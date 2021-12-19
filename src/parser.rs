@@ -104,7 +104,7 @@ impl Parser {
             Ok(Node::UnaryOp(token, Box::new(node)))
         } else {
             self.bin_op(
-                Self::biwise,
+                Self::bitwise,
                 vec![
                     TokenType::Eq,
                     TokenType::Neq,
@@ -113,21 +113,20 @@ impl Parser {
                     TokenType::Le,
                     TokenType::Ge,
                 ],
-                Self::biwise,
+                Self::bitwise,
             )
         }
     }
 
-    fn biwise(&mut self) -> ParseResult {
+    fn bitwise(&mut self) -> ParseResult {
         self.bin_op(
             Self::arithmetic,
             vec![
-                TokenType::Eq,
-                TokenType::Neq,
-                TokenType::Lt,
-                TokenType::Gt,
-                TokenType::Le,
-                TokenType::Ge,
+                TokenType::BAnd,
+                TokenType::BOr,
+                TokenType::BXor,
+                TokenType::Shl,
+                TokenType::Shr,
             ],
             Self::arithmetic,
         )
@@ -148,7 +147,7 @@ impl Parser {
     fn factor(&mut self) -> ParseResult {
         let token = self.current_token.clone();
         match token.token_type {
-            TokenType::Add | TokenType::Sub => {
+            TokenType::Add | TokenType::Sub | TokenType::BNot => {
                 self.advance();
                 let node = self.factor()?;
                 Ok(Node::UnaryOp(token, Box::new(node)))
