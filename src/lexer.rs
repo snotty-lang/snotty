@@ -1,0 +1,215 @@
+use super::utils::{Error, ErrorType, Position, Token, TokenType, KEYWORDS};
+
+type LexResult = Result<Vec<Token>, Error>;
+
+pub struct Lexer;
+
+impl Lexer {
+    pub fn lex(input: &str) -> LexResult {
+        let mut tokens = Vec::new();
+        let mut chars = input.chars().enumerate().peekable();
+        let mut line = 1;
+
+        while let Some((i, c)) = chars.next() {
+            match c {
+                ' ' | '\t' | '\n' | '\r' => {
+                    if c == '\n' {
+                        line += 1;
+                    }
+                }
+                '+' => {
+                    if let Some((_, '=')) = chars.peek() {
+                        tokens.push(Token::new(TokenType::AddAssign, line, i, i + 1));
+                        chars.next();
+                    } else {
+                        tokens.push(Token::new(TokenType::Add, line, i, i));
+                    }
+                }
+                '-' => {
+                    if let Some((_, '=')) = chars.peek() {
+                        tokens.push(Token::new(TokenType::SubAssign, line, i, i + 1));
+                        chars.next();
+                    } else {
+                        tokens.push(Token::new(TokenType::Sub, line, i, i));
+                    }
+                }
+                '*' => {
+                    if let Some((_, '=')) = chars.peek() {
+                        tokens.push(Token::new(TokenType::MulAssign, line, i, i + 1));
+                        chars.next();
+                    }
+                    if let Some((_, '*')) = chars.peek() {
+                        tokens.push(Token::new(TokenType::Pow, line, i, i + 1));
+                        chars.next();
+                    } else {
+                        tokens.push(Token::new(TokenType::Mul, line, i, i));
+                    }
+                }
+                '/' => {
+                    if let Some((_, '=')) = chars.peek() {
+                        tokens.push(Token::new(TokenType::DivAssign, line, i, i + 1));
+                        chars.next();
+                    } else {
+                        tokens.push(Token::new(TokenType::Div, line, i, i));
+                    }
+                }
+                '%' => {
+                    if let Some((_, '=')) = chars.peek() {
+                        tokens.push(Token::new(TokenType::ModAssign, line, i, i + 1));
+                        chars.next();
+                    } else {
+                        tokens.push(Token::new(TokenType::Mod, line, i, i));
+                    }
+                }
+                '(' => {
+                    tokens.push(Token::new(TokenType::LParen, line, i, i));
+                }
+                ')' => {
+                    tokens.push(Token::new(TokenType::RParen, line, i, i));
+                }
+                '{' => {
+                    tokens.push(Token::new(TokenType::LCurly, line, i, i));
+                }
+                '}' => {
+                    tokens.push(Token::new(TokenType::RCurly, line, i, i));
+                }
+                ',' => {
+                    tokens.push(Token::new(TokenType::Comma, line, i, i));
+                }
+                ';' => {
+                    tokens.push(Token::new(TokenType::Eol, line, i, i));
+                }
+                '>' => {
+                    if let Some((_, '=')) = chars.peek() {
+                        chars.next();
+                        tokens.push(Token::new(TokenType::Ge, line, i, i + 1));
+                    } else if let Some((_, '>')) = chars.peek() {
+                        chars.next();
+                        if let Some((_, '=')) = chars.peek() {
+                            tokens.push(Token::new(TokenType::ShrAssign, line, i, i + 2));
+                        } else {
+                            tokens.push(Token::new(TokenType::Shr, line, i, i + 1));
+                        }
+                    } else {
+                        tokens.push(Token::new(TokenType::Gt, line, i, i));
+                    }
+                }
+                '<' => {
+                    if let Some((_, '=')) = chars.peek() {
+                        chars.next();
+                        tokens.push(Token::new(TokenType::Le, line, i, i + 1));
+                    } else if let Some((_, '<')) = chars.peek() {
+                        chars.next();
+                        if let Some((_, '=')) = chars.peek() {
+                            tokens.push(Token::new(TokenType::ShlAssign, line, i, i + 2));
+                        } else {
+                            tokens.push(Token::new(TokenType::Shl, line, i, i + 1));
+                        }
+                    } else {
+                        tokens.push(Token::new(TokenType::Lt, line, i, i));
+                    }
+                }
+                '!' => {
+                    if let Some((_, '=')) = chars.peek() {
+                        chars.next();
+                        tokens.push(Token::new(TokenType::Neq, line, i, i + 1));
+                    } else {
+                        tokens.push(Token::new(TokenType::LNot, line, i, i));
+                    }
+                }
+                '=' => {
+                    if let Some((_, '=')) = chars.peek() {
+                        chars.next();
+                        tokens.push(Token::new(TokenType::Eq, line, i, i + 1));
+                    } else {
+                        tokens.push(Token::new(TokenType::Assign, line, i, i));
+                    }
+                }
+                '&' => {
+                    if let Some((_, '&')) = chars.peek() {
+                        chars.next();
+                        tokens.push(Token::new(TokenType::LAnd, line, i, i + 1));
+                    } else if let Some((_, '=')) = chars.peek() {
+                        chars.next();
+                        tokens.push(Token::new(TokenType::BAndAssign, line, i, i + 1));
+                    } else {
+                        tokens.push(Token::new(TokenType::BAnd, line, i, i));
+                    }
+                }
+                '~' => {
+                    if let Some((_, '=')) = chars.peek() {
+                        chars.next();
+                        tokens.push(Token::new(TokenType::BNotAssign, line, i, i + 1));
+                    } else {
+                        tokens.push(Token::new(TokenType::BNot, line, i, i));
+                    }
+                }
+                '|' => {
+                    if let Some((_, '|')) = chars.peek() {
+                        chars.next();
+                        tokens.push(Token::new(TokenType::LOr, line, i, i + 1));
+                    } else if let Some((_, '=')) = chars.peek() {
+                        chars.next();
+                        tokens.push(Token::new(TokenType::BOrAssign, line, i, i + 1));
+                    } else {
+                        tokens.push(Token::new(TokenType::BOr, line, i, i));
+                    }
+                }
+                '^' => {
+                    if let Some((_, '=')) = chars.peek() {
+                        chars.next();
+                        tokens.push(Token::new(TokenType::BXorAssign, line, i, i + 1));
+                    } else {
+                        tokens.push(Token::new(TokenType::BXor, line, i, i));
+                    }
+                }
+                _ if c.is_digit(10) => {
+                    let mut num = c.to_string();
+                    let start = i;
+                    let mut end = i;
+                    while let Some((i, c)) = chars.peek() {
+                        if !c.is_digit(10) {
+                            break;
+                        }
+                        end = *i;
+                        num.push(*c);
+                        chars.next();
+                    }
+                    tokens.push(Token::new(
+                        TokenType::Number(num.parse().unwrap()),
+                        line,
+                        start,
+                        end,
+                    ));
+                }
+                _ if c.is_alphabetic() => {
+                    let mut word = c.to_string();
+                    let start = i;
+                    let mut end = i;
+                    while let Some((i, c)) = chars.peek() {
+                        if !c.is_alphanumeric() {
+                            break;
+                        }
+                        end = *i;
+                        word.push(*c);
+                        chars.next();
+                    }
+                    if KEYWORDS.contains(&word.as_ref()) {
+                        tokens.push(Token::new(TokenType::Keyword(word), line, start, end));
+                    } else {
+                        tokens.push(Token::new(TokenType::Identifier(word), line, start, end));
+                    }
+                }
+                _ => {
+                    return Err(Error::new(
+                        ErrorType::Lex,
+                        Position::new(line, i, i + 1),
+                        format!("Unexpected token: {}", c),
+                    ));
+                }
+            }
+        }
+        tokens.push(Token::new(TokenType::Eof, line, input.len(), input.len()));
+        Ok(tokens)
+    }
+}
