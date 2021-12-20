@@ -1,6 +1,6 @@
 #![allow(clippy::fn_address_comparisons)]
 
-use super::utils::{Error, ErrorType, Node, Token, TokenType};
+use super::utils::{Error, ErrorType, Node, Token, TokenType, ASSIGNMENT_OPERATORS};
 
 type ParseResult = Result<Node, Error>;
 
@@ -73,7 +73,10 @@ impl Parser {
                 self.advance();
                 self.let_statement(Node::VarAssign)
             }
-            TokenType::Identifier(_) if self.peek_type() == Some(TokenType::Assign) => {
+            TokenType::Identifier(_)
+                if self.peek_type().is_some()
+                    && ASSIGNMENT_OPERATORS.contains(&self.peek_type().unwrap()) =>
+            {
                 self.let_statement(Node::VarReassign)
             }
 
@@ -98,19 +101,7 @@ impl Parser {
                     self.advance();
                     Ok(node_type(token, Box::new(self.expression()?)))
                 }
-                TokenType::AddAssign
-                | TokenType::SubAssign
-                | TokenType::BAndAssign
-                | TokenType::BOrAssign
-                | TokenType::BXorAssign
-                | TokenType::DivAssign
-                | TokenType::ShlAssign
-                | TokenType::ShrAssign
-                | TokenType::MulAssign
-                | TokenType::ModAssign
-                | TokenType::PowAssign
-                    if node_type == Node::VarReassign =>
-                {
+                ref x if ASSIGNMENT_OPERATORS.contains(x) && node_type == Node::VarReassign => {
                     let op = self.current_token.clone();
                     self.advance();
                     Ok(node_type(
@@ -125,14 +116,14 @@ impl Parser {
                 _ => Err(Error::new(
                     ErrorType::Parse,
                     self.current_token.position,
-                    format!("let Unexpected token: {:?}", self.current_token),
+                    format!("Expected '=', found {:?}", self.current_token),
                 )),
             }
         } else {
             Err(Error::new(
                 ErrorType::Parse,
                 self.current_token.position,
-                format!("let2 Unexpected token: {:?}", self.current_token),
+                format!("Expected an identifier, found {:?}", self.current_token),
             ))
         }
     }
@@ -217,7 +208,7 @@ impl Parser {
                 return Err(Error::new(
                     ErrorType::Parse,
                     self.current_token.position,
-                    format!("call Unexpected token: {:?}", self.current_token),
+                    format!("Expected ')', found {:?}", self.current_token),
                 ));
             }
             self.advance();
@@ -241,7 +232,7 @@ impl Parser {
                     return Err(Error::new(
                         ErrorType::Parse,
                         self.current_token.position,
-                        format!("atom Unexpected token: {:?}", self.current_token),
+                        format!("Expected ')', found {:?}", self.current_token),
                     ));
                 }
                 self.advance();
@@ -254,7 +245,7 @@ impl Parser {
             _ => Err(Error::new(
                 ErrorType::Parse,
                 self.current_token.position,
-                format!("atom2 Unexpected token: {:?}", self.current_token),
+                format!("Unexpected token: {:?}", self.current_token),
             )),
         }
     }

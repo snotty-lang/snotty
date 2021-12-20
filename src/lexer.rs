@@ -77,9 +77,11 @@ impl Lexer {
                     }
                     Some((_, '*')) => {
                         chars.next();
+                        let mut end = false;
                         while let Some((i, c)) = chars.next() {
                             if c == '*' {
                                 if let Some((_, '/')) = chars.next() {
+                                    end = true;
                                     break;
                                 }
                             } else if c == '\n' {
@@ -87,9 +89,16 @@ impl Lexer {
                                 last_line = i + 1;
                             }
                         }
+                        if !end {
+                            return Err(Error::new(
+                                ErrorType::Lex,
+                                Position::new(line, i, i),
+                                "Unterminated comment".to_string(),
+                            ));
+                        }
                     }
                     _ => {
-                        tokens.push(Token::new(TokenType::Div, line, i, i));
+                        tokens.push(Token::new(TokenType::Div, line, i, i + 1));
                     }
                 },
                 '%' => {
@@ -125,6 +134,7 @@ impl Lexer {
                     } else if let Some((_, '>')) = chars.peek() {
                         chars.next();
                         if let Some((_, '=')) = chars.peek() {
+                            chars.next();
                             tokens.push(Token::new(TokenType::ShrAssign, line, i, i + 2));
                         } else {
                             tokens.push(Token::new(TokenType::Shr, line, i, i + 1));
@@ -140,6 +150,7 @@ impl Lexer {
                     } else if let Some((_, '<')) = chars.peek() {
                         chars.next();
                         if let Some((_, '=')) = chars.peek() {
+                            chars.next();
                             tokens.push(Token::new(TokenType::ShlAssign, line, i, i + 2));
                         } else {
                             tokens.push(Token::new(TokenType::Shl, line, i, i + 1));
@@ -239,7 +250,7 @@ impl Lexer {
                     return Err(Error::new(
                         ErrorType::Lex,
                         Position::new(line, i, i + 1),
-                        format!("Unexpected token: {}", c),
+                        format!("Invalid token: {}", c),
                     ));
                 }
             }

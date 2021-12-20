@@ -2,6 +2,20 @@ use super::error::Position;
 use std::cmp;
 
 pub const KEYWORDS: [&str; 1] = ["let"];
+pub const ASSIGNMENT_OPERATORS: [TokenType; 12] = [
+    TokenType::Assign,
+    TokenType::SubAssign,
+    TokenType::AddAssign,
+    TokenType::MulAssign,
+    TokenType::DivAssign,
+    TokenType::ModAssign,
+    TokenType::ShlAssign,
+    TokenType::ShrAssign,
+    TokenType::BAndAssign,
+    TokenType::BOrAssign,
+    TokenType::BXorAssign,
+    TokenType::PowAssign,
+];
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {

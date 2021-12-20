@@ -8,7 +8,7 @@ mod utils;
 
 fn main() {
     let tokens = lexer::Lexer::lex(&fs::read_to_string("test.ez").unwrap());
-    println!("{:?}", tokens);
+    println!("{:#?}", tokens);
     let ast = parser::Parser::parse(tokens.unwrap()).unwrap();
     println!("{:#?}", ast);
     // let result = interpreter::Interpreter::visit(ast.unwrap());
