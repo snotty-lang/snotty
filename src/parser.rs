@@ -1,3 +1,5 @@
+#![allow(clippy::fn_address_comparisons)]
+
 use super::utils::{Error, ErrorType, Node, Token, TokenType};
 
 type ParseResult = Result<Node, Error>;
@@ -18,7 +20,7 @@ impl Parser {
 
     fn peek_type(&self) -> Option<TokenType> {
         if self.token_index + 1 < self.tokens.len() {
-            return Some(self.tokens[self.token_index + 1].clone().token_type);
+            return Some(self.tokens[self.token_index + 1].token_type.clone());
         }
         None
     }

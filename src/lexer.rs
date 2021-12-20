@@ -1,3 +1,5 @@
+#![allow(clippy::while_let_on_iterator)]
+
 use super::utils::{Error, ErrorType, Position, Token, TokenType, KEYWORDS};
 
 type LexResult = Result<Vec<Token>, Error>;
@@ -217,7 +219,7 @@ impl Lexer {
                 _ if c.is_alphabetic() => {
                     let mut word = c.to_string();
                     let start = i;
-                    let mut end = i;
+                    let mut end = j;
                     while let Some((i, c)) = chars.peek() {
                         if !c.is_alphanumeric() {
                             break;
