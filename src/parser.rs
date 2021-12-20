@@ -115,7 +115,7 @@ impl Parser {
                         token.clone(),
                         Box::new(Node::BinaryOp(
                             op,
-                            Box::new(Node::VarAccess(token.clone())),
+                            Box::new(Node::VarAccess(token)),
                             Box::new(self.expression()?),
                         )),
                     ))

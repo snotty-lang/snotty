@@ -9,12 +9,15 @@ impl Lexer {
         let mut tokens = Vec::new();
         let mut chars = input.chars().enumerate().peekable();
         let mut line = 1;
+        let mut last_line = 0;
 
-        while let Some((i, c)) = chars.next() {
+        while let Some((j, c)) = chars.next() {
+            let i = j - last_line;
             match c {
                 ' ' | '\t' | '\n' | '\r' => {
                     if c == '\n' {
                         line += 1;
+                        last_line = j + 1;
                     }
                 }
                 '+' => {
@@ -56,14 +59,37 @@ impl Lexer {
                         tokens.push(Token::new(TokenType::Mul, line, i, i));
                     }
                 }
-                '/' => {
-                    if let Some((_, '=')) = chars.peek() {
+                '/' => match chars.peek() {
+                    Some((_, '=')) => {
                         tokens.push(Token::new(TokenType::DivAssign, line, i, i + 1));
                         chars.next();
-                    } else {
+                    }
+                    Some((_, '/')) => {
+                        while let Some((i, c)) = chars.next() {
+                            if c == '\n' {
+                                line += 1;
+                                last_line = i + 1;
+                                break;
+                            }
+                        }
+                    }
+                    Some((_, '*')) => {
+                        chars.next();
+                        while let Some((i, c)) = chars.next() {
+                            if c == '*' {
+                                if let Some((_, '/')) = chars.next() {
+                                    break;
+                                }
+                            } else if c == '\n' {
+                                line += 1;
+                                last_line = i + 1;
+                            }
+                        }
+                    }
+                    _ => {
                         tokens.push(Token::new(TokenType::Div, line, i, i));
                     }
-                }
+                },
                 '%' => {
                     if let Some((_, '=')) = chars.peek() {
                         tokens.push(Token::new(TokenType::ModAssign, line, i, i + 1));
@@ -200,6 +226,7 @@ impl Lexer {
                         word.push(*c);
                         chars.next();
                     }
+                    end -= last_line;
                     if KEYWORDS.contains(&word.as_ref()) {
                         tokens.push(Token::new(TokenType::Keyword(word), line, start, end));
                     } else {
