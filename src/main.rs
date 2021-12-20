@@ -6,7 +6,7 @@ mod parser;
 mod utils;
 
 fn main() {
-    let tokens = lexer::Lexer::lex("{I like}{Mcoding}");
+    let tokens = lexer::Lexer::lex("let x=x + 4");
     println!("{:?}", tokens);
     let mut parser = parser::Parser::new(tokens.unwrap()).unwrap();
     let ast = parser.parse();

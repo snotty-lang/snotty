@@ -9,4 +9,5 @@ pub enum Node {
     VarAccess(Token),
     Statements(Vec<Node>),
     Call(Box<Node>, Vec<Node>),
+    VarReassign(Token, Box<Node>),
 }

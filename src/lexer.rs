@@ -21,6 +21,9 @@ impl Lexer {
                     if let Some((_, '=')) = chars.peek() {
                         tokens.push(Token::new(TokenType::AddAssign, line, i, i + 1));
                         chars.next();
+                    } else if let Some((_, '+')) = chars.peek() {
+                        tokens.push(Token::new(TokenType::Inc, line, i, i + 1));
+                        chars.next();
                     } else {
                         tokens.push(Token::new(TokenType::Add, line, i, i));
                     }
@@ -28,6 +31,9 @@ impl Lexer {
                 '-' => {
                     if let Some((_, '=')) = chars.peek() {
                         tokens.push(Token::new(TokenType::SubAssign, line, i, i + 1));
+                        chars.next();
+                    } else if let Some((_, '-')) = chars.peek() {
+                        tokens.push(Token::new(TokenType::Dec, line, i, i + 1));
                         chars.next();
                     } else {
                         tokens.push(Token::new(TokenType::Sub, line, i, i));
@@ -39,8 +45,13 @@ impl Lexer {
                         chars.next();
                     }
                     if let Some((_, '*')) = chars.peek() {
-                        tokens.push(Token::new(TokenType::Pow, line, i, i + 1));
                         chars.next();
+                        if let Some((_, '=')) = chars.peek() {
+                            tokens.push(Token::new(TokenType::PowAssign, line, i, i + 2));
+                            chars.next();
+                        } else {
+                            tokens.push(Token::new(TokenType::Pow, line, i, i + 1));
+                        }
                     } else {
                         tokens.push(Token::new(TokenType::Mul, line, i, i));
                     }
@@ -137,12 +148,7 @@ impl Lexer {
                     }
                 }
                 '~' => {
-                    if let Some((_, '=')) = chars.peek() {
-                        chars.next();
-                        tokens.push(Token::new(TokenType::BNotAssign, line, i, i + 1));
-                    } else {
-                        tokens.push(Token::new(TokenType::BNot, line, i, i));
-                    }
+                    tokens.push(Token::new(TokenType::BNot, line, i, i));
                 }
                 '|' => {
                     if let Some((_, '|')) = chars.peek() {

@@ -28,6 +28,13 @@ impl Parser {
         }
     }
 
+    fn peek_type(&self) -> Option<TokenType> {
+        if self.token_index + 1 < self.tokens.len() {
+            return Some(self.tokens[self.token_index + 1].clone().token_type);
+        }
+        None
+    }
+
     pub fn parse(&mut self) -> ParseResult {
         self.statements(TokenType::Eof)
     }
@@ -35,7 +42,6 @@ impl Parser {
     fn statements(&mut self, end_token: TokenType) -> ParseResult {
         let mut statements = vec![];
         while self.current_token.token_type != end_token {
-            println!("{:?} != {:?}", self.current_token.token_type, end_token);
             match self.current_token.token_type {
                 TokenType::Eol => self.advance(),
                 _ => statements.push(self.statement()?),
@@ -59,8 +65,12 @@ impl Parser {
         match self.current_token.token_type {
             TokenType::Keyword(ref keyword) if keyword == "let" => {
                 self.advance();
-                self.let_statement()
+                self.let_statement(Node::VarAssign)
             }
+            TokenType::Identifier(_) if self.peek_type() == Some(TokenType::Assign) => {
+                self.let_statement(Node::VarReassign)
+            }
+
             TokenType::LCurly => {
                 self.advance();
                 self.statements(TokenType::RCurly)
@@ -73,20 +83,45 @@ impl Parser {
         }
     }
 
-    fn let_statement(&mut self) -> ParseResult {
+    fn let_statement(&mut self, node_type: fn(Token, Box<Node>) -> Node) -> ParseResult {
         if let TokenType::Identifier(_) = self.current_token.token_type {
             let token = self.current_token.clone();
             self.advance();
-            if self.current_token.token_type != TokenType::Assign {
-                return Err(Error::new(
+            match self.current_token.token_type {
+                TokenType::Assign => {
+                    self.advance();
+                    Ok(node_type(token, Box::new(self.expression()?)))
+                }
+                TokenType::AddAssign
+                | TokenType::SubAssign
+                | TokenType::BAndAssign
+                | TokenType::BOrAssign
+                | TokenType::BXorAssign
+                | TokenType::DivAssign
+                | TokenType::ShlAssign
+                | TokenType::ShrAssign
+                | TokenType::MulAssign
+                | TokenType::ModAssign
+                | TokenType::PowAssign
+                    if node_type == Node::VarReassign =>
+                {
+                    let op = self.current_token.clone();
+                    self.advance();
+                    Ok(node_type(
+                        token.clone(),
+                        Box::new(Node::BinOp(
+                            op,
+                            Box::new(Node::VarAccess(token.clone())),
+                            Box::new(self.expression()?),
+                        )),
+                    ))
+                }
+                _ => Err(Error::new(
                     ErrorType::Parse,
                     self.current_token.position,
                     format!("let Unexpected token: {:?}", self.current_token),
-                ));
+                )),
             }
-            self.advance();
-            let value = self.expression()?;
-            Ok(Node::VarAssign(token, Box::new(value)))
         } else {
             Err(Error::new(
                 ErrorType::Parse,
@@ -147,7 +182,7 @@ impl Parser {
     fn factor(&mut self) -> ParseResult {
         let token = self.current_token.clone();
         match token.token_type {
-            TokenType::Add | TokenType::Sub | TokenType::BNot => {
+            TokenType::Add | TokenType::Sub | TokenType::BNot | TokenType::Inc | TokenType::Dec => {
                 self.advance();
                 let node = self.factor()?;
                 Ok(Node::UnaryOp(token, Box::new(node)))
