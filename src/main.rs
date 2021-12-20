@@ -6,10 +6,9 @@ mod parser;
 mod utils;
 
 fn main() {
-    let tokens = lexer::Lexer::lex("let x=x + 4");
+    let tokens = lexer::Lexer::lex("let x=x 4 x-y");
     println!("{:?}", tokens);
-    let mut parser = parser::Parser::new(tokens.unwrap()).unwrap();
-    let ast = parser.parse();
+    let ast = parser::Parser::parse(tokens.unwrap()).unwrap();
     println!("{:#?}", ast);
     // let result = interpreter::Interpreter::visit(ast.unwrap());
     // println!("{:?}", result.unwrap());

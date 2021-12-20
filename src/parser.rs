@@ -9,18 +9,6 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<Token>) -> Option<Self> {
-        if tokens.is_empty() {
-            return None;
-        }
-        let token = tokens[0].clone();
-        Some(Self {
-            tokens,
-            token_index: 0,
-            current_token: token,
-        })
-    }
-
     fn advance(&mut self) {
         self.token_index += 1;
         if self.token_index < self.tokens.len() {
@@ -35,8 +23,24 @@ impl Parser {
         None
     }
 
-    pub fn parse(&mut self) -> ParseResult {
-        self.statements(TokenType::Eof)
+    /// Returns `None` if there were no tokens to parse
+    ///
+    /// Returns `Some(Err(Error))` if there was an error
+    ///
+    /// Returns `Some(Ok(Node))` if there was no error
+    pub fn parse(tokens: Vec<Token>) -> Option<ParseResult> {
+        if tokens.is_empty() {
+            return None;
+        }
+        let token = tokens[0].clone();
+        Some(
+            Self {
+                tokens,
+                token_index: 0,
+                current_token: token,
+            }
+            .statements(TokenType::Eof),
+        )
     }
 
     fn statements(&mut self, end_token: TokenType) -> ParseResult {
@@ -75,7 +79,7 @@ impl Parser {
                 self.advance();
                 self.statements(TokenType::RCurly)
             }
-            _ => self.bin_op(
+            _ => self.binary_op(
                 Self::comparison,
                 vec![TokenType::LAnd, TokenType::LOr],
                 Self::comparison,
@@ -109,7 +113,7 @@ impl Parser {
                     self.advance();
                     Ok(node_type(
                         token.clone(),
-                        Box::new(Node::BinOp(
+                        Box::new(Node::BinaryOp(
                             op,
                             Box::new(Node::VarAccess(token.clone())),
                             Box::new(self.expression()?),
@@ -138,7 +142,7 @@ impl Parser {
             let node = self.comparison()?;
             Ok(Node::UnaryOp(token, Box::new(node)))
         } else {
-            self.bin_op(
+            self.binary_op(
                 Self::bitwise,
                 vec![
                     TokenType::Eq,
@@ -154,7 +158,7 @@ impl Parser {
     }
 
     fn bitwise(&mut self) -> ParseResult {
-        self.bin_op(
+        self.binary_op(
             Self::arithmetic,
             vec![
                 TokenType::BAnd,
@@ -168,11 +172,11 @@ impl Parser {
     }
 
     fn arithmetic(&mut self) -> ParseResult {
-        self.bin_op(Self::term, vec![TokenType::Add, TokenType::Sub], Self::term)
+        self.binary_op(Self::term, vec![TokenType::Add, TokenType::Sub], Self::term)
     }
 
     fn term(&mut self) -> ParseResult {
-        self.bin_op(
+        self.binary_op(
             Self::factor,
             vec![TokenType::Mul, TokenType::Div, TokenType::Mod],
             Self::factor,
@@ -192,7 +196,7 @@ impl Parser {
     }
 
     fn power(&mut self) -> ParseResult {
-        self.bin_op(Self::call, vec![TokenType::Pow], Self::call)
+        self.binary_op(Self::call, vec![TokenType::Pow], Self::call)
     }
 
     fn call(&mut self) -> ParseResult {
@@ -253,7 +257,7 @@ impl Parser {
         }
     }
 
-    fn bin_op(
+    fn binary_op(
         &mut self,
         func1: fn(&mut Self) -> ParseResult,
         ops: Vec<TokenType>,
@@ -265,7 +269,7 @@ impl Parser {
             let op = self.current_token.clone();
             self.advance();
             let right = func2(self)?;
-            left = Node::BinOp(op, Box::new(left), Box::new(right));
+            left = Node::BinaryOp(op, Box::new(left), Box::new(right));
             token_type = self.current_token.token_type.clone();
         }
         Ok(left)
