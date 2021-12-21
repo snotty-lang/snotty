@@ -33,6 +33,7 @@ pub enum TokenType {
     Inc,
     Dec,
     Arrow,
+    Colon,
     Eq,
     Neq,
     Lt,

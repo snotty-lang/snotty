@@ -30,11 +30,8 @@ impl Parser {
     }
 
     pub fn parse(tokens: Vec<Token>) -> ParseResult {
-        // if tokens.is_empty() {
-        //     return None;
-        // }
         let token = tokens[0].clone();
-        let ast = Self {
+        let mut obj = Self {
             tokens,
             token_index: 0,
             current_token: token,
@@ -42,11 +39,42 @@ impl Parser {
             accessed_functions: vec![],
             defined_functions: vec![],
             defined_variables: vec![],
-        }
-        .statements(TokenType::Eof)?;
+        };
+        let ast = obj.statements(TokenType::Eof)?;
+        // obj.analyze()?;
         Ok(ast)
-        // Analyzer::analyze(ast, parser)
     }
+
+    // fn analyze(&mut self) -> Option<Error> {
+    //     for variable in &self.accessed_variables {
+    //         match variable {
+    //             Node::VarAccess(token) | Node::VarReassign(token, _) => {
+    //                 if !self.defined_variables.contains(&variable) {
+    //                     return Err(Error::new(
+    //                         ErrorType::Parse,
+    //                         token.position.clone(),
+    //                         format!("Variable {:?} is not defined", token),
+    //                     ));
+    //                 }
+    //             }
+    //             _ => unreachable!(),
+    //         }
+    //     }
+    //     for function in self.accessed_functions {
+    //         match function {
+    //             Node::Call(node, args) => {
+    //                 for function in &self.defined_functions {
+    //                     if let Node::FuncDef(name, _, _, _) = function {
+    //                         if name == *node {
+    //                             return Ok(Node::Call(Box::new(function.clone()), args.clone()));
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //             _ => unreachable!(),
+    //         }
+    //     }
+    // }
 
     fn statements(&mut self, end_token: TokenType) -> ParseResult {
         let mut statements = vec![];
@@ -303,6 +331,35 @@ impl Parser {
         if let TokenType::Identifier(_) = self.current_token.token_type {
             params.push(self.current_token.clone());
             self.advance();
+            if self.current_token.token_type == TokenType::Colon {
+                self.advance();
+                if let TokenType::Keyword(ref keyword) = self.current_token.token_type {
+                    match keyword.as_ref() {
+                        "u32" => (),
+                        _ => {
+                            return Err(Error::new(
+                                ErrorType::Parse,
+                                self.current_token.position,
+                                format!("Expected type, found {:?}", self.current_token),
+                            ))
+                        }
+                    }
+                    params.push(self.current_token.clone());
+                    self.advance();
+                } else {
+                    return Err(Error::new(
+                        ErrorType::Parse,
+                        self.current_token.position,
+                        format!("Expected type, found {:?}", self.current_token),
+                    ));
+                }
+            } else {
+                return Err(Error::new(
+                    ErrorType::Parse,
+                    self.current_token.position,
+                    format!("Expected ':', found {:?}", self.current_token),
+                ));
+            }
             while self.current_token.token_type == TokenType::Comma {
                 self.advance();
                 if let TokenType::Identifier(_) = self.current_token.token_type {
@@ -313,6 +370,35 @@ impl Parser {
                         ErrorType::Parse,
                         self.current_token.position,
                         format!("Expected identifier, found {:?}", self.current_token),
+                    ));
+                }
+                if self.current_token.token_type == TokenType::Colon {
+                    self.advance();
+                    if let TokenType::Keyword(ref keyword) = self.current_token.token_type {
+                        match keyword.as_ref() {
+                            "u32" => (),
+                            _ => {
+                                return Err(Error::new(
+                                    ErrorType::Parse,
+                                    self.current_token.position,
+                                    format!("Expected type, found {:?}", self.current_token),
+                                ))
+                            }
+                        }
+                        params.push(self.current_token.clone());
+                        self.advance();
+                    } else {
+                        return Err(Error::new(
+                            ErrorType::Parse,
+                            self.current_token.position,
+                            format!("Expected type, found {:?}", self.current_token),
+                        ));
+                    }
+                } else {
+                    return Err(Error::new(
+                        ErrorType::Parse,
+                        self.current_token.position,
+                        format!("Expected ':', found {:?}", self.current_token),
                     ));
                 }
             }

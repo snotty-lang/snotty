@@ -103,6 +103,9 @@ impl Lexer {
                         tokens.push(Token::new(TokenType::Div, line, i, i + 1));
                     }
                 },
+                ':' => {
+                    tokens.push(Token::new(TokenType::Colon, line, i, i));
+                }
                 '%' => {
                     if let Some((_, '=')) = chars.peek() {
                         tokens.push(Token::new(TokenType::ModAssign, line, i, i + 1));

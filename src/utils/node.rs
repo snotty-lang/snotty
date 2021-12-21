@@ -1,6 +1,6 @@
 use super::token::Token;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Node {
     Number(Token),
     BinaryOp(Token, Box<Node>, Box<Node>),
