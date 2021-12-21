@@ -1,3 +1,2 @@
 //ez foo(bar: Number, char: Number) -> Number foo(bar-1, char-1)
-let x = 0;
-y
+let x = y + 2
