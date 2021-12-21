@@ -9,6 +9,7 @@ pub fn run(filename: &str) {
     // println!("{:#?}", tokens);
     let tokens = tokens.unwrap();
     let ast = parser::Parser::parse(tokens);
+    let ast = ast.unwrap();
     println!("{:#?}", ast);
     // let ast = ast.unwrap();
     // let result = interpreter::Interpreter::visit(ast.unwrap());

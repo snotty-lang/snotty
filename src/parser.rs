@@ -36,55 +36,44 @@ impl Parser {
             current_token: token,
         };
         let ast = obj.statements(TokenType::Eof, &mut global)?;
-        println!("{:?}", global);
-        match obj.analyze(&global).take() {
+        println!("{:#?}", global);
+        match obj.analyze(&mut global) {
             Some(err) => Err(err),
             None => Ok(ast),
         }
     }
 
-    fn analyze(&mut self, global: &Scope) -> Option<Error> {
-        let mut q = VecDeque::new();
-        q.push_back(global);
-
-        while let Some(scope) = q.pop_front() {
-            for var in &scope.accessed_variables {
-                match var {
-                    Node::VarReassign(token, _) | Node::VarAccess(token) => {
-                        if !scope.has_variable(token) {
-                            return Some(Error::new(
-                                ErrorType::Parse,
-                                token.position,
-                                format!("Variable {:?} is not defined", token),
-                            ));
-                        }
-                    }
-                    _ => unreachable!(),
-                }
+    fn analyze(&mut self, global: &mut Scope) -> Option<Error> {
+        fn check_error(scope: &Scope) -> Option<&Error> {
+            if scope.error.is_some() {
+                return scope.error.as_ref();
             }
-
-            for func in &scope.accessed_functions {
-                match func {
-                    Node::Call(func_token, args) => {
-                        if !scope.has_function(func_token, args) {
-                            if let Node::VarAccess(ref func) = **func_token {
-                                return Some(Error::new(
-                                    ErrorType::Parse,
-                                    func.position,
-                                    format!("Function {:?} is not defined", func_token),
-                                ));
-                            }
-                            unreachable!();
-                        }
-                    }
-                    _ => unreachable!(),
-                }
-            }
-
             for child in &scope.scopes {
-                q.push_back(child);
+                if let Some(err) = check_error(child) {
+                    return Some(err);
+                }
+            }
+            None
+        }
+        if let Some(err) = check_error(global) {
+            return Some(err.clone());
+        }
+
+        dbg!(&global.unresolved_functions);
+        fn refresh(scope: &mut Scope, parent: Scope) {
+            scope.parent = Some(Box::new(parent));
+            scope.refresh();
+            let clone = scope.clone();
+            for child in scope.scopes.iter_mut() {
+                refresh(child, clone.clone());
             }
         }
+
+        let clone = global.clone();
+        for child in global.scopes.iter_mut() {
+            refresh(child, clone.clone());
+        }
+
         None
     }
 
@@ -102,8 +91,17 @@ impl Parser {
 
     fn statement(&mut self, scope: &mut Scope) -> ParseResult {
         match self.current_token.token_type {
-            TokenType::Keyword(ref keyword) => match keyword {
-                // break, continue, return
+            TokenType::Keyword(ref keyword) => match keyword.as_ref() {
+                // break, continue
+                "return" => {
+                    let token = self.current_token.clone();
+                    self.advance();
+                    if self.current_token.token_type == TokenType::Eol {
+                        Ok(Node::Return(token, None))
+                    } else {
+                        Ok(Node::Return(token, Some(Box::new(self.expression(scope)?))))
+                    }
+                }
                 _ => self.expression(scope),
             },
             _ => self.expression(scope),
@@ -115,7 +113,7 @@ impl Parser {
             TokenType::Keyword(ref keyword) if keyword == "let" => {
                 self.advance();
                 let node = self.let_statement(Node::VarAssign, scope)?;
-                scope.defined_variables.push(node.clone());
+                scope.register_variable(node.clone());
                 Ok(node)
             }
             TokenType::Identifier(_)
@@ -123,7 +121,7 @@ impl Parser {
                     && ASSIGNMENT_OPERATORS.contains(&self.peek_type().unwrap()) =>
             {
                 let node = self.let_statement(Node::VarReassign, scope)?;
-                scope.accessed_variables.push(node.clone());
+                scope.access_variable(node.clone());
                 Ok(node)
             }
 
@@ -291,7 +289,7 @@ impl Parser {
             }
             self.advance();
             let node = Node::Call(Box::new(atom), args);
-            scope.accessed_functions.push(node.clone());
+            scope.access_function(node.clone());
             Ok(node)
         } else {
             self.token_index -= 1;
@@ -307,7 +305,7 @@ impl Parser {
                 "ez" => {
                     self.advance();
                     let node = self.function_definition(scope)?;
-                    scope.defined_functions.push(node.clone());
+                    scope.register_function(node.clone());
                     Ok(node)
                 }
                 _ => Err(Error::new(
@@ -322,7 +320,7 @@ impl Parser {
             TokenType::Identifier(_) => {
                 self.advance();
                 let node = Node::VarAccess(token);
-                scope.accessed_variables.push(node.clone());
+                scope.access_variable(node.clone());
                 Ok(node)
             }
             TokenType::LParen => {
@@ -376,35 +374,6 @@ impl Parser {
         if let TokenType::Identifier(_) = self.current_token.token_type {
             params.push(self.current_token.clone());
             self.advance();
-            if self.current_token.token_type == TokenType::Colon {
-                self.advance();
-                if let TokenType::Keyword(ref keyword) = self.current_token.token_type {
-                    match keyword.as_ref() {
-                        "Number" => (),
-                        _ => {
-                            return Err(Error::new(
-                                ErrorType::Parse,
-                                self.current_token.position,
-                                format!("Expected type, found {:?}", self.current_token),
-                            ))
-                        }
-                    }
-                    params.push(self.current_token.clone());
-                    self.advance();
-                } else {
-                    return Err(Error::new(
-                        ErrorType::Parse,
-                        self.current_token.position,
-                        format!("Expected type, found {:?}", self.current_token),
-                    ));
-                }
-            } else {
-                return Err(Error::new(
-                    ErrorType::Parse,
-                    self.current_token.position,
-                    format!("Expected ':', found {:?}", self.current_token),
-                ));
-            }
             while self.current_token.token_type == TokenType::Comma {
                 self.advance();
                 if let TokenType::Identifier(_) = self.current_token.token_type {
@@ -415,35 +384,6 @@ impl Parser {
                         ErrorType::Parse,
                         self.current_token.position,
                         format!("Expected identifier, found {:?}", self.current_token),
-                    ));
-                }
-                if self.current_token.token_type == TokenType::Colon {
-                    self.advance();
-                    if let TokenType::Keyword(ref keyword) = self.current_token.token_type {
-                        match keyword.as_ref() {
-                            "Number" => (),
-                            _ => {
-                                return Err(Error::new(
-                                    ErrorType::Parse,
-                                    self.current_token.position,
-                                    format!("Expected type, found {:?}", self.current_token),
-                                ))
-                            }
-                        }
-                        params.push(self.current_token.clone());
-                        self.advance();
-                    } else {
-                        return Err(Error::new(
-                            ErrorType::Parse,
-                            self.current_token.position,
-                            format!("Expected type, found {:?}", self.current_token),
-                        ));
-                    }
-                } else {
-                    return Err(Error::new(
-                        ErrorType::Parse,
-                        self.current_token.position,
-                        format!("Expected ':', found {:?}", self.current_token),
                     ));
                 }
             }
@@ -462,41 +402,21 @@ impl Parser {
             ));
         }
         self.advance();
-        if self.current_token.token_type == TokenType::Arrow {
-            self.advance();
-            let return_type = match self.current_token.token_type {
-                TokenType::Keyword(ref keyword) => match keyword.as_ref() {
-                    "Number" => self.current_token.clone(),
-                    _ => {
-                        return Err(Error::new(
-                            ErrorType::Parse,
-                            self.current_token.position,
-                            format!("Expected return type, found {:?}", self.current_token),
-                        ))
-                    }
-                },
-                _ => {
-                    return Err(Error::new(
-                        ErrorType::Parse,
-                        self.current_token.position,
-                        format!("Expected return type, found {:?}", self.current_token),
-                    ))
-                }
-            };
-            self.advance();
-            return Ok(Node::FuncDef(
-                name,
-                params,
-                Some(return_type),
-                Box::new(self.expression(scope)?),
-            ));
+        let old_len = scope.scopes.len();
+
+        let mut new_scope = Scope::new(Some(scope));
+        let expr = self.expression(&mut new_scope)?;
+        if !new_scope.scopes.is_empty() {
+            assert!(new_scope.scopes.len() == 1);
+            new_scope = new_scope.scopes.pop().unwrap();
+            new_scope.parent = None;
         }
-        Ok(Node::FuncDef(
-            name,
-            params,
-            None,
-            Box::new(self.expression(scope)?),
-        ))
+        if scope.scopes.len() > old_len {
+            new_scope = scope.scopes.pop().unwrap();
+        }
+        new_scope.args = Some(params.clone());
+        scope.scopes.push(new_scope);
+        Ok(Node::FuncDef(name, params, Box::new(expr)))
     }
 
     fn binary_op(

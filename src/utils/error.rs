@@ -1,11 +1,11 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ErrorType {
     Lex,
     Parse,
     Interpret,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Error {
     pub error_type: ErrorType,
     pub position: Position,

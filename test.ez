@@ -1,2 +1,3 @@
-//ez foo(bar: Number, char: Number) -> Number foo(bar-1, char-1)
-let x = y + 2
+//ez foo(bar, char) foo(1, 2)
+ez yo(car) /*foo()*/{}
+yo()
