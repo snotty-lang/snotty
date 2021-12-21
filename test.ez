@@ -1,1 +1,1 @@
-u32
+ez foo(bar, char) -> u32 foo(bar-1, char-1)

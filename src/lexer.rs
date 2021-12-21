@@ -51,8 +51,7 @@ impl Lexer {
                     if let Some((_, '=')) = chars.peek() {
                         tokens.push(Token::new(TokenType::MulAssign, line, i, i + 1));
                         chars.next();
-                    }
-                    if let Some((_, '*')) = chars.peek() {
+                    } else if let Some((_, '*')) = chars.peek() {
                         chars.next();
                         if let Some((_, '=')) = chars.peek() {
                             tokens.push(Token::new(TokenType::PowAssign, line, i, i + 2));

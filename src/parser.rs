@@ -1,9 +1,6 @@
 #![allow(clippy::fn_address_comparisons)]
 
-use super::{
-    semantic::Analyzer,
-    utils::{Error, ErrorType, Node, Token, TokenType, ASSIGNMENT_OPERATORS},
-};
+use super::utils::{Error, ErrorType, Node, Token, TokenType, ASSIGNMENT_OPERATORS};
 
 type ParseResult = Result<Node, Error>;
 
@@ -32,11 +29,6 @@ impl Parser {
         None
     }
 
-    /// Returns `None` if there were no tokens to parse
-    ///
-    /// Returns `Some(Err(Error))` if there was an error
-    ///
-    /// Returns `Some(Ok(Node))` if there was no error
     pub fn parse(tokens: Vec<Token>) -> ParseResult {
         // if tokens.is_empty() {
         //     return None;
@@ -90,7 +82,7 @@ impl Parser {
                 if self.peek_type().is_some()
                     && ASSIGNMENT_OPERATORS.contains(&self.peek_type().unwrap()) =>
             {
-                let node = self.let_statement(Node::VarAssign)?;
+                let node = self.let_statement(Node::VarReassign)?;
                 self.accessed_variables.push(node.clone());
                 Ok(node)
             }
