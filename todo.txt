@@ -1,0 +1,4 @@
+Semantic Analyzer:
+    Check if functions are equal
+
+3-Address Code Generation

@@ -1,7 +1,7 @@
 use super::error::Position;
 use std::cmp;
 
-pub const KEYWORDS: [&str; 3] = ["let", "ez", "u32"];
+pub const KEYWORDS: [&str; 3] = ["let", "ez", "Number"];
 pub const ASSIGNMENT_OPERATORS: [TokenType; 12] = [
     TokenType::Assign,
     TokenType::SubAssign,

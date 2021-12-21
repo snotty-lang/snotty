@@ -6,7 +6,7 @@ use std::fs;
 
 pub fn run(filename: &str) {
     let tokens = lexer::Lexer::lex(&fs::read_to_string(filename).unwrap());
-    println!("{:#?}", tokens);
+    // println!("{:#?}", tokens);
     let tokens = tokens.unwrap();
     let ast = parser::Parser::parse(tokens);
     println!("{:#?}", ast);
