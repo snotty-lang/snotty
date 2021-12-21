@@ -1,6 +1,6 @@
 use super::token::Token;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Node {
     Number(Token),
     BinaryOp(Token, Box<Node>, Box<Node>),
@@ -10,4 +10,5 @@ pub enum Node {
     VarReassign(Token, Box<Node>),
     Statements(Vec<Node>),
     Call(Box<Node>, Vec<Node>),
+    FuncDef(Token, Vec<Token>, Option<Token>, Box<Node>),
 }

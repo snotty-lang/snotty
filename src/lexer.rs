@@ -40,6 +40,9 @@ impl Lexer {
                     } else if let Some((_, '-')) = chars.peek() {
                         tokens.push(Token::new(TokenType::Dec, line, i, i + 1));
                         chars.next();
+                    } else if let Some((_, '>')) = chars.peek() {
+                        tokens.push(Token::new(TokenType::Arrow, line, i, i + 1));
+                        chars.next();
                     } else {
                         tokens.push(Token::new(TokenType::Sub, line, i, i));
                     }
@@ -221,7 +224,16 @@ impl Lexer {
                         chars.next();
                     }
                     tokens.push(Token::new(
-                        TokenType::Number(num.parse().unwrap()),
+                        TokenType::Number(match num.parse() {
+                            Ok(num) => num,
+                            Err(err) => {
+                                return Err(Error::new(
+                                    ErrorType::Lex,
+                                    Position::new(line, start, end),
+                                    err.to_string(),
+                                ));
+                            }
+                        }),
                         line,
                         start,
                         end,

@@ -1,18 +1,7 @@
-//! A language, which doesn't have much. But, It can be compiled to brainfuck.
-
-use std::fs;
-// mod interpreter;
-mod lexer;
-mod parser;
-mod utils;
+//! A language, which doesn't have much. But, It can be compiled to brain fuck.
 
 fn main() {
-    let tokens = lexer::Lexer::lex(&fs::read_to_string("test.ez").unwrap());
-    println!("{:#?}", tokens);
-    let ast = parser::Parser::parse(tokens.unwrap()).unwrap();
-    println!("{:#?}", ast);
-    // let result = interpreter::Interpreter::visit(ast.unwrap());
-    // println!("{:?}", result.unwrap());
+    ezlang::run("test.ez");
 }
 
 /*

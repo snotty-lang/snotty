@@ -1,6 +1,9 @@
 #![allow(clippy::fn_address_comparisons)]
 
-use super::utils::{Error, ErrorType, Node, Token, TokenType, ASSIGNMENT_OPERATORS};
+use super::{
+    semantic::Analyzer,
+    utils::{Error, ErrorType, Node, Token, TokenType, ASSIGNMENT_OPERATORS},
+};
 
 type ParseResult = Result<Node, Error>;
 
@@ -8,6 +11,10 @@ pub struct Parser {
     tokens: Vec<Token>,
     token_index: usize,
     current_token: Token,
+    accessed_variables: Vec<Node>,
+    accessed_functions: Vec<Node>,
+    defined_functions: Vec<Node>,
+    defined_variables: Vec<Node>,
 }
 
 impl Parser {
@@ -30,19 +37,23 @@ impl Parser {
     /// Returns `Some(Err(Error))` if there was an error
     ///
     /// Returns `Some(Ok(Node))` if there was no error
-    pub fn parse(tokens: Vec<Token>) -> Option<ParseResult> {
-        if tokens.is_empty() {
-            return None;
-        }
+    pub fn parse(tokens: Vec<Token>) -> ParseResult {
+        // if tokens.is_empty() {
+        //     return None;
+        // }
         let token = tokens[0].clone();
-        Some(
-            Self {
-                tokens,
-                token_index: 0,
-                current_token: token,
-            }
-            .statements(TokenType::Eof),
-        )
+        let ast = Self {
+            tokens,
+            token_index: 0,
+            current_token: token,
+            accessed_variables: vec![],
+            accessed_functions: vec![],
+            defined_functions: vec![],
+            defined_variables: vec![],
+        }
+        .statements(TokenType::Eof)?;
+        Ok(ast)
+        // Analyzer::analyze(ast, parser)
     }
 
     fn statements(&mut self, end_token: TokenType) -> ParseResult {
@@ -71,13 +82,17 @@ impl Parser {
         match self.current_token.token_type {
             TokenType::Keyword(ref keyword) if keyword == "let" => {
                 self.advance();
-                self.let_statement(Node::VarAssign)
+                let node = self.let_statement(Node::VarAssign)?;
+                self.defined_variables.push(node.clone());
+                Ok(node)
             }
             TokenType::Identifier(_)
                 if self.peek_type().is_some()
                     && ASSIGNMENT_OPERATORS.contains(&self.peek_type().unwrap()) =>
             {
-                self.let_statement(Node::VarReassign)
+                let node = self.let_statement(Node::VarAssign)?;
+                self.accessed_variables.push(node.clone());
+                Ok(node)
             }
 
             TokenType::LCurly => {
@@ -179,7 +194,7 @@ impl Parser {
     fn factor(&mut self) -> ParseResult {
         let token = self.current_token.clone();
         match token.token_type {
-            TokenType::Add | TokenType::Sub | TokenType::BNot | TokenType::Inc | TokenType::Dec => {
+            TokenType::Sub | TokenType::BNot | TokenType::Inc | TokenType::Dec => {
                 self.advance();
                 let node = self.factor()?;
                 Ok(Node::UnaryOp(token, Box::new(node)))
@@ -212,7 +227,9 @@ impl Parser {
                 ));
             }
             self.advance();
-            Ok(Node::Call(Box::new(atom), args))
+            let node = Node::Call(Box::new(atom), args);
+            self.accessed_functions.push(node.clone());
+            Ok(node)
         } else {
             Ok(atom)
         }
@@ -221,9 +238,27 @@ impl Parser {
     fn atom(&mut self) -> ParseResult {
         let token = self.current_token.clone();
         match token.token_type {
+            TokenType::Keyword(ref keyword) => match keyword.as_ref() {
+                "ez" => {
+                    self.advance();
+                    let node = self.function_definition()?;
+                    self.defined_functions.push(node.clone());
+                    Ok(node)
+                }
+                _ => Err(Error::new(
+                    ErrorType::Parse,
+                    self.current_token.position,
+                    format!(
+                        "Unexpected token: {:?}. This might be because of unterminated brackets",
+                        self.current_token
+                    ),
+                )),
+            },
             TokenType::Identifier(_) => {
                 self.advance();
-                Ok(Node::VarAccess(token))
+                let node = Node::VarAccess(token);
+                self.accessed_variables.push(node.clone());
+                Ok(node)
             }
             TokenType::LParen => {
                 self.advance();
@@ -245,9 +280,100 @@ impl Parser {
             _ => Err(Error::new(
                 ErrorType::Parse,
                 self.current_token.position,
-                format!("Unexpected token: {:?}", self.current_token),
+                format!(
+                    "Unexpected token: {:?}. This might be because of unterminated brackets",
+                    self.current_token
+                ),
             )),
         }
+    }
+
+    fn function_definition(&mut self) -> ParseResult {
+        let name = if let TokenType::Identifier(_) = self.current_token.token_type {
+            self.current_token.clone()
+        } else {
+            return Err(Error::new(
+                ErrorType::Parse,
+                self.current_token.position,
+                format!("Expected an identifier, found {:?}", self.current_token),
+            ));
+        };
+        self.advance();
+        if self.current_token.token_type != TokenType::LParen {
+            return Err(Error::new(
+                ErrorType::Parse,
+                self.current_token.position,
+                format!("Expected '(', found {:?}", self.current_token),
+            ));
+        }
+        self.advance();
+        let mut params = vec![];
+        if let TokenType::Identifier(_) = self.current_token.token_type {
+            params.push(self.current_token.clone());
+            self.advance();
+            while self.current_token.token_type == TokenType::Comma {
+                self.advance();
+                if let TokenType::Identifier(_) = self.current_token.token_type {
+                    params.push(self.current_token.clone());
+                    self.advance();
+                } else {
+                    return Err(Error::new(
+                        ErrorType::Parse,
+                        self.current_token.position,
+                        format!("Expected identifier, found {:?}", self.current_token),
+                    ));
+                }
+            }
+            if self.current_token.token_type != TokenType::RParen {
+                return Err(Error::new(
+                    ErrorType::Parse,
+                    self.current_token.position,
+                    format!("Expected ')' or ',', found {:?}", self.current_token),
+                ));
+            }
+        } else if self.current_token.token_type != TokenType::RParen {
+            return Err(Error::new(
+                ErrorType::Parse,
+                self.current_token.position,
+                format!("Expected identifier or ')', found {:?}", self.current_token),
+            ));
+        }
+        self.advance();
+        if self.current_token.token_type == TokenType::Arrow {
+            self.advance();
+            let return_type = match self.current_token.token_type {
+                TokenType::Keyword(ref keyword) => match keyword.as_ref() {
+                    "u32" => self.current_token.clone(),
+                    _ => {
+                        return Err(Error::new(
+                            ErrorType::Parse,
+                            self.current_token.position,
+                            format!("Expected return type, found {:?}", self.current_token),
+                        ))
+                    }
+                },
+                _ => {
+                    return Err(Error::new(
+                        ErrorType::Parse,
+                        self.current_token.position,
+                        format!("Expected return type, found {:?}", self.current_token),
+                    ))
+                }
+            };
+            self.advance();
+            return Ok(Node::FuncDef(
+                name,
+                params,
+                Some(return_type),
+                Box::new(self.expression()?),
+            ));
+        }
+        Ok(Node::FuncDef(
+            name,
+            params,
+            None,
+            Box::new(self.expression()?),
+        ))
     }
 
     fn binary_op(
