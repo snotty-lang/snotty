@@ -4,7 +4,6 @@ use std::fmt;
 pub enum ErrorType {
     Lex,
     Parse,
-    Interpret,
 }
 
 #[derive(Debug, Clone)]
@@ -28,8 +27,11 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Error while {:?}ing at line {}, column {} to {} : {}",
-            self.error_type,
+            "Error while {} at line {}, column {} to {} : {}",
+            match self.error_type {
+                ErrorType::Lex => "lexing",
+                ErrorType::Parse => "parsing",
+            },
             self.position.line,
             self.position.start,
             self.position.end,
