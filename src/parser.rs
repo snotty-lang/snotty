@@ -34,13 +34,17 @@ impl Parser {
             current_token: token,
         };
         let ast = obj.statements(TokenType::Eof, &mut global)?;
-        match obj.analyze(&mut global) {
+        let ast = match Self::check_undefined(&mut global) {
+            Some(err) => return Err(err),
+            None => ast,
+        };
+        match Self::keyword_checks(&ast) {
             Some(err) => Err(err),
             None => Ok(ast),
         }
     }
 
-    fn analyze(&mut self, global: &mut Scope) -> Option<Error> {
+    fn check_undefined(global: &mut Scope) -> Option<Error> {
         fn check_error(scope: &Scope) -> Option<&Error> {
             if scope.error.is_some() {
                 return scope.error.as_ref();
@@ -96,7 +100,7 @@ impl Parser {
                         return Some(Error::new(
                             ErrorType::Parse,
                             token.position,
-                            format!("Function {:?} is not defined", token),
+                            format!("Function {} is not defined", token),
                         ));
                     }
                     _ => unreachable!(),
@@ -105,6 +109,10 @@ impl Parser {
             }
         }
 
+        None
+    }
+
+    fn keyword_checks(_ast: &Node) -> Option<Error> {
         None
     }
 
@@ -200,14 +208,14 @@ impl Parser {
                 _ => Err(Error::new(
                     ErrorType::Parse,
                     self.current_token.position,
-                    format!("Expected '=', found {:?}", self.current_token),
+                    format!("Expected '=', found {}", self.current_token),
                 )),
             }
         } else {
             Err(Error::new(
                 ErrorType::Parse,
                 self.current_token.position,
-                format!("Expected an identifier, found {:?}", self.current_token),
+                format!("Expected an identifier, found {}", self.current_token),
             ))
         }
     }
@@ -298,7 +306,7 @@ impl Parser {
                     return Err(Error::new(
                         ErrorType::Parse,
                         self.current_token.position,
-                        format!("Unexpected {:?}", self.current_token),
+                        format!("Unexpected {}", self.current_token),
                     ))
                 }
             };
@@ -315,7 +323,7 @@ impl Parser {
                 return Err(Error::new(
                     ErrorType::Parse,
                     self.current_token.position,
-                    format!("Expected ')', found {:?}", self.current_token),
+                    format!("Expected ')', found {}", self.current_token),
                 ));
             }
             self.advance();
@@ -343,7 +351,7 @@ impl Parser {
                     ErrorType::Parse,
                     self.current_token.position,
                     format!(
-                        "Unexpected token: {:?}. This might be because of unterminated brackets",
+                        "Unexpected token: {}. This might be because of unterminated brackets",
                         self.current_token
                     ),
                 )),
@@ -361,7 +369,7 @@ impl Parser {
                     return Err(Error::new(
                         ErrorType::Parse,
                         self.current_token.position,
-                        format!("Expected ')', found {:?}", self.current_token),
+                        format!("Expected ')', found {}", self.current_token),
                     ));
                 }
                 self.advance();
@@ -375,7 +383,7 @@ impl Parser {
                 ErrorType::Parse,
                 self.current_token.position,
                 format!(
-                    "Unexpected token: {:?}. This might be because of unterminated brackets",
+                    "Unexpected token: {}. This might be because of unterminated brackets",
                     self.current_token
                 ),
             )),
@@ -389,7 +397,7 @@ impl Parser {
             return Err(Error::new(
                 ErrorType::Parse,
                 self.current_token.position,
-                format!("Expected an identifier, found {:?}", self.current_token),
+                format!("Expected an identifier, found {}", self.current_token),
             ));
         };
         self.advance();
@@ -397,7 +405,7 @@ impl Parser {
             return Err(Error::new(
                 ErrorType::Parse,
                 self.current_token.position,
-                format!("Expected '(', found {:?}", self.current_token),
+                format!("Expected '(', found {}", self.current_token),
             ));
         }
         self.advance();
@@ -414,7 +422,7 @@ impl Parser {
                     return Err(Error::new(
                         ErrorType::Parse,
                         self.current_token.position,
-                        format!("Expected identifier, found {:?}", self.current_token),
+                        format!("Expected identifier, found {}", self.current_token),
                     ));
                 }
             }
@@ -422,14 +430,14 @@ impl Parser {
                 return Err(Error::new(
                     ErrorType::Parse,
                     self.current_token.position,
-                    format!("Expected ')' or ',', found {:?}", self.current_token),
+                    format!("Expected ')' or ',', found {}", self.current_token),
                 ));
             }
         } else if self.current_token.token_type != TokenType::RParen {
             return Err(Error::new(
                 ErrorType::Parse,
                 self.current_token.position,
-                format!("Expected identifier or ')', found {:?}", self.current_token),
+                format!("Expected identifier or ')', found {}", self.current_token),
             ));
         }
         self.advance();

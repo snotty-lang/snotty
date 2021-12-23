@@ -1,2 +1,1 @@
-//ez foo(bar, char) /*yo(1, 2)*/ {}
-ez foo(go) foo(x + 1 * 8)
+let g = {return ++1} return a

@@ -9,8 +9,14 @@ pub fn run(filename: &str) {
     // println!("{:#?}", tokens);
     let tokens = tokens.unwrap();
     let ast = parser::Parser::parse(tokens);
-    let ast = ast.unwrap();
-    println!("{:#?}", ast);
+    match &ast {
+        Ok(ast) => {
+            println!("{:#?}", ast);
+        }
+        Err(error) => {
+            println!("{}", error);
+        }
+    }
     // let ast = ast.unwrap();
     // let result = interpreter::Interpreter::visit(ast.unwrap());
     // println!("{:?}", result.unwrap());

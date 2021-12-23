@@ -1,3 +1,5 @@
+use std::fmt;
+
 #[derive(Debug, Clone)]
 pub enum ErrorType {
     Lex,
@@ -19,6 +21,20 @@ impl Error {
             position,
             details,
         }
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Error while {:?}ing at line {}, column {} to {} : {}",
+            self.error_type,
+            self.position.line,
+            self.position.start,
+            self.position.end,
+            self.details
+        )
     }
 }
 

@@ -64,7 +64,7 @@ impl Scope {
                     self.error = Some(Error::new(
                         ErrorType::Parse,
                         token.position,
-                        format!("Variable {:?} is not defined", token),
+                        format!("Variable {} is not defined", token),
                     ));
                 }
             }
@@ -89,7 +89,7 @@ impl Scope {
                                             ErrorType::Parse,
                                             token1.position,
                                             format!(
-                                                "Function {:?} takes {} arguments, but {} given",
+                                                "Function {} takes {} arguments, but {} given",
                                                 token1,
                                                 args2.len(),
                                                 args1.len()
