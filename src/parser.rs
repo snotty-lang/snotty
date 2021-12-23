@@ -68,8 +68,6 @@ impl Parser {
             }
         }
 
-        println!("{}", global);
-
         let clone = global.clone();
         for child in global.scopes.iter_mut() {
             refresh(child, clone.clone());
@@ -322,7 +320,7 @@ impl Parser {
             }
             self.advance();
             let node = Node::Call(Box::new(atom), args);
-            scope.access_function(node.clone(), false);
+            scope.access_function(node.clone());
             Ok(node)
         } else {
             self.token_index -= 1;

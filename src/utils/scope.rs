@@ -72,8 +72,8 @@ impl Scope {
         }
     }
 
-    pub fn access_function(&mut self, node: Node, force: bool) {
-        if self.func_error.is_some() && !force {
+    pub fn access_function(&mut self, node: Node) {
+        if self.func_error.is_some() {
             return;
         }
         let mut found = false;
@@ -113,23 +113,23 @@ impl Scope {
             if self.parent.is_some() {
                 let parent = self.parent.as_mut().unwrap();
                 let old = parent.unresolved_functions.len();
-                parent.access_function(node.clone(), force);
-                self.error = parent.func_error.clone();
+                parent.access_function(node.clone());
+                self.func_error = parent.func_error.clone();
                 if parent.unresolved_functions.len() <= old {
                     return self.unresolved_functions.retain(|n| n != &node);
                 }
             }
-            if !self.unresolved_functions.contains(dbg!(&node)) {
+            if !self.unresolved_functions.contains(&node) {
                 self.unresolved_functions.push(node)
             }
-        } else if self.unresolved_functions.contains(dbg!(&node)) {
+        } else if self.unresolved_functions.contains(&node) {
             self.unresolved_functions.retain(|n| n != &node);
         }
     }
 
     pub fn refresh(&mut self) {
         for node in self.unresolved_functions.clone() {
-            self.access_function(node, true);
+            self.access_function(node);
         }
     }
 }

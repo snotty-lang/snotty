@@ -1,3 +1,2 @@
 //ez foo(bar, char) /*yo(1, 2)*/ {}
-ez foo(go) yo(go + 1, go - 1)
-ez yo(my, yo) foo(yo + my)
+ez foo(go) foo(x + 1 * 8)
