@@ -1,6 +1,5 @@
 //! A language, which doesn't have much. But, It can be compiled to brain fuck.
 
-
 fn main() {
     ezlang::run("test.ez");
 }

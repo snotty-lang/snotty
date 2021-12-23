@@ -1,7 +1,5 @@
 #![allow(clippy::fn_address_comparisons)]
 
-use std::collections::VecDeque;
-
 use super::utils::{Error, ErrorType, Node, Scope, Token, TokenType, ASSIGNMENT_OPERATORS};
 
 type ParseResult = Result<Node, Error>;
@@ -36,7 +34,6 @@ impl Parser {
             current_token: token,
         };
         let ast = obj.statements(TokenType::Eof, &mut global)?;
-        println!("{:#?}", global);
         match obj.analyze(&mut global) {
             Some(err) => Err(err),
             None => Ok(ast),
@@ -47,6 +44,9 @@ impl Parser {
         fn check_error(scope: &Scope) -> Option<&Error> {
             if scope.error.is_some() {
                 return scope.error.as_ref();
+            }
+            if scope.func_error.is_some() {
+                return scope.func_error.as_ref();
             }
             for child in &scope.scopes {
                 if let Some(err) = check_error(child) {
@@ -59,7 +59,6 @@ impl Parser {
             return Some(err.clone());
         }
 
-        dbg!(&global.unresolved_functions);
         fn refresh(scope: &mut Scope, parent: Scope) {
             scope.parent = Some(Box::new(parent));
             scope.refresh();
@@ -69,9 +68,43 @@ impl Parser {
             }
         }
 
+        println!("{}", global);
+
         let clone = global.clone();
         for child in global.scopes.iter_mut() {
             refresh(child, clone.clone());
+        }
+
+        fn check_functions(scope: &mut Scope) -> Option<Node> {
+            if !scope.unresolved_functions.is_empty() {
+                return Some(scope.unresolved_functions.pop().unwrap());
+            }
+            for child in &mut scope.scopes {
+                if let Some(err) = check_functions(child) {
+                    return Some(err);
+                }
+            }
+            None
+        }
+
+        if let Some(err) = check_error(global) {
+            return Some(err.clone());
+        }
+
+        if let Some(node) = check_functions(global) {
+            match &node {
+                Node::Call(node, _) => match &**node {
+                    Node::VarAccess(token) => {
+                        return Some(Error::new(
+                            ErrorType::Parse,
+                            token.position,
+                            format!("Function {:?} is not defined", token),
+                        ));
+                    }
+                    _ => unreachable!(),
+                },
+                _ => unreachable!(),
+            }
         }
 
         None
@@ -289,7 +322,7 @@ impl Parser {
             }
             self.advance();
             let node = Node::Call(Box::new(atom), args);
-            scope.access_function(node.clone());
+            scope.access_function(node.clone(), false);
             Ok(node)
         } else {
             self.token_index -= 1;
@@ -402,19 +435,15 @@ impl Parser {
             ));
         }
         self.advance();
-        let old_len = scope.scopes.len();
 
         let mut new_scope = Scope::new(Some(scope));
+        new_scope.args = Some(params.clone());
         let expr = self.expression(&mut new_scope)?;
         if !new_scope.scopes.is_empty() {
             assert!(new_scope.scopes.len() == 1);
             new_scope = new_scope.scopes.pop().unwrap();
             new_scope.parent = None;
         }
-        if scope.scopes.len() > old_len {
-            new_scope = scope.scopes.pop().unwrap();
-        }
-        new_scope.args = Some(params.clone());
         scope.scopes.push(new_scope);
         Ok(Node::FuncDef(name, params, Box::new(expr)))
     }

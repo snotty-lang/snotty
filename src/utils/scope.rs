@@ -1,4 +1,5 @@
 use super::{Error, ErrorType, Node, Token};
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct Scope {
@@ -9,6 +10,7 @@ pub struct Scope {
     pub scopes: Vec<Scope>,
     pub parent: Option<Box<Scope>>,
     pub error: Option<Error>,
+    pub func_error: Option<Error>,
 }
 
 impl Scope {
@@ -21,6 +23,7 @@ impl Scope {
             args: None,
             parent: parent.map(|p| Box::new(p.clone())),
             error: None,
+            func_error: None,
         }
     }
 
@@ -47,11 +50,16 @@ impl Scope {
         }
         match &node {
             Node::VarAccess(token) | Node::VarReassign(token, _) => {
-                if dbg!(!self.defined_variables.contains(&token)) {
+                if !self.defined_variables.contains(token) {
                     if self.parent.is_some() {
                         let parent = self.parent.as_mut().unwrap();
                         parent.access_variable(node.clone());
-                        if parent.error.is_none() {return}
+                        if parent.error.is_none() {
+                            return;
+                        }
+                    }
+                    if self.args.is_some() && self.args.as_ref().unwrap().contains(token) {
+                        return;
                     }
                     self.error = Some(Error::new(
                         ErrorType::Parse,
@@ -64,18 +72,31 @@ impl Scope {
         }
     }
 
-    pub fn access_function(&mut self, node: Node) {
-        if self.error.is_some() {
+    pub fn access_function(&mut self, node: Node, force: bool) {
+        if self.func_error.is_some() && !force {
             return;
         }
         let mut found = false;
         match &node {
-            Node::Call(node, args1) => match &**node {
+            Node::Call(call_node, args1) => match &**call_node {
                 Node::VarAccess(token1) => {
                     for function in &self.defined_functions {
                         match function {
                             Node::FuncDef(token2, args2, _) => {
-                                if token1 == token2 && args1.len() == args2.len() {
+                                if token1 == token2 {
+                                    if args1.len() != args2.len() {
+                                        self.func_error = Some(Error::new(
+                                            ErrorType::Parse,
+                                            token1.position,
+                                            format!(
+                                                "Function {:?} takes {} arguments, but {} given",
+                                                token1,
+                                                args2.len(),
+                                                args1.len()
+                                            ),
+                                        ));
+                                        return;
+                                    }
                                     found = true;
                                     break;
                                 }
@@ -89,14 +110,40 @@ impl Scope {
             _ => unreachable!(),
         }
         if !found {
-            self.unresolved_functions.push(node);
+            if self.parent.is_some() {
+                let parent = self.parent.as_mut().unwrap();
+                let old = parent.unresolved_functions.len();
+                parent.access_function(node.clone(), force);
+                self.error = parent.func_error.clone();
+                if parent.unresolved_functions.len() <= old {
+                    return self.unresolved_functions.retain(|n| n != &node);
+                }
+            }
+            if !self.unresolved_functions.contains(dbg!(&node)) {
+                self.unresolved_functions.push(node)
+            }
+        } else if self.unresolved_functions.contains(dbg!(&node)) {
+            self.unresolved_functions.retain(|n| n != &node);
         }
     }
 
     pub fn refresh(&mut self) {
         for node in self.unresolved_functions.clone() {
-            self.access_function(node);
+            self.access_function(node, true);
         }
-        dbg!(&self.unresolved_functions);
+    }
+}
+
+impl fmt::Display for Scope {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fn delete_parent(scope: &mut Scope) {
+            scope.parent = None;
+            for child in &mut scope.scopes {
+                delete_parent(child);
+            }
+        }
+        let mut obj = self.clone();
+        delete_parent(&mut obj);
+        write!(f, "{:#?}", obj)
     }
 }
