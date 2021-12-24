@@ -1,1 +1,3 @@
-let g = {return ++1} return a
+let x = 4 + 2
+x = x + 4
+x - 5
