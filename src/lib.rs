@@ -28,7 +28,4 @@ pub fn run(filename: &str) {
     let code = ir_code::CodeGenerator::generate_code(ast);
 
     println!("{}", code);
-
-    // let result = interpreter::Interpreter::visit(ast.unwrap());
-    // println!("{:?}", result.unwrap());
 }
