@@ -1,7 +1,7 @@
 use super::{Token, TokenType};
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Operator {
     Add,
     Sub,
@@ -25,21 +25,21 @@ impl Operator {
             TokenType::Mul => Self::Mul,
             TokenType::Div => Self::Div,
             TokenType::Mod => Self::Mod,
-            _ => unreachable!(),
+            _ => unreachable!("{}", t),
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum Val {
-    Num(u32),
+    Num(i32),
     Index(usize),
     None,
 }
 
 #[derive(Debug)]
 pub struct Instructions {
-    instructions: Vec<Instruction>,
+    pub instructions: Vec<Instruction>,
 }
 
 impl Instructions {
@@ -54,12 +54,12 @@ impl Instructions {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Instruction {
-    op: Operator,
-    arg1: Val,
-    arg2: Option<Val>,
-    assign: Option<Val>,
+    pub op: Operator,
+    pub arg1: Val,
+    pub arg2: Option<Val>,
+    pub assign: Option<Val>,
 }
 
 impl Instruction {

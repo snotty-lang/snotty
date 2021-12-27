@@ -56,7 +56,7 @@ pub enum TokenType {
     BOr,
     BXor,
     Identifier(String),
-    Number(u32),
+    Number(u16),
     LParen,
     RParen,
     LCurly,
@@ -137,6 +137,27 @@ impl Token {
         Self {
             token_type,
             position: Position { line, start, end },
+        }
+    }
+
+    pub fn un_augmented(self) -> Self {
+        let token_type = match self.token_type {
+            TokenType::AddAssign => TokenType::Add,
+            TokenType::SubAssign => TokenType::Sub,
+            TokenType::MulAssign => TokenType::Mul,
+            TokenType::DivAssign => TokenType::Div,
+            TokenType::ModAssign => TokenType::Mod,
+            TokenType::ShlAssign => TokenType::Shl,
+            TokenType::ShrAssign => TokenType::Shr,
+            TokenType::BXorAssign => TokenType::BXor,
+            TokenType::BAndAssign => TokenType::BAnd,
+            TokenType::BOrAssign => TokenType::BOr,
+            TokenType::PowAssign => TokenType::Pow,
+            _ => self.token_type,
+        };
+        Self {
+            token_type,
+            position: self.position,
         }
     }
 }

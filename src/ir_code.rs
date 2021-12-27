@@ -23,7 +23,7 @@ impl CodeGenerator {
         match node {
             Node::Number(num) => {
                 if let TokenType::Number(num) = num.token_type {
-                    Val::Num(num)
+                    Val::Num(num as i32)
                 } else {
                     unreachable!();
                 }

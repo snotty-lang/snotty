@@ -1,3 +1,5 @@
+mod compiler;
+mod evaluate;
 mod ir_code;
 mod lexer;
 mod parser;
@@ -9,7 +11,7 @@ use std::process;
 pub fn run(filename: &str) {
     let contents = fs::read_to_string(filename).unwrap();
 
-    let tokens = match lexer::Lexer::lex(&contents) {
+    let tokens = match lexer::lex(&contents) {
         Ok(tokens) => tokens,
         Err(error) => {
             eprintln!("{}", error);
@@ -17,7 +19,7 @@ pub fn run(filename: &str) {
         }
     };
 
-    let ast = match parser::Parser::parse(tokens) {
+    let ast = match parser::parse(tokens) {
         Ok(ast) => ast,
         Err(error) => {
             eprintln!("{}", error);
@@ -28,4 +30,6 @@ pub fn run(filename: &str) {
     let code = ir_code::CodeGenerator::generate_code(ast);
 
     println!("{}", code);
+    let code = evaluate::evaluate(&code);
+    compiler::transpile(&code);
 }

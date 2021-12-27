@@ -1,5 +1,3 @@
-#![allow(clippy::fn_address_comparisons)]
-
 use super::utils::{Error, ErrorType, Node, Scope, Token, TokenType, ASSIGNMENT_OPERATORS};
 
 type ParseResult = Result<Node, Error>;
@@ -23,25 +21,6 @@ impl Parser {
             return Some(self.tokens[self.token_index + 1].token_type.clone());
         }
         None
-    }
-
-    pub fn parse(tokens: Vec<Token>) -> ParseResult {
-        let token = tokens[0].clone();
-        let mut global = Scope::new(None);
-        let mut obj = Self {
-            tokens,
-            token_index: 0,
-            current_token: token,
-        };
-        let ast = obj.statements(TokenType::Eof, &mut global)?;
-        let ast = match Self::check_undefined(&mut global) {
-            Some(err) => return Err(err),
-            None => ast,
-        };
-        match Self::keyword_checks(&ast) {
-            Some(err) => Err(err),
-            None => Ok(ast),
-        }
     }
 
     fn check_undefined(global: &mut Scope) -> Option<Error> {
@@ -151,7 +130,7 @@ impl Parser {
         match self.current_token.token_type {
             TokenType::Keyword(ref keyword) if keyword == "let" => {
                 self.advance();
-                let node = self.let_statement(Node::VarAssign, scope)?;
+                let node = self.let_statement(true, scope)?;
                 scope.register_variable(node.clone());
                 Ok(node)
             }
@@ -159,7 +138,7 @@ impl Parser {
                 if self.peek_type().is_some()
                     && ASSIGNMENT_OPERATORS.contains(&self.peek_type().unwrap()) =>
             {
-                let node = self.let_statement(Node::VarReassign, scope)?;
+                let node = self.let_statement(false, scope)?;
                 scope.access_variable(node.clone());
                 Ok(node)
             }
@@ -180,26 +159,22 @@ impl Parser {
         }
     }
 
-    fn let_statement(
-        &mut self,
-        node_type: fn(Token, Box<Node>) -> Node,
-        scope: &mut Scope,
-    ) -> ParseResult {
+    fn let_statement(&mut self, init: bool, scope: &mut Scope) -> ParseResult {
         if let TokenType::Identifier(_) = self.current_token.token_type {
             let token = self.current_token.clone();
             self.advance();
             match self.current_token.token_type {
                 TokenType::Assign => {
                     self.advance();
-                    Ok(node_type(token, Box::new(self.expression(scope)?)))
+                    Ok(Node::VarAssign(token, Box::new(self.expression(scope)?)))
                 }
-                ref x if ASSIGNMENT_OPERATORS.contains(x) && node_type == Node::VarReassign => {
+                ref x if ASSIGNMENT_OPERATORS.contains(x) && !init => {
                     let op = self.current_token.clone();
                     self.advance();
-                    Ok(node_type(
+                    Ok(Node::VarReassign(
                         token.clone(),
                         Box::new(Node::BinaryOp(
-                            op,
+                            op.un_augmented(),
                             Box::new(Node::VarAccess(token)),
                             Box::new(self.expression(scope)?),
                         )),
@@ -471,5 +446,24 @@ impl Parser {
             token_type = self.current_token.token_type.clone();
         }
         Ok(left)
+    }
+}
+
+pub fn parse(tokens: Vec<Token>) -> ParseResult {
+    let token = tokens[0].clone();
+    let mut global = Scope::new(None);
+    let mut obj = Parser {
+        tokens,
+        token_index: 0,
+        current_token: token,
+    };
+    let ast = obj.statements(TokenType::Eof, &mut global)?;
+    let ast = match Parser::check_undefined(&mut global) {
+        Some(err) => return Err(err),
+        None => ast,
+    };
+    match Parser::keyword_checks(&ast) {
+        Some(err) => Err(err),
+        None => Ok(ast),
     }
 }
