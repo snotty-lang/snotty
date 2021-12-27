@@ -1,5 +1,3 @@
-#![allow(dead_code, unused_variables)]
-
 use std::{collections::HashMap, fmt};
 
 use super::utils::{Node, Token, TokenType};
@@ -130,7 +128,6 @@ impl Operator {
 
 #[derive(Debug, Clone)]
 pub enum Val {
-    Var(String),
     Num(u32),
     Index(usize),
 }
@@ -206,7 +203,6 @@ impl fmt::Display for Instruction {
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Val::Var(var) => write!(f, "{}", var),
             Val::Num(num) => write!(f, "{}", num),
             Val::Index(index) => write!(f, "[{}]", index),
         }
