@@ -86,7 +86,14 @@ impl CodeGenerator {
                     println!("{:?}", self.vars);
                 }
                 println!("--------------");
-                Val::None
+                Val::Index(self.array_index)
+            }
+
+            Node::Print(expr) => {
+                let expr = self.match_node(expr);
+                self.instructions
+                    .push(Instruction::new(Operator::Print, expr));
+                Val::Index(self.array_index)
             }
 
             Node::Call(_, _) => todo!(),

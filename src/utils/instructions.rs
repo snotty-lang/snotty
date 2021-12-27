@@ -9,6 +9,7 @@ pub enum Operator {
     Div,
     Mod,
     Neg,
+    Print,
 }
 
 impl Operator {
@@ -34,7 +35,6 @@ impl Operator {
 pub enum Val {
     Num(i32),
     Index(usize),
-    None,
 }
 
 #[derive(Debug)]
@@ -110,7 +110,6 @@ impl fmt::Display for Val {
         match self {
             Val::Num(num) => write!(f, "{}", num),
             Val::Index(index) => write!(f, "[{}]", index),
-            Val::None => write!(f, "None"),
         }
     }
 }
@@ -124,6 +123,7 @@ impl fmt::Display for Operator {
             Operator::Div => write!(f, "/"),
             Operator::Mod => write!(f, "%"),
             Operator::Neg => write!(f, "-"),
+            Operator::Print => write!(f, "print "),
         }
     }
 }

@@ -322,6 +322,11 @@ impl Parser {
                     scope.register_function(node.clone());
                     Ok(node)
                 }
+                "ezout" => {
+                    self.advance();
+                    let node = Node::Print(Box::new(self.expression(scope)?));
+                    Ok(node)
+                }
                 _ => Err(Error::new(
                     ErrorType::Parse,
                     self.current_token.position,
@@ -442,6 +447,19 @@ impl Parser {
             let op = self.current_token.clone();
             self.advance();
             let right = func2(self, scope)?;
+            if op.token_type == TokenType::Div {
+                if let Node::Number(Token {
+                    token_type: TokenType::Number(0),
+                    ..
+                }) = right
+                {
+                    return Err(Error::new(
+                        ErrorType::Parse,
+                        self.current_token.position,
+                        "Division by zero".to_string(),
+                    ));
+                }
+            }
             left = Node::BinaryOp(op, Box::new(left), Box::new(right));
             token_type = self.current_token.token_type.clone();
         }
