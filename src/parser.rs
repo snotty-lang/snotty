@@ -3,7 +3,6 @@ use super::utils::{Error, ErrorType, Node, Scope, Token, TokenType, ASSIGNMENT_O
 /// A result type for parsing
 type ParseResult = Result<Node, Error>;
 
-
 /// Parses the List of Tokens into an AST
 pub struct Parser {
     tokens: Vec<Token>,
