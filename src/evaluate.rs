@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::utils::{Instructions, Operator, Val};
+use super::utils::{Instruction, Instructions, Operator, Val};
 
 pub fn evaluate(code: &Instructions) -> Instructions {
     let mut vars = HashMap::new();
@@ -20,13 +20,28 @@ pub fn evaluate(code: &Instructions) -> Instructions {
         let assign = match instruction.assign {
             Some(Val::Index(index)) => index,
 
-            // ezout
-            None => {
-                let mut new_instruction = instruction.clone();
-                new_instruction.arg1 = Val::Num(left);
-                new.push(new_instruction);
-                continue;
-            }
+            // ezout and ezascii
+            None => match instruction.op {
+                Operator::Print => {
+                    let left_str = left.to_string();
+                    let left_vec = left_str.chars().collect::<Vec<char>>();
+                    for left in left_vec {
+                        new.push(Instruction::new(
+                            Operator::Print,
+                            Val::Num(left as u32 as i32),
+                        ));
+                    }
+                    new.push(Instruction::new(Operator::Print, Val::Num(10)));
+                    continue;
+                }
+                Operator::Ascii => {
+                    let mut new_instruction = instruction.clone();
+                    new_instruction.arg1 = Val::Num(left);
+                    new.push(new_instruction);
+                    continue;
+                }
+                _ => unreachable!(),
+            },
             _ => unreachable!(),
         };
 

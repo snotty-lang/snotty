@@ -1,3 +1,7 @@
 let x = 2 + 3
 //x *= -x
-ezout x
+//ezout x + 48
+//ezout 10
+x *= 0
+ezout 48
+ezascii 49

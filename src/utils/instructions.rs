@@ -10,6 +10,7 @@ pub enum Operator {
     Mod,
     Neg,
     Print,
+    Ascii,
 }
 
 impl Operator {
@@ -124,6 +125,7 @@ impl fmt::Display for Operator {
             Operator::Mod => write!(f, "%"),
             Operator::Neg => write!(f, "-"),
             Operator::Print => write!(f, "print "),
+            Operator::Ascii => write!(f, "ascii "),
         }
     }
 }

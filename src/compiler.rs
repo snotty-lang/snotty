@@ -11,7 +11,8 @@ pub fn transpile(instructions: &Instructions) {
         match instruction.assign {
             Some(Val::Index(index)) => index,
             None => match instruction.op {
-                Operator::Print => {
+                Operator::Print | Operator::Ascii => {
+                    code.push_str("[-]");
                     code.push_str(&("+".repeat(left) + "."));
                     continue;
                 }
@@ -25,6 +26,7 @@ pub fn transpile(instructions: &Instructions) {
             _ => continue,
         } as usize;
 
+        code.push_str("[-]");
         code.push_str(&match instruction.op {
             Operator::Add => "+".repeat(left + right),
             Operator::Sub => "+".repeat(left - right),

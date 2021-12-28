@@ -13,4 +13,6 @@ pub enum Node {
     FuncDef(Token, Vec<Token>, Box<Node>),
     Return(Token, Option<Box<Node>>),
     Print(Box<Node>),
+    Ascii(Box<Node>),
+    Input,
 }

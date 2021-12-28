@@ -96,6 +96,14 @@ impl CodeGenerator {
                 Val::Index(self.array_index)
             }
 
+            Node::Ascii(expr) => {
+                let expr = self.match_node(expr);
+                self.instructions
+                    .push(Instruction::new(Operator::Ascii, expr));
+                Val::Index(self.array_index)
+            }
+
+            Node::Input => todo!(),
             Node::Call(_, _) => todo!(),
             Node::FuncDef(_, _, _) => todo!(),
             Node::Return(_, _) => todo!(),

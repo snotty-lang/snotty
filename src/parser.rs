@@ -23,78 +23,6 @@ impl Parser {
         None
     }
 
-    fn check_undefined(global: &mut Scope) -> Option<Error> {
-        fn check_error(scope: &Scope) -> Option<&Error> {
-            if scope.error.is_some() {
-                return scope.error.as_ref();
-            }
-            if scope.func_error.is_some() {
-                return scope.func_error.as_ref();
-            }
-            for child in &scope.scopes {
-                if let Some(err) = check_error(child) {
-                    return Some(err);
-                }
-            }
-            None
-        }
-        if let Some(err) = check_error(global) {
-            return Some(err.clone());
-        }
-
-        fn refresh(scope: &mut Scope, parent: Scope) {
-            scope.parent = Some(Box::new(parent));
-            scope.refresh();
-            let clone = scope.clone();
-            for child in scope.scopes.iter_mut() {
-                refresh(child, clone.clone());
-            }
-        }
-
-        let clone = global.clone();
-        for child in global.scopes.iter_mut() {
-            refresh(child, clone.clone());
-        }
-
-        fn check_functions(scope: &mut Scope) -> Option<Node> {
-            if !scope.unresolved_functions.is_empty() {
-                return Some(scope.unresolved_functions.pop().unwrap());
-            }
-            for child in &mut scope.scopes {
-                if let Some(err) = check_functions(child) {
-                    return Some(err);
-                }
-            }
-            None
-        }
-
-        if let Some(err) = check_error(global) {
-            return Some(err.clone());
-        }
-
-        if let Some(node) = check_functions(global) {
-            match &node {
-                Node::Call(node, _) => match &**node {
-                    Node::VarAccess(token) => {
-                        return Some(Error::new(
-                            ErrorType::Parse,
-                            token.position,
-                            format!("Function {} is not defined", token),
-                        ));
-                    }
-                    _ => unreachable!(),
-                },
-                _ => unreachable!(),
-            }
-        }
-
-        None
-    }
-
-    fn keyword_checks(_ast: &Node) -> Option<Error> {
-        None
-    }
-
     fn statements(&mut self, end_token: TokenType, scope: &mut Scope) -> ParseResult {
         let mut statements = vec![];
         while self.current_token.token_type != end_token {
@@ -171,12 +99,28 @@ impl Parser {
                 ref x if ASSIGNMENT_OPERATORS.contains(x) && !init => {
                     let op = self.current_token.clone();
                     self.advance();
+                    let right = self.expression(scope)?;
+
+                    if [TokenType::DivAssign, TokenType::ModAssign].contains(&op.token_type) {
+                        if let Node::Number(Token {
+                            token_type: TokenType::Number(0),
+                            ..
+                        }) = right
+                        {
+                            return Err(Error::new(
+                                ErrorType::Parse,
+                                self.current_token.position,
+                                "Division by zero".to_string(),
+                            ));
+                        }
+                    }
+
                     Ok(Node::VarReassign(
                         token.clone(),
                         Box::new(Node::BinaryOp(
                             op.un_augmented(),
                             Box::new(Node::VarAccess(token)),
-                            Box::new(self.expression(scope)?),
+                            Box::new(right),
                         )),
                     ))
                 }
@@ -324,16 +268,20 @@ impl Parser {
                 }
                 "ezout" => {
                     self.advance();
-                    let node = Node::Print(Box::new(self.expression(scope)?));
-                    Ok(node)
+                    Ok(Node::Print(Box::new(self.expression(scope)?)))
+                }
+                "ezin" => {
+                    self.advance();
+                    Ok(Node::Input)
+                }
+                "ezascii" => {
+                    self.advance();
+                    Ok(Node::Ascii(Box::new(self.expression(scope)?)))
                 }
                 _ => Err(Error::new(
                     ErrorType::Parse,
                     self.current_token.position,
-                    format!(
-                        "Unexpected token: {}. This might be because of unterminated brackets",
-                        self.current_token
-                    ),
+                    format!("Unexpected keyword: {}", self.current_token),
                 )),
             },
             TokenType::Identifier(_) => {
@@ -447,7 +395,7 @@ impl Parser {
             let op = self.current_token.clone();
             self.advance();
             let right = func2(self, scope)?;
-            if op.token_type == TokenType::Div {
+            if [TokenType::Div, TokenType::Mod].contains(&op.token_type) {
                 if let Node::Number(Token {
                     token_type: TokenType::Number(0),
                     ..
@@ -476,12 +424,84 @@ pub fn parse(tokens: Vec<Token>) -> ParseResult {
         current_token: token,
     };
     let ast = obj.statements(TokenType::Eof, &mut global)?;
-    let ast = match Parser::check_undefined(&mut global) {
+    let ast = match check_undefined(&mut global) {
         Some(err) => return Err(err),
         None => ast,
     };
-    match Parser::keyword_checks(&ast) {
+    match keyword_checks(&ast) {
         Some(err) => Err(err),
         None => Ok(ast),
     }
+}
+
+fn check_undefined(global: &mut Scope) -> Option<Error> {
+    fn check_error(scope: &Scope) -> Option<&Error> {
+        if scope.error.is_some() {
+            return scope.error.as_ref();
+        }
+        if scope.func_error.is_some() {
+            return scope.func_error.as_ref();
+        }
+        for child in &scope.scopes {
+            if let Some(err) = check_error(child) {
+                return Some(err);
+            }
+        }
+        None
+    }
+    if let Some(err) = check_error(global) {
+        return Some(err.clone());
+    }
+
+    fn refresh(scope: &mut Scope, parent: Scope) {
+        scope.parent = Some(Box::new(parent));
+        scope.refresh();
+        let clone = scope.clone();
+        for child in scope.scopes.iter_mut() {
+            refresh(child, clone.clone());
+        }
+    }
+
+    let clone = global.clone();
+    for child in global.scopes.iter_mut() {
+        refresh(child, clone.clone());
+    }
+
+    fn check_functions(scope: &mut Scope) -> Option<Node> {
+        if !scope.unresolved_functions.is_empty() {
+            return Some(scope.unresolved_functions.pop().unwrap());
+        }
+        for child in &mut scope.scopes {
+            if let Some(err) = check_functions(child) {
+                return Some(err);
+            }
+        }
+        None
+    }
+
+    if let Some(err) = check_error(global) {
+        return Some(err.clone());
+    }
+
+    if let Some(node) = check_functions(global) {
+        match &node {
+            Node::Call(node, _) => match &**node {
+                Node::VarAccess(token) => {
+                    return Some(Error::new(
+                        ErrorType::Parse,
+                        token.position,
+                        format!("Function {} is not defined", token),
+                    ));
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    None
+}
+
+fn keyword_checks(_ast: &Node) -> Option<Error> {
+    None
 }
