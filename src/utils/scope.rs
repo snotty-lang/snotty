@@ -64,7 +64,7 @@ impl Scope {
                         return;
                     }
                     self.error = Some(Error::new(
-                        ErrorType::Parse,
+                        ErrorType::UndefinedVariable,
                         token.position,
                         format!("Variable {} is not defined", token),
                     ));
@@ -88,7 +88,7 @@ impl Scope {
                                 if token1 == token2 {
                                     if args1.len() != args2.len() {
                                         self.func_error = Some(Error::new(
-                                            ErrorType::Parse,
+                                            ErrorType::UndefinedFunction,
                                             token1.position,
                                             format!(
                                                 "Function {} takes {} arguments, but {} given",

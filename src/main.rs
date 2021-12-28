@@ -1,14 +1,6 @@
-use std::process;
-
 fn main() {
-    ezlang::run(&ezlang::get_contents("test.ez").unwrap_or_else(|e| {
-        println!("{}", e);
-        process::exit(1);
-    }))
-    .unwrap_or_else(|e| {
-        println!("{}", e);
-        process::exit(1);
-    });
+    // println!("{:?}", ezlang::ez!(ezout 2 + 2));
+    println!("{}", ezlang::compile("test.ez"));
 }
 
 /*

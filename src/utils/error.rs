@@ -4,8 +4,12 @@ use std::fmt;
 /// An enum to specify the type of the error.
 #[derive(Debug, Clone)]
 pub enum ErrorType {
-    Lex,
-    Parse,
+    InvalidLiteral,
+    NumberTooLarge,
+    SyntaxError,
+    UndefinedFunction,
+    UndefinedVariable,
+    DivisionByZero,
 }
 
 /// An error that can occur during the compilation of the source code.
@@ -30,11 +34,8 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Error while {} at line {}, column {} to {} : {}",
-            match self.error_type {
-                ErrorType::Lex => "lexing",
-                ErrorType::Parse => "parsing",
-            },
+            "{:?} at line {}, column {} to {} : {}",
+            self.error_type,
             self.position.line,
             self.position.start,
             self.position.end,

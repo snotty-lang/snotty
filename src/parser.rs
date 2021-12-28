@@ -110,7 +110,7 @@ impl Parser {
                         }) = right
                         {
                             return Err(Error::new(
-                                ErrorType::Parse,
+                                ErrorType::DivisionByZero,
                                 self.current_token.position,
                                 "Division by zero".to_string(),
                             ));
@@ -127,14 +127,14 @@ impl Parser {
                     ))
                 }
                 _ => Err(Error::new(
-                    ErrorType::Parse,
+                    ErrorType::SyntaxError,
                     self.current_token.position,
                     format!("Expected '=', found {}", self.current_token),
                 )),
             }
         } else {
             Err(Error::new(
-                ErrorType::Parse,
+                ErrorType::SyntaxError,
                 self.current_token.position,
                 format!("Expected an identifier, found {}", self.current_token),
             ))
@@ -225,7 +225,7 @@ impl Parser {
                 Some(x) => x,
                 None => {
                     return Err(Error::new(
-                        ErrorType::Parse,
+                        ErrorType::SyntaxError,
                         self.current_token.position,
                         format!("Unexpected {}", self.current_token),
                     ))
@@ -242,7 +242,7 @@ impl Parser {
             }
             if self.current_token.token_type != TokenType::RParen {
                 return Err(Error::new(
-                    ErrorType::Parse,
+                    ErrorType::SyntaxError,
                     self.current_token.position,
                     format!("Expected ')', found {}", self.current_token),
                 ));
@@ -289,7 +289,7 @@ impl Parser {
                     Ok(Node::Number(token))
                 }
                 _ => Err(Error::new(
-                    ErrorType::Parse,
+                    ErrorType::SyntaxError,
                     self.current_token.position,
                     format!("Unexpected keyword: {}", self.current_token),
                 )),
@@ -305,7 +305,7 @@ impl Parser {
                 let node = self.expression(scope)?;
                 if self.current_token.token_type != TokenType::RParen {
                     return Err(Error::new(
-                        ErrorType::Parse,
+                        ErrorType::SyntaxError,
                         self.current_token.position,
                         format!("Expected ')', found {}", self.current_token),
                     ));
@@ -318,12 +318,9 @@ impl Parser {
                 Ok(Node::Number(token))
             }
             _ => Err(Error::new(
-                ErrorType::Parse,
+                ErrorType::SyntaxError,
                 self.current_token.position,
-                format!(
-                    "Unexpected token: {}. This might be because of unterminated brackets",
-                    self.current_token
-                ),
+                format!("Unexpected token: {}", self.current_token),
             )),
         }
     }
@@ -333,7 +330,7 @@ impl Parser {
             self.current_token.clone()
         } else {
             return Err(Error::new(
-                ErrorType::Parse,
+                ErrorType::SyntaxError,
                 self.current_token.position,
                 format!("Expected an identifier, found {}", self.current_token),
             ));
@@ -341,7 +338,7 @@ impl Parser {
         self.advance();
         if self.current_token.token_type != TokenType::LParen {
             return Err(Error::new(
-                ErrorType::Parse,
+                ErrorType::SyntaxError,
                 self.current_token.position,
                 format!("Expected '(', found {}", self.current_token),
             ));
@@ -358,7 +355,7 @@ impl Parser {
                     self.advance();
                 } else {
                     return Err(Error::new(
-                        ErrorType::Parse,
+                        ErrorType::SyntaxError,
                         self.current_token.position,
                         format!("Expected identifier, found {}", self.current_token),
                     ));
@@ -366,14 +363,14 @@ impl Parser {
             }
             if self.current_token.token_type != TokenType::RParen {
                 return Err(Error::new(
-                    ErrorType::Parse,
+                    ErrorType::SyntaxError,
                     self.current_token.position,
                     format!("Expected ')' or ',', found {}", self.current_token),
                 ));
             }
         } else if self.current_token.token_type != TokenType::RParen {
             return Err(Error::new(
-                ErrorType::Parse,
+                ErrorType::SyntaxError,
                 self.current_token.position,
                 format!("Expected identifier or ')', found {}", self.current_token),
             ));
@@ -412,7 +409,7 @@ impl Parser {
                 }) = right
                 {
                     return Err(Error::new(
-                        ErrorType::Parse,
+                        ErrorType::DivisionByZero,
                         self.current_token.position,
                         "Division by zero".to_string(),
                     ));
@@ -503,7 +500,7 @@ fn check_undefined(global: &mut Scope) -> Option<Error> {
             Node::Call(node, _) => match &**node {
                 Node::VarAccess(token) => {
                     return Some(Error::new(
-                        ErrorType::Parse,
+                        ErrorType::UndefinedFunction,
                         token.position,
                         format!("Function {} is not defined", token),
                     ));

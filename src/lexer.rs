@@ -23,6 +23,8 @@ type LexResult = Result<Vec<Token>, Error>;
 /// assert!(tokens.is_err());
 /// ```
 pub fn lex(input: &str) -> LexResult {
+    let mut parentheses = Vec::new();
+    let mut curly = Vec::new();
     let mut tokens = Vec::new();
     let mut chars = input.chars().enumerate().peekable();
     let mut line = 1;
@@ -108,7 +110,7 @@ pub fn lex(input: &str) -> LexResult {
                     }
                     if !end {
                         return Err(Error::new(
-                            ErrorType::Lex,
+                            ErrorType::SyntaxError,
                             Position::new(line, i, i),
                             "Unterminated comment".to_string(),
                         ));
@@ -131,15 +133,31 @@ pub fn lex(input: &str) -> LexResult {
             }
             '(' => {
                 tokens.push(Token::new(TokenType::LParen, line, i, i));
+                parentheses.push(Position::new(line, i, i));
             }
             ')' => {
                 tokens.push(Token::new(TokenType::RParen, line, i, i));
+                if parentheses.pop().is_none() {
+                    return Err(Error::new(
+                        ErrorType::SyntaxError,
+                        Position::new(line, i, i),
+                        "Missing opening '(' pair".to_string(),
+                    ));
+                }
             }
             '{' => {
                 tokens.push(Token::new(TokenType::LCurly, line, i, i));
+                curly.push(Position::new(line, i, i));
             }
             '}' => {
                 tokens.push(Token::new(TokenType::RCurly, line, i, i));
+                if curly.pop().is_none() {
+                    return Err(Error::new(
+                        ErrorType::SyntaxError,
+                        Position::new(line, i, i),
+                        "Missing opening '}' pair".to_string(),
+                    ));
+                }
             }
             ',' => {
                 tokens.push(Token::new(TokenType::Comma, line, i, i));
@@ -245,7 +263,7 @@ pub fn lex(input: &str) -> LexResult {
                         Ok(num) => num,
                         Err(err) => {
                             return Err(Error::new(
-                                ErrorType::Lex,
+                                ErrorType::NumberTooLarge,
                                 Position::new(line, start, end),
                                 err.to_string(),
                             ));
@@ -277,13 +295,30 @@ pub fn lex(input: &str) -> LexResult {
             }
             _ => {
                 return Err(Error::new(
-                    ErrorType::Lex,
+                    ErrorType::InvalidLiteral,
                     Position::new(line, i, i + 1),
                     format!("Invalid token: {}", c),
                 ));
             }
         }
     }
+
+    if !parentheses.is_empty() {
+        return Err(Error::new(
+            ErrorType::SyntaxError,
+            parentheses.pop().unwrap(),
+            "Unclosed '('".to_string(),
+        ));
+    }
+
+    if !curly.is_empty() {
+        return Err(Error::new(
+            ErrorType::SyntaxError,
+            curly.pop().unwrap(),
+            "Unclosed '}'".to_string(),
+        ));
+    }
+
     tokens.push(Token::new(TokenType::Eof, line, input.len(), input.len()));
     Ok(tokens)
 }

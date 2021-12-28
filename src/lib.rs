@@ -1,4 +1,26 @@
 //! A language, which doesn't have much. But, It can be compiled to brainfuck.
+//! To get started, run the following code:
+//! ```
+//! println!("{}", ezlang::run("ezout 2 + 2").unwrap());
+//! ```
+//! This should output the following code:
+//! ```
+//! [-]++++++++++++++++++++++++++++++++++++++++++++++++++++.[-]++++++++++.
+//! ```
+//!
+//! To compile this brainfuck code into machine code, you can use this <a href=https://github.com/Alumin112/BrainFuck-Compiler/>compiler</a>.
+//!
+//! You can use the official ezlang compiler from <a href=https://github.com/Alumin112/ezlang/>here</a>
+//!
+//! There is also the ez macro
+//! ```
+//! use ezlang;
+//!
+//! ezlang::ez!(
+//!     let y = 454 ezout y / 10
+//! )
+//! ```
+//! It is the run function but in macro style
 
 /// Contains the code transpiler, which generates the Brainfuck code
 pub mod compiler;
@@ -17,11 +39,11 @@ pub mod parser;
 pub mod utils;
 
 use std::fs;
-use std::io::Result as IoResult;
+use std::process;
 
 use utils::Error;
 
-/// Reads and parses the passed file, and returns a the generated brainfuck code or an error, if any
+/// parses the passed ezlang code, and returns a the generated brainfuck code or an error, if any
 /// # Arguments
 /// * `contents` - The contents to be parsed
 /// # Returns
@@ -43,12 +65,29 @@ pub fn run(contents: &str) -> Result<String, Error> {
     Ok(compiler::transpile(&code))
 }
 
-/// Reads the contents from the passed file
-/// # Arguments
-/// * `filename` - The file to be read
-/// # Returns
-/// * `Result<String, io::Error>` - The contents of the file or an error, if any
+/// Reads and compiles the content of the passed file and returns it
+/// In case of an error, it exits the program
 #[inline(always)]
-pub fn get_contents(filename: &str) -> IoResult<String> {
-    fs::read_to_string(filename)
+pub fn compile(filename: &str) -> String {
+    run(&fs::read_to_string(filename).unwrap_or_else(|e| {
+        println!("{}", e);
+        process::exit(1);
+    }))
+    .unwrap_or_else(|e| {
+        println!("{}", e);
+        process::exit(1);
+    })
+}
+
+/// Same as `run`, but a macro
+#[macro_export]
+macro_rules! ez {
+    ($($text: tt)*) => {{
+        let mut code = String::new();
+        $(
+            code.push(' ');
+            code.push_str(stringify!($text));
+        )*
+        ezlang::run(&code)
+    }};
 }
