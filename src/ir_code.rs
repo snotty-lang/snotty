@@ -21,13 +21,15 @@ impl CodeGenerator {
 
     fn match_node(&mut self, node: &Node) -> Val {
         match node {
-            Node::Number(num) => {
-                if let TokenType::Number(num) = num.token_type {
-                    Val::Num(num as i32)
-                } else {
-                    unreachable!();
-                }
-            }
+            Node::Number(num) => match num.token_type {
+                TokenType::Number(num) => Val::Num(num as i32),
+                TokenType::Keyword(ref boolean) => match boolean.as_ref() {
+                    "true" => Val::Bool(true),
+                    "false" => Val::Bool(false),
+                    _ => unreachable!(),
+                },
+                _ => unreachable!(),
+            },
 
             Node::BinaryOp(op, left, right) => {
                 let left = self.match_node(left);

@@ -5,6 +5,7 @@ pub fn transpile(instructions: &Instructions) {
     for instruction in &instructions.instructions {
         let left = match instruction.arg1 {
             Val::Num(num) => num,
+            Val::Bool(b) => b as i32,
             Val::Index(_) => continue,
         } as usize;
 

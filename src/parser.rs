@@ -278,6 +278,14 @@ impl Parser {
                     self.advance();
                     Ok(Node::Ascii(Box::new(self.expression(scope)?)))
                 }
+                "true" => {
+                    self.advance();
+                    Ok(Node::Number(token))
+                }
+                "false" => {
+                    self.advance();
+                    Ok(Node::Number(token))
+                }
                 _ => Err(Error::new(
                     ErrorType::Parse,
                     self.current_token.position,

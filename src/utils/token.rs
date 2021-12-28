@@ -1,7 +1,10 @@
 use super::error::Position;
 use std::{cmp, fmt};
 
-pub const KEYWORDS: [&str; 6] = ["let", "ez", "return", "ezout", "ezin", "ezascii"];
+pub const KEYWORDS: [&str; 8] = [
+    "let", "ez", "return", "ezout", "ezin", "ezascii", "true", "false",
+];
+
 pub const ASSIGNMENT_OPERATORS: [TokenType; 12] = [
     TokenType::Assign,
     TokenType::SubAssign,

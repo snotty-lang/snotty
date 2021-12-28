@@ -11,6 +11,15 @@ pub enum Operator {
     Neg,
     Print,
     Ascii,
+    Eq,
+    Neq,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+    LAnd,
+    LOr,
+    LNot,
 }
 
 impl Operator {
@@ -27,6 +36,15 @@ impl Operator {
             TokenType::Mul => Self::Mul,
             TokenType::Div => Self::Div,
             TokenType::Mod => Self::Mod,
+            TokenType::Eq => Self::Eq,
+            TokenType::Neq => Self::Neq,
+            TokenType::Lt => Self::Lt,
+            TokenType::Gt => Self::Gt,
+            TokenType::Le => Self::Le,
+            TokenType::Ge => Self::Ge,
+            TokenType::LAnd => Self::LAnd,
+            TokenType::LOr => Self::LOr,
+            TokenType::LNot => Self::LNot,
             _ => unreachable!("{}", t),
         }
     }
@@ -35,6 +53,7 @@ impl Operator {
 #[derive(Debug, Clone)]
 pub enum Val {
     Num(i32),
+    Bool(bool),
     Index(usize),
 }
 
@@ -109,6 +128,7 @@ impl fmt::Display for Instruction {
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Val::Bool(b) => write!(f, "{}", b),
             Val::Num(num) => write!(f, "{}", num),
             Val::Index(index) => write!(f, "[{}]", index),
         }
@@ -126,6 +146,27 @@ impl fmt::Display for Operator {
             Operator::Neg => write!(f, "-"),
             Operator::Print => write!(f, "print "),
             Operator::Ascii => write!(f, "ascii "),
+            Operator::Eq => write!(f, "=="),
+            Operator::Neq => write!(f, "!="),
+            Operator::Lt => write!(f, "<"),
+            Operator::Gt => write!(f, ">"),
+            Operator::Le => write!(f, "<="),
+            Operator::Ge => write!(f, ">="),
+            Operator::LAnd => write!(f, "&&"),
+            Operator::LOr => write!(f, "||"),
+            Operator::LNot => write!(f, "!"),
+        }
+    }
+}
+
+impl Val {
+    /// # Panics
+    /// Panics if the variant is `Self::Index`
+    pub fn get_int(&self) -> i32 {
+        match self {
+            Val::Num(num) => *num,
+            Val::Bool(b) => *b as i32,
+            _ => unreachable!(),
         }
     }
 }

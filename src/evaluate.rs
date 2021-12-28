@@ -6,15 +6,15 @@ pub fn evaluate(code: &Instructions) -> Instructions {
     let mut vars = HashMap::new();
     let mut new = Instructions::new();
     for instruction in &code.instructions {
-        let left = match instruction.arg1 {
-            Val::Num(num) => num,
-            Val::Index(index) => match vars.get(&index) {
-                Some(Val::Num(num)) => *num,
-                _ => {
+        let left = match &instruction.arg1 {
+            Val::Index(index) => match vars.get(index) {
+                Some(Val::Index(_)) | None => {
                     new.push(instruction.clone());
                     continue;
                 }
+                Some(x) => x.clone(),
             },
+            x => x.clone(),
         };
 
         let assign = match instruction.assign {
@@ -36,7 +36,7 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                 }
                 Operator::Ascii => {
                     let mut new_instruction = instruction.clone();
-                    new_instruction.arg1 = Val::Num(left);
+                    new_instruction.arg1 = Val::Num(left.get_int());
                     new.push(new_instruction);
                     continue;
                 }
@@ -45,36 +45,51 @@ pub fn evaluate(code: &Instructions) -> Instructions {
             _ => unreachable!(),
         };
 
-        let right = match instruction.arg2 {
-            Some(Val::Num(num)) => num,
-            Some(Val::Index(index)) => match vars.get(&index) {
-                Some(Val::Num(num)) => *num,
-                _ => {
+        let right = match &instruction.arg2 {
+            Some(Val::Index(index)) => match vars.get(index) {
+                Some(Val::Index(_)) | None => {
                     new.push(instruction.clone());
                     continue;
                 }
+                Some(x) => x.clone(),
             },
+            Some(x) => x.clone(),
 
             // Unary Operations
             None => match instruction.op {
                 Operator::Neg => {
-                    vars.insert(assign, Val::Num(-left));
+                    vars.insert(assign, Val::Num(-(left.get_int())));
+                    continue;
+                }
+                Operator::LNot => {
+                    vars.insert(assign, Val::Bool(left.get_int() == 0));
                     continue;
                 }
                 _ => unreachable!(),
             },
         };
 
+        let left = left.get_int();
+        let right = right.get_int();
+
         vars.insert(
             assign,
-            Val::Num(match instruction.op {
-                Operator::Add => left + right,
-                Operator::Sub => left - right,
-                Operator::Mul => left * right,
-                Operator::Div => left / right,
-                Operator::Mod => left % right,
+            match instruction.op {
+                Operator::Add => Val::Num(left + right),
+                Operator::Sub => Val::Num(left - right),
+                Operator::Mul => Val::Num(left * right),
+                Operator::Div => Val::Num(left / right),
+                Operator::Mod => Val::Num(left % right),
+                Operator::Eq => Val::Bool(left == right),
+                Operator::Neq => Val::Bool(left != right),
+                Operator::Lt => Val::Bool(left < right),
+                Operator::Gt => Val::Bool(left > right),
+                Operator::Le => Val::Bool(left <= right),
+                Operator::Ge => Val::Bool(left >= right),
+                Operator::LAnd => Val::Bool(left != 0 && right != 0),
+                Operator::LOr => Val::Bool(left != 0 || right != 0),
                 _ => unreachable!(),
-            }),
+            },
         );
     }
     println!("{:?}", vars);
