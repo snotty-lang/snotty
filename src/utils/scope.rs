@@ -1,6 +1,8 @@
 use super::{Error, ErrorType, Node, Token};
 use std::fmt;
 
+/// Scope struct
+/// It is used to find undefined variables and functions
 #[derive(Debug, Clone)]
 pub struct Scope {
     pub unresolved_functions: Vec<Node>,
@@ -49,7 +51,7 @@ impl Scope {
             return;
         }
         match &node {
-            Node::VarAccess(token) | Node::VarReassign(token, _) => {
+            Node::VarAccess(token) | Node::VarReassign(token, _) | Node::VarAssign(token, _) => {
                 if !self.defined_variables.contains(token) {
                     if self.parent.is_some() {
                         let parent = self.parent.as_mut().unwrap();

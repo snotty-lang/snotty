@@ -1,6 +1,7 @@
 use super::utils::{Instructions, Operator, Val};
 
-pub fn transpile(instructions: &Instructions) {
+/// Compiles the 3-address code into brainfuck code.
+pub fn transpile(instructions: &Instructions) -> String {
     let mut code = String::new();
     for instruction in &instructions.instructions {
         let left = match instruction.arg1 {
@@ -39,4 +40,5 @@ pub fn transpile(instructions: &Instructions) {
         });
     }
     println!("{}", code);
+    code
 }

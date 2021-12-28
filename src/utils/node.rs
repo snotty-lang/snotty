@@ -1,5 +1,6 @@
 use super::token::Token;
 
+/// A Node in the AST.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
     Number(Token),

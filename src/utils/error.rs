@@ -1,11 +1,14 @@
+use std::error;
 use std::fmt;
 
+/// An enum to specify the type of the error.
 #[derive(Debug, Clone)]
 pub enum ErrorType {
     Lex,
     Parse,
 }
 
+/// An error that can occur during the compilation of the source code.
 #[derive(Debug, Clone)]
 pub struct Error {
     pub error_type: ErrorType,
@@ -40,6 +43,9 @@ impl fmt::Display for Error {
     }
 }
 
+impl error::Error for Error {}
+
+/// A position in the source code.
 #[derive(Debug, Clone, Copy)]
 pub struct Position {
     pub line: usize,

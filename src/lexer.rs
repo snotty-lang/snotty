@@ -2,8 +2,26 @@
 
 use super::utils::{Error, ErrorType, Position, Token, TokenType, KEYWORDS};
 
+/// A Result type for Lexing
 type LexResult = Result<Vec<Token>, Error>;
 
+/// Lexes the given input string into a vector of tokens
+/// # Arguments
+/// * `input` - The input string to be lexed
+/// # Returns
+/// * `LexResult` - A Result containing a vector of tokens or an error, if any
+/// # Errors
+/// Returns an error if a number is very big or if an invalid token was found
+/// # Examples
+/// ```
+/// use ezlang;
+///
+/// let tokens = ezlang::lexer::lex("ezout 5 + 7");
+/// assert!(tokens.is_ok());
+///
+/// let tokens = ezlang::lexer::lex("$? ez");
+/// assert!(tokens.is_err());
+/// ```
 pub fn lex(input: &str) -> LexResult {
     let mut tokens = Vec::new();
     let mut chars = input.chars().enumerate().peekable();

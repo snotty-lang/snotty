@@ -1,7 +1,10 @@
 use super::utils::{Error, ErrorType, Node, Scope, Token, TokenType, ASSIGNMENT_OPERATORS};
 
+/// A result type for parsing
 type ParseResult = Result<Node, Error>;
 
+
+/// Parses the List of Tokens into an AST
 pub struct Parser {
     tokens: Vec<Token>,
     token_index: usize,
@@ -423,6 +426,10 @@ impl Parser {
     }
 }
 
+/// Parses the given vector of tokens into an AST.
+/// Returns the root node of the AST.
+/// # Errors
+/// If the tokens cannot be parsed into an AST, an error is returned.
 pub fn parse(tokens: Vec<Token>) -> ParseResult {
     let token = tokens[0].clone();
     let mut global = Scope::new(None);
@@ -442,6 +449,7 @@ pub fn parse(tokens: Vec<Token>) -> ParseResult {
     }
 }
 
+/// Checks for undefined functions and variables.
 fn check_undefined(global: &mut Scope) -> Option<Error> {
     fn check_error(scope: &Scope) -> Option<&Error> {
         if scope.error.is_some() {
@@ -510,6 +518,7 @@ fn check_undefined(global: &mut Scope) -> Option<Error> {
     None
 }
 
+/// Checks for invalid placement and use of keywords
 fn keyword_checks(_ast: &Node) -> Option<Error> {
     None
 }

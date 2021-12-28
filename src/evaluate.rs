@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use super::utils::{Instruction, Instructions, Operator, Val};
 
+/// Evaluates constant time operations during compile time
 pub fn evaluate(code: &Instructions) -> Instructions {
     let mut vars = HashMap::new();
     let mut new = Instructions::new();
@@ -20,7 +21,7 @@ pub fn evaluate(code: &Instructions) -> Instructions {
         let assign = match instruction.assign {
             Some(Val::Index(index)) => index,
 
-            // ezout and ezascii
+            // Printing
             None => match instruction.op {
                 Operator::Print => {
                     let left_str = left.to_string();
@@ -65,6 +66,22 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                     vars.insert(assign, Val::Bool(left.get_int() == 0));
                     continue;
                 }
+                Operator::Inc => {
+                    vars.insert(assign, Val::Num(left.get_int() + 1));
+                    continue;
+                }
+                Operator::Dec => {
+                    vars.insert(assign, Val::Num(left.get_int() - 1));
+                    continue;
+                }
+                Operator::BNot => {
+                    vars.insert(assign, Val::Num(!left.get_int()));
+                    continue;
+                }
+                Operator::Input => {
+                    new.push(instruction.clone());
+                    continue;
+                }
                 _ => unreachable!(),
             },
         };
@@ -88,6 +105,16 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                 Operator::Ge => Val::Bool(left >= right),
                 Operator::LAnd => Val::Bool(left != 0 && right != 0),
                 Operator::LOr => Val::Bool(left != 0 || right != 0),
+                Operator::BAnd => Val::Num(left & right),
+                Operator::BOr => Val::Num(left | right),
+                Operator::BXor => Val::Num(left ^ right),
+                Operator::Shl => Val::Num(left << right),
+                Operator::Shr => Val::Num(left >> right),
+                Operator::Pow => Val::Num(if right < 0 {
+                    1 / left.pow(right.abs() as u32)
+                } else {
+                    left.pow(right as u32)
+                }),
                 _ => unreachable!(),
             },
         );

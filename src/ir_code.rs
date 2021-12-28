@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use super::utils::{Instruction, Instructions, Node, Operator, TokenType, Val};
 
+/// Generates the Intermediate 3-address code from the AST
 pub struct CodeGenerator {
     instructions: Instructions,
     array_index: usize,
@@ -9,16 +10,6 @@ pub struct CodeGenerator {
 }
 
 impl CodeGenerator {
-    pub fn generate_code(ast: Node) -> Instructions {
-        let mut obj = Self {
-            instructions: Instructions::new(),
-            array_index: 0,
-            vars: HashMap::new(),
-        };
-        obj.match_node(&ast);
-        obj.instructions
-    }
-
     fn match_node(&mut self, node: &Node) -> Val {
         match node {
             Node::Number(num) => match num.token_type {
@@ -105,10 +96,26 @@ impl CodeGenerator {
                 Val::Index(self.array_index)
             }
 
-            Node::Input => todo!(),
+            Node::Input => {
+                self.instructions
+                    .push(Instruction::input().assign(Val::Index(self.array_index)));
+                self.array_index += 1;
+                Val::Index(self.array_index - 1)
+            }
             Node::Call(_, _) => todo!(),
             Node::FuncDef(_, _, _) => todo!(),
             Node::Return(_, _) => todo!(),
         }
     }
+}
+
+/// Generates and returns the Intermediate Representation of the AST
+pub fn generate_code(ast: Node) -> Instructions {
+    let mut obj = CodeGenerator {
+        instructions: Instructions::new(),
+        array_index: 0,
+        vars: HashMap::new(),
+    };
+    obj.match_node(&ast);
+    obj.instructions
 }

@@ -1,7 +1,14 @@
-//! A language, which doesn't have much. But, It can be compiled to brain fuck.
+use std::process;
 
 fn main() {
-    ezlang::run("test.ez");
+    ezlang::run(&ezlang::get_contents("test.ez").unwrap_or_else(|e| {
+        println!("{}", e);
+        process::exit(1);
+    }))
+    .unwrap_or_else(|e| {
+        println!("{}", e);
+        process::exit(1);
+    });
 }
 
 /*

@@ -1,8 +1,10 @@
 use super::{Token, TokenType};
 use std::fmt;
 
-#[derive(Debug, Clone)]
+/// An enum to specify the type of the operator.
+#[derive(Debug, Clone, PartialEq)]
 pub enum Operator {
+    Input,
     Add,
     Sub,
     Mul,
@@ -20,9 +22,24 @@ pub enum Operator {
     LAnd,
     LOr,
     LNot,
+    Inc,
+    Dec,
+    Pow,
+    Shl,
+    Shr,
+    BAnd,
+    BOr,
+    BXor,
+    BNot,
 }
 
 impl Operator {
+    /// Converts a `Token` to an `Operator`.
+    /// # Arguments
+    /// * `token` - The `Token` to convert.
+    /// * `unary` - Whether the operator is unary.
+    /// # Returns
+    /// The `Operator` corresponding to the `Token`.
     pub fn from_token(t: &Token, unary: bool) -> Self {
         match t.token_type {
             TokenType::Add => Self::Add,
@@ -45,18 +62,32 @@ impl Operator {
             TokenType::LAnd => Self::LAnd,
             TokenType::LOr => Self::LOr,
             TokenType::LNot => Self::LNot,
+            TokenType::Inc => Self::Inc,
+            TokenType::Dec => Self::Dec,
+            TokenType::Pow => Self::Pow,
+            TokenType::Shl => Self::Shl,
+            TokenType::Shr => Self::Shr,
+            TokenType::BAnd => Self::BAnd,
+            TokenType::BOr => Self::BOr,
+            TokenType::BXor => Self::BXor,
+            TokenType::BNot => Self::BNot,
             _ => unreachable!("{}", t),
         }
     }
 }
 
+/// An enum to specify the type of the value.
 #[derive(Debug, Clone)]
 pub enum Val {
+    /// A number.
     Num(i32),
+    /// A boolean.
     Bool(bool),
+    /// An index (variable).
     Index(usize),
 }
 
+/// A vector of instructions.
 #[derive(Debug)]
 pub struct Instructions {
     pub instructions: Vec<Instruction>,
@@ -74,6 +105,13 @@ impl Instructions {
     }
 }
 
+impl Default for Instructions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// An instruction.
 #[derive(Debug, Clone)]
 pub struct Instruction {
     pub op: Operator,
@@ -101,6 +139,10 @@ impl Instruction {
         self.assign = Some(assign);
         self
     }
+
+    pub fn input() -> Self {
+        Self::new(Operator::Input, Val::Index(0))
+    }
 }
 
 impl fmt::Display for Instructions {
@@ -116,7 +158,13 @@ impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let text = match &self.arg2 {
             Some(arg2) => format!("{} {} {}", self.arg1, self.op, arg2),
-            None => format!("{}{}", self.op, self.arg1,),
+            None => {
+                if let Operator::Input = self.op {
+                    format!("{}", self.op)
+                } else {
+                    format!("{}{}", self.op, self.arg1,)
+                }
+            }
         };
         match self.assign {
             Some(ref assign) => write!(f, "{} = {}", assign, text),
@@ -138,6 +186,7 @@ impl fmt::Display for Val {
 impl fmt::Display for Operator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Operator::Input => write!(f, "?"),
             Operator::Add => write!(f, "+"),
             Operator::Sub => write!(f, "-"),
             Operator::Mul => write!(f, "*"),
@@ -155,6 +204,15 @@ impl fmt::Display for Operator {
             Operator::LAnd => write!(f, "&&"),
             Operator::LOr => write!(f, "||"),
             Operator::LNot => write!(f, "!"),
+            Operator::Inc => write!(f, "++"),
+            Operator::Dec => write!(f, "--"),
+            Operator::Pow => write!(f, "**"),
+            Operator::Shl => write!(f, "<<"),
+            Operator::Shr => write!(f, ">>"),
+            Operator::BAnd => write!(f, "&"),
+            Operator::BOr => write!(f, "|"),
+            Operator::BXor => write!(f, "^"),
+            Operator::BNot => write!(f, "~"),
         }
     }
 }

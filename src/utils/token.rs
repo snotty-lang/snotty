@@ -1,6 +1,7 @@
 use super::error::Position;
 use std::{cmp, fmt};
 
+/// List of all the keywords identified by the lexer
 pub const KEYWORDS: [&str; 8] = [
     "let", "ez", "return", "ezout", "ezin", "ezascii", "true", "false",
 ];
@@ -20,6 +21,7 @@ pub const ASSIGNMENT_OPERATORS: [TokenType; 12] = [
     TokenType::PowAssign,
 ];
 
+/// Different types of Tokens converted by the lexer
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     AddAssign,
@@ -71,6 +73,7 @@ pub enum TokenType {
     Eof,
 }
 
+/// The token struct
 #[derive(Clone, Debug)]
 pub struct Token {
     pub token_type: TokenType,
