@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::utils::{Instruction, Instructions, Node, Operator, TokenType, Val};
+use super::utils::{Instruction, Instructions, Node, TokenType, Val};
 
 /// Generates the Intermediate 3-address code from the AST
 pub struct CodeGenerator {
@@ -26,9 +26,8 @@ impl CodeGenerator {
                 let left = self.match_node(left);
                 let right = self.match_node(right);
                 self.instructions.push(
-                    Instruction::new(Operator::from_token(op, false), left)
-                        .arg(right)
-                        .assign(Val::Index(self.array_index)),
+                    Instruction::from_token_binary(op)(left, right),
+                    Some(self.array_index),
                 );
                 self.array_index += 1;
                 Val::Index(self.array_index - 1)
@@ -37,8 +36,8 @@ impl CodeGenerator {
             Node::UnaryOp(op, expr) => {
                 let expr = self.match_node(expr);
                 self.instructions.push(
-                    Instruction::new(Operator::from_token(op, true), expr)
-                        .assign(Val::Index(self.array_index)),
+                    Instruction::from_token_unary(op)(expr),
+                    Some(self.array_index),
                 );
                 self.array_index += 1;
                 Val::Index(self.array_index - 1)
@@ -73,35 +72,32 @@ impl CodeGenerator {
             }
 
             Node::Statements(statements) => {
+                let mut val = Val::Index(self.array_index);
                 for statement in statements {
-                    let val = self.match_node(statement);
-                    println!("{}", val);
-                    println!("{:?}", self.vars);
+                    val = self.match_node(statement);
                 }
-                println!("--------------");
-                Val::Index(self.array_index)
+                val
             }
 
             Node::Print(expr) => {
                 let expr = self.match_node(expr);
-                self.instructions
-                    .push(Instruction::new(Operator::Print, expr));
+                self.instructions.push(Instruction::Print(expr), None);
                 Val::Index(self.array_index)
             }
 
             Node::Ascii(expr) => {
                 let expr = self.match_node(expr);
-                self.instructions
-                    .push(Instruction::new(Operator::Ascii, expr));
+                self.instructions.push(Instruction::Ascii(expr), None);
                 Val::Index(self.array_index)
             }
 
             Node::Input => {
                 self.instructions
-                    .push(Instruction::input().assign(Val::Index(self.array_index)));
+                    .push(Instruction::Input, Some(self.array_index));
                 self.array_index += 1;
                 Val::Index(self.array_index - 1)
             }
+
             Node::Call(_, _) => todo!(),
             Node::FuncDef(_, _, _) => todo!(),
             Node::Return(_, _) => todo!(),

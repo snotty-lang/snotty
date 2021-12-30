@@ -1,5 +1,4 @@
 fn main() {
-    // println!("{:?}", ezlang::ez!(ezout 2 + 2));
     println!("{}", ezlang::compile("test.ez"));
 }
 

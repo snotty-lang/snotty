@@ -2,54 +2,48 @@ use super::{Token, TokenType};
 use std::fmt;
 
 /// An enum to specify the type of the operator.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Operator {
+#[derive(Debug, Clone)]
+pub enum Instruction {
     Input,
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    Neg,
-    Print,
-    Ascii,
-    Eq,
-    Neq,
-    Lt,
-    Gt,
-    Le,
-    Ge,
-    LAnd,
-    LOr,
-    LNot,
-    Inc,
-    Dec,
-    Pow,
-    Shl,
-    Shr,
-    BAnd,
-    BOr,
-    BXor,
-    BNot,
+    Add(Val, Val),
+    Sub(Val, Val),
+    Mul(Val, Val),
+    Div(Val, Val),
+    Mod(Val, Val),
+    Neg(Val),
+    Print(Val),
+    Ascii(Val),
+    Eq(Val, Val),
+    Neq(Val, Val),
+    Lt(Val, Val),
+    Gt(Val, Val),
+    Le(Val, Val),
+    Ge(Val, Val),
+    LAnd(Val, Val),
+    LOr(Val, Val),
+    LNot(Val),
+    Inc(Val),
+    Dec(Val),
+    Pow(Val, Val),
+    Shl(Val, Val),
+    Shr(Val, Val),
+    BAnd(Val, Val),
+    BOr(Val, Val),
+    BXor(Val, Val),
+    BNot(Val),
 }
 
-impl Operator {
+impl Instruction {
     /// Converts a `Token` to an `Operator`.
     /// # Arguments
     /// * `token` - The `Token` to convert.
     /// * `unary` - Whether the operator is unary.
     /// # Returns
-    /// The `Operator` corresponding to the `Token`.
-    pub fn from_token(t: &Token, unary: bool) -> Self {
+    /// The `Instruction` variant corresponding to the `Token`.
+    pub fn from_token_binary(t: &Token) -> fn(Val, Val) -> Self {
         match t.token_type {
             TokenType::Add => Self::Add,
-            TokenType::Sub => {
-                if unary {
-                    Self::Neg
-                } else {
-                    Self::Sub
-                }
-            }
+            TokenType::Sub => Self::Sub,
             TokenType::Mul => Self::Mul,
             TokenType::Div => Self::Div,
             TokenType::Mod => Self::Mod,
@@ -61,17 +55,58 @@ impl Operator {
             TokenType::Ge => Self::Ge,
             TokenType::LAnd => Self::LAnd,
             TokenType::LOr => Self::LOr,
-            TokenType::LNot => Self::LNot,
-            TokenType::Inc => Self::Inc,
-            TokenType::Dec => Self::Dec,
             TokenType::Pow => Self::Pow,
             TokenType::Shl => Self::Shl,
             TokenType::Shr => Self::Shr,
             TokenType::BAnd => Self::BAnd,
             TokenType::BOr => Self::BOr,
             TokenType::BXor => Self::BXor,
+            _ => unreachable!("{}", t),
+        }
+    }
+
+    pub fn from_token_unary(t: &Token) -> fn(Val) -> Self {
+        match t.token_type {
+            TokenType::Sub => Self::Neg,
+            TokenType::LNot => Self::LNot,
+            TokenType::Inc => Self::Inc,
+            TokenType::Dec => Self::Dec,
             TokenType::BNot => Self::BNot,
             _ => unreachable!("{}", t),
+        }
+    }
+}
+
+impl fmt::Display for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Input => write!(f, "?"),
+            Self::Add(left, right) => write!(f, "{} + {}", left, right),
+            Self::Sub(left, right) => write!(f, "{} - {}", left, right),
+            Self::Mul(left, right) => write!(f, "{} * {}", left, right),
+            Self::Div(left, right) => write!(f, "{} / {}", left, right),
+            Self::Mod(left, right) => write!(f, "{} % {}", left, right),
+            Self::Neg(val) => write!(f, "-{}", val),
+            Self::Print(val) => write!(f, "print {}", val),
+            Self::Ascii(val) => write!(f, "ascii {}", val),
+            Self::Pow(base, exp) => write!(f, "{} ** {}", base, exp),
+            Self::Shl(left, right) => write!(f, "{} << {}", left, right),
+            Self::Shr(left, right) => write!(f, "{} >> {}", left, right),
+            Self::BAnd(left, right) => write!(f, "{} & {}", left, right),
+            Self::BOr(left, right) => write!(f, "{} | {}", left, right),
+            Self::BXor(left, right) => write!(f, "{} ^ {}", left, right),
+            Self::BNot(val) => write!(f, "~{}", val),
+            Self::Eq(left, right) => write!(f, "{} == {}", left, right),
+            Self::Neq(left, right) => write!(f, "{} != {}", left, right),
+            Self::Lt(left, right) => write!(f, "{} < {}", left, right),
+            Self::Gt(left, right) => write!(f, "{} > {}", left, right),
+            Self::Le(left, right) => write!(f, "{} <= {}", left, right),
+            Self::Ge(left, right) => write!(f, "{} >= {}", left, right),
+            Self::LAnd(left, right) => write!(f, "{} && {}", left, right),
+            Self::LOr(left, right) => write!(f, "{} || {}", left, right),
+            Self::LNot(val) => write!(f, "!{}", val),
+            Self::Inc(val) => write!(f, "++{}", val),
+            Self::Dec(val) => write!(f, "--{}", val),
         }
     }
 }
@@ -87,88 +122,14 @@ pub enum Val {
     Index(usize),
 }
 
-/// A vector of instructions.
-#[derive(Debug)]
-pub struct Instructions {
-    pub instructions: Vec<Instruction>,
-}
-
-impl Instructions {
-    pub fn new() -> Self {
-        Self {
-            instructions: Vec::new(),
-        }
-    }
-
-    pub fn push(&mut self, instruction: Instruction) {
-        self.instructions.push(instruction);
-    }
-}
-
-impl Default for Instructions {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// An instruction.
-#[derive(Debug, Clone)]
-pub struct Instruction {
-    pub op: Operator,
-    pub arg1: Val,
-    pub arg2: Option<Val>,
-    pub assign: Option<Val>,
-}
-
-impl Instruction {
-    pub fn new(op: Operator, arg1: Val) -> Self {
-        Self {
-            op,
-            arg1,
-            arg2: None,
-            assign: None,
-        }
-    }
-
-    pub fn arg(mut self, arg: Val) -> Self {
-        self.arg2 = Some(arg);
-        self
-    }
-
-    pub fn assign(mut self, assign: Val) -> Self {
-        self.assign = Some(assign);
-        self
-    }
-
-    pub fn input() -> Self {
-        Self::new(Operator::Input, Val::Index(0))
-    }
-}
-
-impl fmt::Display for Instructions {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for instruction in &self.instructions {
-            writeln!(f, "{}", instruction)?;
-        }
-        Ok(())
-    }
-}
-
-impl fmt::Display for Instruction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let text = match &self.arg2 {
-            Some(arg2) => format!("{} {} {}", self.arg1, self.op, arg2),
-            None => {
-                if let Operator::Input = self.op {
-                    format!("{}", self.op)
-                } else {
-                    format!("{}{}", self.op, self.arg1,)
-                }
-            }
-        };
-        match self.assign {
-            Some(ref assign) => write!(f, "{} = {}", assign, text),
-            None => write!(f, "{}", text),
+impl Val {
+    /// # Panics
+    /// Panics if the variant is `Self::Index`
+    pub fn get_int(&self) -> i32 {
+        match self {
+            Val::Num(num) => *num,
+            Val::Bool(b) => *b as i32,
+            _ => unreachable!(),
         }
     }
 }
@@ -183,48 +144,34 @@ impl fmt::Display for Val {
     }
 }
 
-impl fmt::Display for Operator {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Operator::Input => write!(f, "?"),
-            Operator::Add => write!(f, "+"),
-            Operator::Sub => write!(f, "-"),
-            Operator::Mul => write!(f, "*"),
-            Operator::Div => write!(f, "/"),
-            Operator::Mod => write!(f, "%"),
-            Operator::Neg => write!(f, "-"),
-            Operator::Print => write!(f, "print "),
-            Operator::Ascii => write!(f, "ascii "),
-            Operator::Eq => write!(f, "=="),
-            Operator::Neq => write!(f, "!="),
-            Operator::Lt => write!(f, "<"),
-            Operator::Gt => write!(f, ">"),
-            Operator::Le => write!(f, "<="),
-            Operator::Ge => write!(f, ">="),
-            Operator::LAnd => write!(f, "&&"),
-            Operator::LOr => write!(f, "||"),
-            Operator::LNot => write!(f, "!"),
-            Operator::Inc => write!(f, "++"),
-            Operator::Dec => write!(f, "--"),
-            Operator::Pow => write!(f, "**"),
-            Operator::Shl => write!(f, "<<"),
-            Operator::Shr => write!(f, ">>"),
-            Operator::BAnd => write!(f, "&"),
-            Operator::BOr => write!(f, "|"),
-            Operator::BXor => write!(f, "^"),
-            Operator::BNot => write!(f, "~"),
-        }
+/// A vector of instructions.
+#[derive(Debug)]
+pub struct Instructions(pub Vec<(Option<usize>, Instruction)>);
+
+impl Instructions {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn push(&mut self, instruction: Instruction, assign: Option<usize>) {
+        self.0.push((assign, instruction));
     }
 }
 
-impl Val {
-    /// # Panics
-    /// Panics if the variant is `Self::Index`
-    pub fn get_int(&self) -> i32 {
-        match self {
-            Val::Num(num) => *num,
-            Val::Bool(b) => *b as i32,
-            _ => unreachable!(),
+impl Default for Instructions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Display for Instructions {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for (assign, instruction) in &self.0 {
+            match assign {
+                Some(assign) => writeln!(f, "[{}] = {}", assign, instruction),
+                None => writeln!(f, "{}", instruction),
+            }?;
         }
+        Ok(())
     }
 }

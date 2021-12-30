@@ -73,13 +73,6 @@ impl Parser {
                 Ok(node)
             }
 
-            TokenType::LCurly => {
-                self.advance();
-                let mut new_scope = Scope::new(Some(scope));
-                let node = self.statements(TokenType::RCurly, &mut new_scope)?;
-                scope.scopes.push(new_scope);
-                Ok(node)
-            }
             _ => self.binary_op(
                 Self::comparison,
                 vec![TokenType::LAnd, TokenType::LOr],
@@ -214,48 +207,36 @@ impl Parser {
     }
 
     fn call(&mut self, scope: &mut Scope) -> ParseResult {
-        let atom = if let TokenType::Identifier(_) = self.current_token.token_type {
-            Some(Node::VarAccess(self.current_token.clone()))
-        } else {
-            None
-        };
-        self.advance();
-        if let TokenType::LParen = self.current_token.token_type {
-            let atom = match atom {
-                Some(x) => x,
-                None => {
+        if let TokenType::Identifier(_) = self.current_token.token_type {
+            let atom = Node::VarAccess(self.current_token.clone());
+            self.advance();
+            if let TokenType::LParen = self.current_token.token_type {
+                self.advance();
+                let mut args = vec![];
+                while self.current_token.token_type != TokenType::RParen {
+                    args.push(self.expression(scope)?);
+                    if self.current_token.token_type != TokenType::Comma {
+                        break;
+                    }
+                    self.advance();
+                }
+                if self.current_token.token_type != TokenType::RParen {
                     return Err(Error::new(
                         ErrorType::SyntaxError,
                         self.current_token.position,
-                        format!("Unexpected {}", self.current_token),
-                    ))
-                }
-            };
-            self.advance();
-            let mut args = vec![];
-            while self.current_token.token_type != TokenType::RParen {
-                args.push(self.expression(scope)?);
-                if self.current_token.token_type != TokenType::Comma {
-                    break;
+                        format!("Expected ')', found {}", self.current_token),
+                    ));
                 }
                 self.advance();
+                let node = Node::Call(Box::new(atom), args);
+                scope.access_function(node.clone());
+                return Ok(node);
+            } else {
+                self.token_index -= 1;
             }
-            if self.current_token.token_type != TokenType::RParen {
-                return Err(Error::new(
-                    ErrorType::SyntaxError,
-                    self.current_token.position,
-                    format!("Expected ')', found {}", self.current_token),
-                ));
-            }
-            self.advance();
-            let node = Node::Call(Box::new(atom), args);
-            scope.access_function(node.clone());
-            Ok(node)
-        } else {
-            self.token_index -= 1;
-            self.current_token = self.tokens[self.token_index].clone();
-            Ok(self.atom(scope)?)
         }
+        self.current_token = self.tokens[self.token_index].clone();
+        self.atom(scope)
     }
 
     fn atom(&mut self, scope: &mut Scope) -> ParseResult {
@@ -311,6 +292,13 @@ impl Parser {
                     ));
                 }
                 self.advance();
+                Ok(node)
+            }
+            TokenType::LCurly => {
+                self.advance();
+                let mut new_scope = Scope::new(Some(scope));
+                let node = self.statements(TokenType::RCurly, &mut new_scope)?;
+                scope.scopes.push(new_scope);
                 Ok(node)
             }
             TokenType::Number(_) => {

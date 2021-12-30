@@ -62,6 +62,7 @@ pub fn run(contents: &str) -> Result<String, Error> {
     let code = ir_code::generate_code(ast);
     println!("{}", code);
     let code = evaluate::evaluate(&code);
+    println!("{}", code);
     Ok(compiler::transpile(&code))
 }
 
