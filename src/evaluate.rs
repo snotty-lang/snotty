@@ -8,10 +8,6 @@ pub fn evaluate(code: &Instructions) -> Instructions {
     let mut new = Instructions::new();
     for (assign, instruction) in &code.0 {
         let evaluated = match instruction {
-            Instruction::Input => {
-                new.push(instruction.clone(), *assign);
-                continue;
-            }
             Instruction::Add(left, right) => {
                 super::check!(left, new, vars, assign, instruction);
                 super::check!(right, new, vars, assign, instruction);
@@ -41,18 +37,18 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                 super::check!(val, new, vars, assign, instruction);
                 Val::Num(-val)
             }
+            Instruction::Ascii(_) | Instruction::Input => {
+                new.push(instruction.clone(), *assign);
+                continue;
+            }
             Instruction::Print(val) => {
-                super::check!(val, new, vars, assign, instruction);
+                super::check!(2 val, new, vars, assign, instruction);
                 let left_str = val.to_string();
                 let left_vec = left_str.chars().collect::<Vec<char>>();
                 for left in left_vec {
-                    new.push(Instruction::Print(Val::Num(left as u32 as i32)), None);
+                    new.push(Instruction::Ascii(Val::Num(left as u32 as i32)), None);
                 }
-                new.push(Instruction::Print(Val::Num(10)), None);
-                continue;
-            }
-            Instruction::Ascii(_) => {
-                new.push(instruction.clone(), *assign);
+                new.push(Instruction::Ascii(Val::Num(10)), None);
                 continue;
             }
             Instruction::Eq(left, right) => {
@@ -166,6 +162,19 @@ macro_rules! check {
             }
         } else {
             $val.get_int()
+        };
+    };
+    (2 $val:ident, $new: ident, $vars: ident, $assign: ident, $instruction: ident) => {
+        let $val = if let Val::Index(index) = $val {
+            match $vars.get(index) {
+                Some(Val::Index(_)) | None => {
+                    $new.push($instruction.clone(), *$assign);
+                    continue;
+                }
+                Some(val) => val,
+            }
+        } else {
+            $val
         };
     };
 }

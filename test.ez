@@ -1,1 +1,2 @@
-let x = 9 x |= 8
+let x = 9
+ezout x  ==6 
