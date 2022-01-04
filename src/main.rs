@@ -1,5 +1,7 @@
+use std::fs;
+
 fn main() {
-    println!("{}", ezlang::compile("test.ez"));
+    fs::write("dd.bf", ezlang::compile("test.ez")).unwrap();
 }
 
 /*

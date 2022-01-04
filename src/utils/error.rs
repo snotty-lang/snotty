@@ -10,6 +10,7 @@ pub enum ErrorType {
     UndefinedFunction,
     UndefinedVariable,
     DivisionByZero,
+    InvalidReturn,
 }
 
 /// An error that can occur during the compilation of the source code.

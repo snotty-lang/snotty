@@ -4,6 +4,7 @@ use std::fmt;
 /// An enum to specify the type of the operator.
 #[derive(Debug, Clone)]
 pub enum Instruction {
+    Copy(Val),
     Input,
     Add(Val, Val),
     Sub(Val, Val),
@@ -80,6 +81,7 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Instruction::Copy(val) => write!(f, "{}", val),
             Self::Input => write!(f, "?"),
             Self::Add(left, right) => write!(f, "{} + {}", left, right),
             Self::Sub(left, right) => write!(f, "{} - {}", left, right),

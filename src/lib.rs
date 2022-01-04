@@ -36,6 +36,10 @@ pub mod lexer;
 
 /// Contains the Parser struct
 pub mod parser;
+
+/// Optimizes the generated IR code
+pub mod ir_optimizer;
+
 pub mod utils;
 
 use std::fs;
@@ -60,6 +64,8 @@ pub fn run(contents: &str) -> Result<String, Error> {
     let tokens = lexer::lex(contents)?;
     let ast = parser::parse(tokens)?;
     let code = ir_code::generate_code(ast);
+    println!("{}", code);
+    let code = ir_optimizer::optimize(&code);
     println!("{}", code);
     let code = evaluate::evaluate(&code);
     println!("{}", code);

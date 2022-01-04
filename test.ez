@@ -1,2 +1,3 @@
-let x = 9
-ezout x  ==6 
+let x= ezin
+let y = x
+ezout y - ++x

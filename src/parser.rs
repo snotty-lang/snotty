@@ -503,6 +503,58 @@ fn check_undefined(global: &mut Scope) -> Option<Error> {
 }
 
 /// Checks for invalid placement and use of keywords
-fn keyword_checks(_ast: &Node) -> Option<Error> {
-    None
+fn keyword_checks(ast: &Node) -> Option<Error> {
+    fn check_return(node: &Node) -> Option<Token> {
+        match node {
+            Node::Number(_) => None,
+            Node::BinaryOp(_, n1, n2) => {
+                let n1 = check_return(n1);
+                if n1.is_some() {
+                    return n1;
+                }
+                let n2 = check_return(n2);
+                if n2.is_some() {
+                    return n2;
+                }
+                None
+            }
+            Node::UnaryOp(_, n1) => check_return(n1),
+            Node::VarAssign(_, n1) => check_return(n1),
+            Node::VarAccess(_) => None,
+            Node::VarReassign(_, n1) => check_return(n1),
+            Node::Statements(_) => None,
+            Node::Call(n1, n2) => {
+                let n1 = check_return(n1);
+                if n1.is_some() {
+                    return n1;
+                }
+                for i in n2.iter().map(check_return) {
+                    if i.is_some() {
+                        return i;
+                    }
+                }
+                None
+            }
+            Node::FuncDef(_, _, _) => None,
+            Node::Return(t, _) => Some(t.clone()),
+            Node::Print(n1) => check_return(n1),
+            Node::Ascii(n1) => check_return(n1),
+            Node::Input => None,
+        }
+    }
+    match ast {
+        Node::Statements(nodes) => {
+            for node in nodes.iter() {
+                if let Some(token) = check_return(node) {
+                    return Some(Error::new(
+                        ErrorType::InvalidReturn,
+                        token.position,
+                        "Return statement cannot be in the global scope".to_string(),
+                    ));
+                }
+            }
+            None
+        }
+        _ => unreachable!(),
+    }
 }

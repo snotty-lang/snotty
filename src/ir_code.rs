@@ -45,9 +45,19 @@ impl CodeGenerator {
 
             Node::VarAssign(var, expr) => {
                 if let TokenType::Identifier(ref var) = var.token_type {
-                    let index = self.match_node(expr);
-                    self.vars.insert(var.clone(), index);
-                    Val::Index(self.array_index)
+                    match self.match_node(expr) {
+                        Val::Index(index) => {
+                            self.vars.insert(var.clone(), Val::Index(index));
+                            self.instructions
+                                .push(Instruction::Copy(Val::Index(index)), Some(self.array_index));
+                            self.array_index += 1;
+                            Val::Index(self.array_index - 1)
+                        }
+                        val => {
+                            self.vars.insert(var.clone(), val);
+                            Val::Index(self.array_index)
+                        }
+                    }
                 } else {
                     unreachable!();
                 }
@@ -63,9 +73,19 @@ impl CodeGenerator {
 
             Node::VarReassign(var, expr) => {
                 if let TokenType::Identifier(ref var) = var.token_type {
-                    let index = self.match_node(expr);
-                    self.vars.insert(var.clone(), index);
-                    Val::Index(self.array_index)
+                    match self.match_node(expr) {
+                        Val::Index(index) => {
+                            self.vars.insert(var.clone(), Val::Index(index));
+                            self.instructions
+                                .push(Instruction::Copy(Val::Index(index)), Some(self.array_index));
+                            self.array_index += 1;
+                            Val::Index(self.array_index - 1)
+                        }
+                        val => {
+                            self.vars.insert(var.clone(), val);
+                            Val::Index(self.array_index)
+                        }
+                    }
                 } else {
                     unreachable!();
                 }
