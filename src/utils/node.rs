@@ -16,4 +16,5 @@ pub enum Node {
     Print(Box<Node>),
     Ascii(Box<Node>),
     Input,
+    If(Box<Node>, Box<Node>, Option<Box<Node>>),
 }

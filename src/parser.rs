@@ -269,6 +269,23 @@ impl Parser {
                     self.advance();
                     Ok(Node::Number(token))
                 }
+                "if" => {
+                    self.advance();
+                    let condition = self.expression(scope)?;
+                    let then_branch = self.expression(scope)?;
+                    let else_branch =
+                        if self.current_token.token_type == TokenType::Keyword("else".to_owned()) {
+                            self.advance();
+                            Some(Box::new(self.expression(scope)?))
+                        } else {
+                            None
+                        };
+                    Ok(Node::If(
+                        Box::new(condition),
+                        Box::new(then_branch),
+                        else_branch,
+                    ))
+                }
                 _ => Err(Error::new(
                     ErrorType::SyntaxError,
                     self.current_token.position,
@@ -523,6 +540,23 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
             Node::VarAccess(_) => None,
             Node::VarReassign(_, n1) => check_return(n1),
             Node::Statements(_) => None,
+            Node::If(n1, n2, n3) => {
+                let n1 = check_return(n1);
+                if n1.is_some() {
+                    return n1;
+                }
+                let n2 = check_return(n2);
+                if n2.is_some() {
+                    return n2;
+                }
+                if let Some(n3) = n3 {
+                    let n3 = check_return(n3);
+                    if n3.is_some() {
+                        return n3;
+                    }
+                }
+                None
+            }
             Node::Call(n1, n2) => {
                 let n1 = check_return(n1);
                 if n1.is_some() {

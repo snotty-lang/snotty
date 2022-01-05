@@ -4,6 +4,8 @@ use std::fmt;
 /// An enum to specify the type of the operator.
 #[derive(Debug, Clone)]
 pub enum Instruction {
+    // Label(String),
+    // Jmp(String),
     Copy(Val),
     Input,
     Add(Val, Val),

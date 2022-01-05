@@ -2,8 +2,8 @@ use super::error::Position;
 use std::{cmp, fmt};
 
 /// List of all the keywords identified by the lexer
-pub const KEYWORDS: [&str; 8] = [
-    "let", "ez", "return", "ezout", "ezin", "ezascii", "true", "false",
+pub const KEYWORDS: [&str; 10] = [
+    "let", "ez", "return", "ezout", "ezin", "ezascii", "true", "false", "if", "else",
 ];
 
 pub const ASSIGNMENT_OPERATORS: [TokenType; 12] = [

@@ -50,19 +50,6 @@ pub fn transpile(code: &Instructions) -> String {
                 );
                 goto(&mut bf_code, &mut location, start);
             }
-            Instruction::Pow(left, right) => {
-                if right.get_int() < 0 {
-                    Val::Num(1 / left.get_int().pow(-right.get_int() as u32))
-                } else {
-                    Val::Num(left.get_int().pow(right.get_int() as u32))
-                };
-            }
-            Instruction::LAnd(left, right) => {
-                Val::Bool(left.get_int() != 0 && right.get_int() != 0);
-            }
-            Instruction::LNot(val) => {
-                Val::Bool(val.get_int() == 0);
-            }
             Instruction::Inc(val) => {
                 goto_add!(val, &mut bf_code, &mut location, {});
                 bf_code.push('+');
@@ -79,57 +66,42 @@ pub fn transpile(code: &Instructions) -> String {
             }
             Instruction::Add(left, right) => {
                 let start = location;
-                let mut r = location;
-                goto_add!(
-                    left,
-                    &mut bf_code,
-                    &mut location,
-                    {
-                        let left_loc = location;
-                        println!("l{}", left_loc);
-                        goto(&mut bf_code, &mut location, start);
-                        copy(&mut bf_code, left_loc, location, location);
-                    },
-                    {
-                        r += 1;
-                    }
-                );
-                bf_code.push_str(">[-]");
-                goto_add!(right, &mut bf_code, &mut location, {
-                    let right_loc = location;
-                    println!("r{}", right_loc);
-                    goto(&mut bf_code, &mut location, start);
-                    copy(&mut bf_code, right_loc, r, r);
+                goto_add!(left, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
                 });
+                goto(&mut bf_code, &mut location, start + 1);
+                goto_add!(right, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 1, location);
+                });
+                goto(&mut bf_code, &mut location, start + 1);
                 bf_code.push_str("[-<+>]<");
-                goto(&mut bf_code, &mut location, start);
-                bf_code.push('|');
+                location -= 1;
             }
             Instruction::Sub(left, right) => {
                 let start = location;
-                let mut r = location;
-                goto_add!(
-                    left,
-                    &mut bf_code,
-                    &mut location,
-                    {
-                        let left_loc = location;
-                        goto(&mut bf_code, &mut location, start);
-                        copy(&mut bf_code, left_loc, location, location);
-                    },
-                    {
-                        r += 1;
-                    }
-                );
-                bf_code.push_str(">[-]");
-                goto_add!(right, &mut bf_code, &mut location, {
-                    let right_loc = location;
-                    goto(&mut bf_code, &mut location, start);
-                    copy(&mut bf_code, right_loc, r, r);
+                goto_add!(left, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
                 });
+                goto(&mut bf_code, &mut location, start + 1);
+                goto_add!(right, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 1, location);
+                });
+                goto(&mut bf_code, &mut location, start + 1);
                 bf_code.push_str("[-<->]<");
-                goto(&mut bf_code, &mut location, start);
-                bf_code.push('|');
+                location -= 1;
+            }
+            Instruction::Pow(left, right) => {
+                if right.get_int() < 0 {
+                    Val::Num(1 / left.get_int().pow(-right.get_int() as u32))
+                } else {
+                    Val::Num(left.get_int().pow(right.get_int() as u32))
+                };
+            }
+            Instruction::LAnd(left, right) => {
+                Val::Bool(left.get_int() != 0 && right.get_int() != 0);
+            }
+            Instruction::LNot(val) => {
+                Val::Bool(val.get_int() == 0);
             }
             Instruction::Mul(left, right) => {
                 Val::Num(left.get_int() * right.get_int());
@@ -176,15 +148,20 @@ pub fn transpile(code: &Instructions) -> String {
             Instruction::BXor(left, right) => {
                 Val::Num(left.get_int() ^ right.get_int());
             }
-            Instruction::Copy(_) => {}
+            Instruction::Copy(from) => {
+                if let Val::Index(index) = from {
+                    goto(&mut bf_code, &mut location, *index);
+                }
+            }
         };
 
         match assign {
-            Some(val) if *val != location => copy(&mut bf_code, location, *val, location),
+            Some(val) if *val != location => {
+                dbg!(val, location);
+                copy(&mut bf_code, location, *val, location)
+            }
             _ => (),
         };
-
-        // matches!(assign, Some(val) if location != *val)
     }
     bf_code
 }

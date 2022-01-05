@@ -47,7 +47,7 @@ impl CodeGenerator {
                 if let TokenType::Identifier(ref var) = var.token_type {
                     match self.match_node(expr) {
                         Val::Index(index) => {
-                            self.vars.insert(var.clone(), Val::Index(index));
+                            self.vars.insert(var.clone(), Val::Index(self.array_index));
                             self.instructions
                                 .push(Instruction::Copy(Val::Index(index)), Some(self.array_index));
                             self.array_index += 1;
@@ -75,7 +75,7 @@ impl CodeGenerator {
                 if let TokenType::Identifier(ref var) = var.token_type {
                     match self.match_node(expr) {
                         Val::Index(index) => {
-                            self.vars.insert(var.clone(), Val::Index(index));
+                            self.vars.insert(var.clone(), Val::Index(self.array_index));
                             self.instructions
                                 .push(Instruction::Copy(Val::Index(index)), Some(self.array_index));
                             self.array_index += 1;
@@ -116,6 +116,19 @@ impl CodeGenerator {
                     .push(Instruction::Input, Some(self.array_index));
                 self.array_index += 1;
                 Val::Index(self.array_index - 1)
+            }
+
+            Node::If(_cond, _then, _else_) => {
+                // let cond = self.match_node(cond);
+                // let then = self.match_node(then);
+                // let else_ = else_.map(|e| self.match_node(&*e));
+                // self.instructions.push(
+                //     Instruction::If(cond, then, else_),
+                //     Some(self.array_index),
+                // );
+                // self.array_index += 1;
+                // Val::Index(self.array_index - 1)
+                todo!()
             }
 
             Node::Call(_, _) => todo!(),

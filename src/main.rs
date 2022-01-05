@@ -1,7 +1,7 @@
 use std::fs;
 
 fn main() {
-    fs::write("dd.bf", ezlang::compile("test.ez")).unwrap();
+    fs::write("db.bf", ezlang::compile("test.ez")).unwrap();
 }
 
 /*
