@@ -186,10 +186,11 @@ impl CodeGenerator {
                 Ok((Val::Index(self.array_index - 1), then_variant, false))
             }
 
-            Node::None(_) => Ok((Val::None, ValType::None, false)),
+            Node::None => Ok((Val::None, ValType::None, false)),
 
             Node::Call(_, _) => todo!(),
             Node::FuncDef(_, _, _) => todo!(),
+
             Node::Return(_, expr) => match expr {
                 Some(expr) => {
                     let (expr, variant, _) = self.match_node(expr)?;

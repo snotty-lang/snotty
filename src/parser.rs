@@ -292,7 +292,7 @@ impl Parser {
                 }
                 "NULL" => {
                     self.advance();
-                    Ok(Node::None(token))
+                    Ok(Node::None)
                 }
                 _ => Err(Error::new(
                     ErrorType::SyntaxError,
@@ -531,7 +531,7 @@ fn check_undefined(global: &mut Scope) -> Option<Error> {
 fn keyword_checks(ast: &Node) -> Option<Error> {
     fn check_return(node: &Node) -> Option<Token> {
         match node {
-            Node::None(_) => None,
+            Node::None => None,
             Node::Number(_) => None,
             Node::BinaryOp(_, n1, n2) => {
                 let n1 = check_return(n1);
