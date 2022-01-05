@@ -11,6 +11,7 @@ pub enum ErrorType {
     UndefinedVariable,
     DivisionByZero,
     InvalidReturn,
+    TypeError,
 }
 
 /// An error that can occur during the compilation of the source code.

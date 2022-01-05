@@ -1,1 +1,3 @@
-if 4 2 else if 4 5
+let x = 6 + true;
+x = true;
+ezout x

@@ -140,8 +140,86 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                     val.clone()
                 }
             }
-        };
+            Instruction::If(cond, then, else_) => {
+                let cond2 = if let Val::Index(index) = cond {
+                    match vars.get(index) {
+                        Some(Val::Index(_)) | None => None,
+                        Some(val) => Some(val.get_int()),
+                    }
+                } else {
+                    Some(cond.get_int())
+                };
+                let then2 = if let Val::Index(index) = then {
+                    match vars.get(index) {
+                        Some(Val::Index(_)) | None => None,
+                        Some(val) => Some(val.get_int()),
+                    }
+                } else {
+                    Some(then.get_int())
+                };
+                let else_2 = if let Some(else_) = else_ {
+                    if let Val::Index(index) = else_ {
+                        match vars.get(index) {
+                            Some(Val::Index(_)) | None => None,
+                            Some(val) => Some(val.get_int()),
+                        }
+                    } else {
+                        Some(else_.get_int())
+                    }
+                } else {
+                    None
+                };
 
+                // println!("{:?} {:?} {:?}", cond2, then2, else_2);
+                // #[derive(Debug)]
+                enum Value {
+                    Ins(Instruction),
+                    Val(Val),
+                }
+
+                let val = match (cond2, then2, else_2) {
+                    (None, _, _) => Value::Ins(instruction.clone()),
+                    (Some(cond), None, None) => {
+                        if cond != 0 {
+                            Value::Val(then.clone())
+                        } else if let Some(else_) = else_ {
+                            Value::Val(else_.clone())
+                        } else {
+                            continue;
+                        }
+                    }
+                    (Some(cond), None, Some(else_)) => {
+                        if cond == 0 {
+                            Value::Val(Val::Num(else_))
+                        } else {
+                            Value::Ins(instruction.clone())
+                        }
+                    }
+                    (Some(cond), Some(then), None) => {
+                        if cond != 0 {
+                            Value::Val(Val::Num(then))
+                        } else {
+                            continue;
+                        }
+                    }
+                    (Some(cond), Some(then), Some(else_)) => {
+                        if cond != 0 {
+                            Value::Val(Val::Num(then))
+                        } else {
+                            Value::Val(Val::Num(else_))
+                        }
+                    }
+                };
+
+                match val {
+                    Value::Ins(ins) => {
+                        new.push(ins, *assign);
+                        continue;
+                    }
+                    Value::Val(val) => val,
+                }
+            }
+        };
         vars.insert(assign.unwrap(), evaluated);
     }
 

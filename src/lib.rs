@@ -23,7 +23,7 @@
 //! It is the run function but in macro style
 
 /// Contains the code transpiler, which generates the Brainfuck code
-pub mod compiler;
+// pub mod compiler;
 
 /// Contains the `evaluate` function, which does constant time evaluation of the code.
 pub mod evaluate;
@@ -38,8 +38,7 @@ pub mod lexer;
 pub mod parser;
 
 /// Optimizes the generated IR code
-pub mod ir_optimizer;
-
+// pub mod ir_optimizer;
 pub mod utils;
 
 use std::fs;
@@ -63,13 +62,15 @@ use utils::Error;
 pub fn run(contents: &str) -> Result<String, Error> {
     let tokens = lexer::lex(contents)?;
     let ast = parser::parse(tokens)?;
-    let code = ir_code::generate_code(ast);
-    // println!("{}", code);
-    let code = ir_optimizer::optimize(&code);
-    // println!("{}", code);
+    // println!("{:#?}", ast);
+    let code = ir_code::generate_code(ast)?;
+    println!("{}", code);
     let code = evaluate::evaluate(&code);
     println!("{}", code);
-    Ok(compiler::transpile(&code))
+    // let code = ir_optimizer::optimize(&code);
+    // println!("{}", code);
+    // Ok(compiler::transpile(&code))
+    Ok(String::new())
 }
 
 /// Reads and compiles the content of the passed file and returns it

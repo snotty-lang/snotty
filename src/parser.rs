@@ -87,9 +87,13 @@ impl Parser {
             let token = self.current_token.clone();
             self.advance();
             match self.current_token.token_type {
-                TokenType::Assign => {
+                TokenType::Assign if init => {
                     self.advance();
                     Ok(Node::VarAssign(token, Box::new(self.expression(scope)?)))
+                }
+                TokenType::Assign => {
+                    self.advance();
+                    Ok(Node::VarReassign(token, Box::new(self.expression(scope)?)))
                 }
                 ref x if ASSIGNMENT_OPERATORS.contains(x) && !init => {
                     let op = self.current_token.clone();
@@ -285,6 +289,10 @@ impl Parser {
                         Box::new(then_branch),
                         else_branch,
                     ))
+                }
+                "NULL" => {
+                    self.advance();
+                    Ok(Node::None(token))
                 }
                 _ => Err(Error::new(
                     ErrorType::SyntaxError,
@@ -523,6 +531,7 @@ fn check_undefined(global: &mut Scope) -> Option<Error> {
 fn keyword_checks(ast: &Node) -> Option<Error> {
     fn check_return(node: &Node) -> Option<Token> {
         match node {
+            Node::None(_) => None,
             Node::Number(_) => None,
             Node::BinaryOp(_, n1, n2) => {
                 let n1 = check_return(n1);

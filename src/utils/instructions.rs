@@ -4,8 +4,7 @@ use std::fmt;
 /// An enum to specify the type of the operator.
 #[derive(Debug, Clone)]
 pub enum Instruction {
-    // Label(String),
-    // Jmp(String),
+    If(Val, Val, Option<Val>),
     Copy(Val),
     Input,
     Add(Val, Val),
@@ -83,6 +82,13 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Instruction::If(cond, then, else_) => {
+                if let Some(else_) = else_ {
+                    write!(f, "if {} then {} else {}", cond, then, else_)
+                } else {
+                    write!(f, "if {} then {}", cond, then)
+                }
+            }
             Instruction::Copy(val) => write!(f, "{}", val),
             Self::Input => write!(f, "?"),
             Self::Add(left, right) => write!(f, "{} + {}", left, right),
@@ -124,11 +130,13 @@ pub enum Val {
     Bool(bool),
     /// An index (variable).
     Index(usize),
+    /// None
+    None,
 }
 
 impl Val {
     /// # Panics
-    /// Panics if the variant is `Self::Index`
+    /// Panics if the variant is `Self::Index or Self::None`.
     pub fn get_int(&self) -> i32 {
         match self {
             Val::Num(num) => *num,
@@ -138,9 +146,17 @@ impl Val {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub enum ValType {
+    None,
+    Number,
+    Boolean,
+}
+
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Val::None => write!(f, "NULL"),
             Val::Bool(b) => write!(f, "{}", b),
             Val::Num(num) => write!(f, "{}", num),
             Val::Index(index) => write!(f, "[{}]", index),

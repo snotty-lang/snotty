@@ -18,20 +18,13 @@ pub fn transpile(code: &Instructions) -> String {
             }
             Instruction::Print(val) => {
                 let start = location;
+                bf_code.push_str(">>");
                 goto(&mut bf_code, &mut location, free_idx);
-                goto_add!(
-                    val,
-                    &mut bf_code,
-                    &mut location,
-                    {
-                        bf_code.push('.');
-                        goto(&mut bf_code, &mut location, free_idx);
-                        bf_code.push_str("++++++++++.----------");
-                    },
-                    {
-                        bf_code.push_str(".[-]++++++++++.----------");
-                    }
-                );
+                goto_add!(val, &mut bf_code, &mut location, {
+                    // goto(&mut bf_code, &mut location, free_idx);
+                });
+                bf_code.push_str(">+[[-]<[->+<[->+<[->+<[->+<[->+<[->+<[->+<[->+<[->+<[->[-]>>+>+<<<]]]]]]]]]<]>>[>]++++++[-<++++++++>]>>]<<<[.[-]<<<]");
+                bf_code.push_str("++++++++++.----------");
                 goto(&mut bf_code, &mut location, start);
             }
             Instruction::Ascii(val) => {
@@ -153,6 +146,7 @@ pub fn transpile(code: &Instructions) -> String {
                     goto(&mut bf_code, &mut location, *index);
                 }
             }
+            Instruction::If(_, _, _) => {}
         };
 
         match assign {
