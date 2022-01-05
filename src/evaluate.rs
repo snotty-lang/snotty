@@ -128,9 +128,9 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                 Val::Num(!val)
             }
             Instruction::Copy(val) => {
-                if let Val::Index(index) = val {
+                if let Val::Index(index, _) = val {
                     match vars.get(index) {
-                        Some(Val::Index(_)) | None => {
+                        Some(Val::Index(..)) | None => {
                             new.push(instruction.clone(), *assign);
                             continue;
                         }
@@ -141,37 +141,35 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                 }
             }
             Instruction::If(cond, then, else_) => {
-                let cond2 = if let Val::Index(index) = cond {
+                let cond2 = if let Val::Index(index, _) = cond {
                     match vars.get(index) {
-                        Some(Val::Index(_)) | None => None,
+                        Some(Val::Index(..)) | None => None,
                         Some(val) => Some(val.get_int()),
                     }
                 } else {
                     Some(cond.get_int())
                 };
-                let then2 = if let Val::Index(index) = then {
+                let then2 = if let Val::Index(index, _) = then {
                     match vars.get(index) {
-                        Some(Val::Index(_)) | None => None,
-                        Some(val) => Some(val.get_int()),
+                        Some(Val::Index(..)) | None => None,
+                        Some(val) => Some(val),
                     }
                 } else {
-                    Some(then.get_int())
+                    Some(then)
                 };
                 let else_2 = if let Some(else_) = else_ {
-                    if let Val::Index(index) = else_ {
+                    if let Val::Index(index, _) = else_ {
                         match vars.get(index) {
-                            Some(Val::Index(_)) | None => None,
-                            Some(val) => Some(val.get_int()),
+                            Some(Val::Index(..)) | None => None,
+                            Some(val) => Some(val),
                         }
                     } else {
-                        Some(else_.get_int())
+                        Some(else_)
                     }
                 } else {
                     None
                 };
 
-                // println!("{:?} {:?} {:?}", cond2, then2, else_2);
-                // #[derive(Debug)]
                 enum Value {
                     Ins(Instruction),
                     Val(Val),
@@ -190,23 +188,23 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                     }
                     (Some(cond), None, Some(else_)) => {
                         if cond == 0 {
-                            Value::Val(Val::Num(else_))
+                            Value::Val(else_.clone())
                         } else {
                             Value::Ins(instruction.clone())
                         }
                     }
                     (Some(cond), Some(then), None) => {
                         if cond != 0 {
-                            Value::Val(Val::Num(then))
+                            Value::Val(then.clone())
                         } else {
                             continue;
                         }
                     }
                     (Some(cond), Some(then), Some(else_)) => {
                         if cond != 0 {
-                            Value::Val(Val::Num(then))
+                            Value::Val(then.clone())
                         } else {
-                            Value::Val(Val::Num(else_))
+                            Value::Val(else_.clone())
                         }
                     }
                 };
@@ -229,9 +227,9 @@ pub fn evaluate(code: &Instructions) -> Instructions {
 #[macro_export]
 macro_rules! check {
     ($val:ident, $new: ident, $vars: ident, $assign: ident, $instruction: ident) => {
-        let $val = if let Val::Index(index) = $val {
+        let $val = if let Val::Index(index, _) = $val {
             match $vars.get(index) {
-                Some(Val::Index(_)) | None => {
+                Some(Val::Index(..)) | None => {
                     $new.push($instruction.clone(), *$assign);
                     continue;
                 }
@@ -244,7 +242,7 @@ macro_rules! check {
     (2 $val:ident, $new: ident, $vars: ident, $assign: ident, $instruction: ident) => {{
         if let Val::Index(index) = $val {
             match $vars.get(index) {
-                Some(Val::Index(_)) | None => (),
+                Some(Val::Index(..)) | None => (),
                 Some(a) => {
                     let new_ins = match $instruction.clone() {
                         Instruction::Neg(_) => Instruction::Neg(a.clone()),
@@ -265,9 +263,9 @@ macro_rules! check {
         continue;
     }};
     (VAL $val:ident, $new: ident, $vars: ident, $assign: ident, $instruction: ident) => {
-        let $val = if let Val::Index(index) = $val {
+        let $val = if let Val::Index(index, _) = $val {
             match $vars.get(index) {
-                Some(Val::Index(_)) | None => {
+                Some(Val::Index(..)) | None => {
                     $new.push($instruction.clone(), *$assign);
                     continue;
                 }
@@ -278,17 +276,17 @@ macro_rules! check {
         };
     };
     (BINARY $left:ident, $right: ident, $new: ident, $vars: ident, $assign: ident, $instruction: ident) => {
-        let $left = if let Val::Index(index) = $left {
+        let $left = if let Val::Index(index, _) = $left {
             match $vars.get(index) {
-                Some(Val::Index(_)) | None => None,
+                Some(Val::Index(..)) | None => None,
                 Some(val) => Some(val.clone()),
             }
         } else {
             Some($left.clone())
         };
-        let $right = if let Val::Index(index) = $right {
+        let $right = if let Val::Index(index, _) = $right {
             match $vars.get(index) {
-                Some(Val::Index(_)) | None => None,
+                Some(Val::Index(..)) | None => None,
                 Some(val) => Some(val.clone()),
             }
         } else {
@@ -355,7 +353,7 @@ macro_rules! check {
     (BINARY2 $left:ident, $right: ident, $new: ident, $vars: ident, $assign: ident, $instruction: ident) => {{
         let $left = if let Val::Index(index) = $left {
             match $vars.get(index) {
-                Some(Val::Index(_)) | None => None,
+                Some(Val::Index(..)) | None => None,
                 Some(val) => Some(val.clone()),
             }
         } else {
@@ -363,7 +361,7 @@ macro_rules! check {
         };
         let $right = if let Val::Index(index) = $right {
             match $vars.get(index) {
-                Some(Val::Index(_)) | None => None,
+                Some(Val::Index(..)) | None => None,
                 Some(val) => Some(val.clone()),
             }
         } else {

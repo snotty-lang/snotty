@@ -142,7 +142,7 @@ impl Token {
     pub fn new(token_type: TokenType, line: usize, start: usize, end: usize) -> Self {
         Self {
             token_type,
-            position: Position { line, start, end },
+            position: Position::new(line, start, end),
         }
     }
 

@@ -129,7 +129,7 @@ pub enum Val {
     /// A boolean.
     Bool(bool),
     /// An index (variable).
-    Index(usize),
+    Index(usize, ValType),
     /// None
     None,
 }
@@ -141,7 +141,17 @@ impl Val {
         match self {
             Val::Num(num) => *num,
             Val::Bool(b) => *b as i32,
+            // Val::None => 0,
             _ => unreachable!(),
+        }
+    }
+
+    pub fn r#type(&self) -> ValType {
+        match self {
+            Val::Num(_) => ValType::Number,
+            Val::Bool(_) => ValType::Boolean,
+            Val::Index(_, t) => *t,
+            Val::None => ValType::None,
         }
     }
 }
@@ -159,7 +169,7 @@ impl fmt::Display for Val {
             Val::None => write!(f, "NULL"),
             Val::Bool(b) => write!(f, "{}", b),
             Val::Num(num) => write!(f, "{}", num),
-            Val::Index(index) => write!(f, "[{}]", index),
+            Val::Index(index, _) => write!(f, "[{}]", index),
         }
     }
 }
