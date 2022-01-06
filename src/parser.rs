@@ -259,7 +259,7 @@ impl Parser {
                 }
                 "ezin" => {
                     self.advance();
-                    Ok(Node::Input)
+                    Ok(Node::Input(token))
                 }
                 "ezascii" => {
                     self.advance();
@@ -292,7 +292,7 @@ impl Parser {
                 }
                 "NULL" => {
                     self.advance();
-                    Ok(Node::None)
+                    Ok(Node::None(token))
                 }
                 _ => Err(Error::new(
                     ErrorType::SyntaxError,
@@ -531,7 +531,7 @@ fn check_undefined(global: &mut Scope) -> Option<Error> {
 fn keyword_checks(ast: &Node) -> Option<Error> {
     fn check_return(node: &Node) -> Option<Token> {
         match node {
-            Node::None => None,
+            Node::None(_) => None,
             Node::Number(_) => None,
             Node::BinaryOp(_, n1, n2) => {
                 let n1 = check_return(n1);
@@ -582,7 +582,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
             Node::Return(t, _) => Some(t.clone()),
             Node::Print(n1) => check_return(n1),
             Node::Ascii(n1) => check_return(n1),
-            Node::Input => None,
+            Node::Input(_) => None,
         }
     }
     match ast {

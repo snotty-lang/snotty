@@ -31,7 +31,7 @@ impl CodeGenerator {
                         ErrorType::TypeError,
                         op.position,
                         format!(
-                            "Cannot do {} for {:?} and {:?}",
+                            "Cannot operate '{}' on two different types: type {:?} and type {:?}",
                             op,
                             right.r#type(),
                             left_type
@@ -43,7 +43,27 @@ impl CodeGenerator {
                     Some(self.array_index),
                 );
                 self.array_index += 1;
-                Ok((Val::Index(self.array_index - 1, left_type), false))
+                let type_ = match op.token_type {
+                    TokenType::Ge
+                    | TokenType::Gt
+                    | TokenType::Lt
+                    | TokenType::Le
+                    | TokenType::LAnd
+                    | TokenType::LOr
+                    | TokenType::Eq
+                    | TokenType::Neq => ValType::Boolean,
+                    _ => {
+                        if left_type == ValType::Boolean {
+                            return Err(Error::new(
+                                ErrorType::TypeError,
+                                op.position,
+                                format!("Cannot do '{}' on type Boolean", op,),
+                            ));
+                        }
+                        ValType::Number
+                    }
+                };
+                Ok((Val::Index(self.array_index - 1, type_), false))
             }
 
             Node::UnaryOp(op, expr) => {
@@ -99,7 +119,7 @@ impl CodeGenerator {
                                     ErrorType::TypeError,
                                     var1.position,
                                     format!(
-                                        "Variable {} is of type {:?} but is being assigned {:?}",
+                                        "Variable {} is of type {:?} but is being assigned to type {:?}",
                                         var1,
                                         var.r#type(),
                                         type_
@@ -122,7 +142,7 @@ impl CodeGenerator {
                                     ErrorType::TypeError,
                                     var1.position,
                                     format!(
-                                        "Variable {} is of type {:?} but is being assigned {:?}",
+                                        "Variable {} is of type {:?} but is being assigned to type {:?}",
                                         var1,
                                         var.r#type(),
                                         val_type
@@ -160,7 +180,7 @@ impl CodeGenerator {
                 Ok((Val::Index(self.array_index, ValType::None), false))
             }
 
-            Node::Input => {
+            Node::Input(_) => {
                 self.instructions
                     .push(Instruction::Input, Some(self.array_index));
                 self.array_index += 1;
@@ -174,7 +194,7 @@ impl CodeGenerator {
                         ErrorType::TypeError,
                         cond1.position(),
                         format!(
-                            "Condition in an if statement can only be a boolean, and not a {:?}",
+                            "Condition in an if statement can only be of type Boolean, and not of type {:?}",
                             cond.r#type()
                         ),
                     ));
@@ -203,7 +223,7 @@ impl CodeGenerator {
                 Ok((Val::Index(self.array_index - 1, then_type), false))
             }
 
-            Node::None => Ok((Val::None, false)),
+            Node::None(_) => Ok((Val::None, false)),
 
             Node::Call(_, _) => todo!(),
             Node::FuncDef(_, _, _) => todo!(),

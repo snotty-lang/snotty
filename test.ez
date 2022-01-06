@@ -1,1 +1,1 @@
-ezout if NULL 3 else NULL
+ezout if false + true 3 else 6

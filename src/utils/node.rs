@@ -15,9 +15,9 @@ pub enum Node {
     Return(Token, Option<Box<Node>>),
     Print(Box<Node>),
     Ascii(Box<Node>),
-    Input,
+    Input(Token),
     If(Box<Node>, Box<Node>, Option<Box<Node>>),
-    None,
+    None(Token),
 }
 
 impl Node {
@@ -103,7 +103,8 @@ impl Node {
                 }
                 pos
             }
-            _ => unreachable!(),
+            Node::None(token) => token.position,
+            Node::Input(token) => token.position,
         }
     }
 }

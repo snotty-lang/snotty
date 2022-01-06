@@ -170,51 +170,43 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                     None
                 };
 
-                enum Value {
-                    Ins(Instruction),
-                    Val(Val),
-                }
-
-                let val = match (cond2, then2, else_2) {
-                    (None, _, _) => Value::Ins(instruction.clone()),
+                match (cond2, then2, else_2) {
+                    (None, _, _) => {
+                        new.push(instruction.clone(), *assign);
+                        continue;
+                    }
                     (Some(cond), None, None) => {
                         if cond != 0 {
-                            Value::Val(then.clone())
+                            then.clone()
                         } else if let Some(else_) = else_ {
-                            Value::Val(else_.clone())
+                            (else_.clone())
                         } else {
                             continue;
                         }
                     }
                     (Some(cond), None, Some(else_)) => {
                         if cond == 0 {
-                            Value::Val(else_.clone())
+                            (else_.clone())
                         } else {
-                            Value::Ins(instruction.clone())
+                            (then.clone())
                         }
                     }
                     (Some(cond), Some(then), None) => {
                         if cond != 0 {
-                            Value::Val(then.clone())
+                            (then.clone())
+                        } else if let Some(else_) = else_ {
+                            (else_.clone())
                         } else {
                             continue;
                         }
                     }
                     (Some(cond), Some(then), Some(else_)) => {
                         if cond != 0 {
-                            Value::Val(then.clone())
+                            (then.clone())
                         } else {
-                            Value::Val(else_.clone())
+                            (else_.clone())
                         }
                     }
-                };
-
-                match val {
-                    Value::Ins(ins) => {
-                        new.push(ins, *assign);
-                        continue;
-                    }
-                    Value::Val(val) => val,
                 }
             }
         };
