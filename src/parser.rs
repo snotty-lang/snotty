@@ -50,20 +50,28 @@ impl Parser {
                         Ok(Node::Return(token, Some(Box::new(self.expression(scope)?))))
                     }
                 }
+                "let" => {
+                    self.advance();
+                    let node = self.let_statement(true, scope)?;
+                    scope.register_variable(node.clone());
+                    Ok(node)
+                }
+                "if" => {
+                    self.advance();
+                    let condition = self.expression(scope)?;
+                    let then_branch = self.statement(scope)?;
+                    let else_ = if self.current_token.token_type
+                        == TokenType::Keyword("else".to_string())
+                    {
+                        self.advance();
+                        Some(Box::new(self.statement(scope)?))
+                    } else {
+                        None
+                    };
+                    Ok(Node::If(Box::new(condition), Box::new(then_branch), else_))
+                }
                 _ => self.expression(scope),
             },
-            _ => self.expression(scope),
-        }
-    }
-
-    fn expression(&mut self, scope: &mut Scope) -> ParseResult {
-        match self.current_token.token_type {
-            TokenType::Keyword(ref keyword) if keyword == "let" => {
-                self.advance();
-                let node = self.let_statement(true, scope)?;
-                scope.register_variable(node.clone());
-                Ok(node)
-            }
             TokenType::Identifier(_)
                 if self.peek_type().is_some()
                     && ASSIGNMENT_OPERATORS.contains(&self.peek_type().unwrap()) =>
@@ -72,14 +80,17 @@ impl Parser {
                 scope.access_variable(node.clone());
                 Ok(node)
             }
-
-            _ => self.binary_op(
-                Self::comparison,
-                vec![TokenType::LAnd, TokenType::LOr],
-                Self::comparison,
-                scope,
-            ),
+            _ => self.expression(scope),
         }
+    }
+
+    fn expression(&mut self, scope: &mut Scope) -> ParseResult {
+        self.binary_op(
+            Self::comparison,
+            vec![TokenType::LAnd, TokenType::LOr],
+            Self::comparison,
+            scope,
+        )
     }
 
     fn let_statement(&mut self, init: bool, scope: &mut Scope) -> ParseResult {
@@ -273,24 +284,7 @@ impl Parser {
                     self.advance();
                     Ok(Node::Number(token))
                 }
-                "if" => {
-                    self.advance();
-                    let condition = self.expression(scope)?;
-                    let then_branch = self.expression(scope)?;
-                    let else_branch =
-                        if self.current_token.token_type == TokenType::Keyword("else".to_owned()) {
-                            self.advance();
-                            Some(Box::new(self.expression(scope)?))
-                        } else {
-                            None
-                        };
-                    Ok(Node::If(
-                        Box::new(condition),
-                        Box::new(then_branch),
-                        else_branch,
-                    ))
-                }
-                "NULL" => {
+                "ezblank" => {
                     self.advance();
                     Ok(Node::None(token))
                 }
@@ -300,6 +294,25 @@ impl Parser {
                     format!("Unexpected keyword: {}", self.current_token),
                 )),
             },
+            TokenType::TernaryIf => {
+                self.advance();
+                let condition = self.expression(scope)?;
+                let then_branch = self.expression(scope)?;
+                if self.current_token.token_type != TokenType::Colon {
+                    return Err(Error::new(
+                        ErrorType::SyntaxError,
+                        self.current_token.position,
+                        format!("Expected ':', found {}", self.current_token),
+                    ));
+                }
+                self.advance();
+                let else_branch = self.expression(scope)?;
+                Ok(Node::Ternary(
+                    Box::new(condition),
+                    Box::new(then_branch),
+                    Box::new(else_branch),
+                ))
+            }
             TokenType::Identifier(_) => {
                 self.advance();
                 let node = Node::VarAccess(token);
@@ -393,11 +406,6 @@ impl Parser {
         let mut new_scope = Scope::new(Some(scope));
         new_scope.args = Some(params.clone());
         let expr = self.expression(&mut new_scope)?;
-        if !new_scope.scopes.is_empty() {
-            assert!(new_scope.scopes.len() == 1);
-            new_scope = new_scope.scopes.pop().unwrap();
-            new_scope.parent = None;
-        }
         scope.scopes.push(new_scope);
         Ok(Node::FuncDef(name, params, Box::new(expr)))
     }
@@ -549,6 +557,21 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
             Node::VarAccess(_) => None,
             Node::VarReassign(_, n1) => check_return(n1),
             Node::Statements(_) => None,
+            Node::Ternary(n1, n2, n3) => {
+                let n1 = check_return(n1);
+                if n1.is_some() {
+                    return n1;
+                }
+                let n2 = check_return(n2);
+                if n2.is_some() {
+                    return n2;
+                }
+                let n3 = check_return(n3);
+                if n3.is_some() {
+                    return n3;
+                }
+                None
+            }
             Node::If(n1, n2, n3) => {
                 let n1 = check_return(n1);
                 if n1.is_some() {

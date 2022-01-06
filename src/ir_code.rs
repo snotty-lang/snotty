@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 
-use super::utils::{Error, ErrorType, Instruction, Instructions, Node, TokenType, Val, ValType};
+use super::utils::{
+    Error, ErrorType, Instruction, Instructions, Label, Node, TokenType, Val, ValType,
+};
 
 /// Generates the Intermediate 3-address code from the AST
 pub struct CodeGenerator {
     instructions: Instructions,
     array_index: usize,
+    current_label: usize,
     vars: HashMap<String, Val>,
 }
 
@@ -26,14 +29,15 @@ impl CodeGenerator {
                 let (left, _) = self.match_node(left)?;
                 let (right, _) = self.match_node(right)?;
                 let left_type = left.r#type();
+                let right_type = right.r#type();
                 if left_type != right.r#type() {
                     return Err(Error::new(
                         ErrorType::TypeError,
                         op.position,
                         format!(
-                            "Cannot operate '{}' on two different types: type {:?} and type {:?}",
-                            op,
-                            right.r#type(),
+                            "Cannot {} `{}` to `{}`",
+                            op.token_type.get_operation_name(),
+                            right_type,
                             left_type
                         ),
                     ));
@@ -43,27 +47,19 @@ impl CodeGenerator {
                     Some(self.array_index),
                 );
                 self.array_index += 1;
-                let type_ = match op.token_type {
-                    TokenType::Ge
-                    | TokenType::Gt
-                    | TokenType::Lt
-                    | TokenType::Le
-                    | TokenType::LAnd
-                    | TokenType::LOr
-                    | TokenType::Eq
-                    | TokenType::Neq => ValType::Boolean,
-                    _ => {
-                        if left_type == ValType::Boolean {
-                            return Err(Error::new(
-                                ErrorType::TypeError,
-                                op.position,
-                                format!("Cannot do '{}' on type Boolean", op,),
-                            ));
-                        }
-                        ValType::Number
-                    }
-                };
-                Ok((Val::Index(self.array_index - 1, type_), false))
+                match left_type.get_result_type(right_type, op) {
+                    Some(result_type) => Ok((Val::Index(self.array_index - 1, result_type), false)),
+                    None => Err(Error::new(
+                        ErrorType::TypeError,
+                        op.position,
+                        format!(
+                            "Cannot {} `{}` to `{}`",
+                            op.token_type.get_operation_name(),
+                            right_type,
+                            left_type
+                        ),
+                    )),
+                }
             }
 
             Node::UnaryOp(op, expr) => {
@@ -74,7 +70,18 @@ impl CodeGenerator {
                     Some(self.array_index),
                 );
                 self.array_index += 1;
-                Ok((Val::Index(self.array_index - 1, expr_type), false))
+                match expr_type.get_result_type_unary(op) {
+                    Some(result_type) => Ok((Val::Index(self.array_index - 1, result_type), false)),
+                    None => Err(Error::new(
+                        ErrorType::TypeError,
+                        op.position,
+                        format!(
+                            "Cannot apply `{}` to `{}`",
+                            op.token_type.get_operation_name(),
+                            expr_type,
+                        ),
+                    )),
+                }
             }
 
             Node::VarAssign(var, expr) => {
@@ -199,26 +206,73 @@ impl CodeGenerator {
                         ),
                     ));
                 }
-                let (then, _) = self.match_node(then1)?;
-                let then_type = then.r#type();
+
+                let then_part = self.instructions.0.len();
+                self.match_node(then1)?;
+
+                let label = self.current_label;
+                self.current_label += 1;
+                self.instructions
+                    .push(Instruction::Label(Label(label)), None);
+
+                let else_part = self.instructions.0.len();
                 let else_ = match else_1.as_ref().map(|e| self.match_node(e)) {
-                    Some(Ok((else_, _))) => {
-                        if then_type != else_.r#type() {
-                            return Err(Error::new(
-                                ErrorType::TypeError,
-                                else_1.as_ref().unwrap().position(),
-                                format!("Then and else branch have different types, expected type {:?}, found type {:?}", then_type, else_.r#type()),
-                            ));
-                        }
-                        Some(else_)
-                    }
+                    Some(Ok((else_, _))) => Some(else_),
                     Some(Err(e)) => {
                         return Err(e);
                     }
                     None => None,
                 };
-                self.instructions
-                    .push(Instruction::If(cond, then, else_), Some(self.array_index));
+
+                self.instructions.0.insert(
+                    then_part,
+                    (
+                        Some(self.array_index),
+                        Instruction::JmpFalse(cond, Label(label)),
+                    ),
+                );
+
+                if else_.is_some() {
+                    self.instructions.0.insert(
+                        else_part,
+                        (None, Instruction::Jmp(Label(self.current_label))),
+                    );
+                    self.instructions
+                        .push(Instruction::Label(Label(self.current_label)), None);
+                    self.current_label += 1;
+                }
+                Ok((Val::Index(self.array_index, ValType::None), false))
+            }
+
+            Node::Ternary(cond1, then1, else_1) => {
+                let (cond, _) = self.match_node(cond1)?;
+                if cond.r#type() != ValType::Boolean {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        cond1.position(),
+                        format!(
+                            "Condition in an if statement can only be of type Boolean, and not of type {:?}",
+                            cond.r#type()
+                        ),
+                    ));
+                }
+
+                let (then, _) = self.match_node(then1)?;
+                let then_type = then.r#type();
+
+                let (else_, _) = self.match_node(else_1)?;
+                if then_type != else_.r#type() {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        else_1.position(),
+                        format!("Then and else branch have different types, expected type {:?}, found type {:?}", then_type, else_.r#type()),
+                    ));
+                }
+
+                self.instructions.push(
+                    Instruction::TernaryIf(cond, then, else_),
+                    Some(self.array_index),
+                );
                 self.array_index += 1;
                 Ok((Val::Index(self.array_index - 1, then_type), false))
             }
@@ -239,6 +293,7 @@ impl CodeGenerator {
 /// Generates and returns the Intermediate Representation of the AST
 pub fn generate_code(ast: Node) -> Result<Instructions, Error> {
     let mut obj = CodeGenerator {
+        current_label: 0,
         instructions: Instructions::new(),
         array_index: 0,
         vars: HashMap::new(),

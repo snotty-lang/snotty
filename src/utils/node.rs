@@ -16,6 +16,7 @@ pub enum Node {
     Print(Box<Node>),
     Ascii(Box<Node>),
     Input(Token),
+    Ternary(Box<Node>, Box<Node>, Box<Node>),
     If(Box<Node>, Box<Node>, Option<Box<Node>>),
     None(Token),
 }
@@ -90,16 +91,22 @@ impl Node {
             }
             Node::Print(node) => node.position(),
             Node::Ascii(node) => node.position(),
+            Node::Ternary(cond, _, else_) => {
+                let mut pos = cond.position();
+                let else_pos = else_.position();
+                pos.line_end = else_pos.line_end;
+                pos.end = else_pos.end;
+                pos
+            }
             Node::If(cond, then, else_) => {
                 let mut pos = cond.position();
+                let then_pos = then.position();
+                pos.line_end = then_pos.line_end;
+                pos.end = then_pos.end;
                 if let Some(else_) = else_ {
                     let else_pos = else_.position();
                     pos.line_end = else_pos.line_end;
                     pos.end = else_pos.end;
-                } else {
-                    let then_pos = then.position();
-                    pos.line_end = then_pos.line_end;
-                    pos.end = then_pos.end;
                 }
                 pos
             }

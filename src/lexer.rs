@@ -246,6 +246,9 @@ pub fn lex(input: &str) -> LexResult {
                     tokens.push(Token::new(TokenType::BXor, line, i, i));
                 }
             }
+            '?' => {
+                tokens.push(Token::new(TokenType::TernaryIf, line, i, i));
+            }
             _ if c.is_digit(10) => {
                 let mut num = c.to_string();
                 let start = i;

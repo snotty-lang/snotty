@@ -1,10 +1,13 @@
-use super::{Token, TokenType};
+use super::{Token, TokenType, BOOLEAN_EXCLUSIVE, BOOLEAN_OPERATORS};
 use std::fmt;
 
 /// An enum to specify the type of the operator.
 #[derive(Debug, Clone)]
 pub enum Instruction {
-    If(Val, Val, Option<Val>),
+    TernaryIf(Val, Val, Val),
+    JmpFalse(Val, Label),
+    Jmp(Label),
+    Label(Label),
     Copy(Val),
     Input,
     Add(Val, Val),
@@ -33,6 +36,15 @@ pub enum Instruction {
     BOr(Val, Val),
     BXor(Val, Val),
     BNot(Val),
+}
+
+#[derive(Debug, Clone)]
+pub struct Label(pub usize);
+
+impl fmt::Display for Label {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "L{}", self.0)
+    }
 }
 
 impl Instruction {
@@ -82,13 +94,12 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Instruction::If(cond, then, else_) => {
-                if let Some(else_) = else_ {
-                    write!(f, "if {} then {} else {}", cond, then, else_)
-                } else {
-                    write!(f, "if {} then {}", cond, then)
-                }
+            Instruction::TernaryIf(a, b, c) => write!(f, "if {} then {} else {}", a, b, c),
+            Instruction::JmpFalse(cond, goto) => {
+                write!(f, "ifFalse {} jmp {}", cond, goto)
             }
+            Instruction::Label(l) => write!(f, "{}:", l),
+            Instruction::Jmp(goto) => write!(f, "jmp {}", goto),
             Instruction::Copy(val) => write!(f, "{}", val),
             Self::Input => write!(f, "?"),
             Self::Add(left, right) => write!(f, "{} + {}", left, right),
@@ -141,7 +152,6 @@ impl Val {
         match self {
             Val::Num(num) => *num,
             Val::Bool(b) => *b as i32,
-            // Val::None => 0,
             _ => unreachable!(),
         }
     }
@@ -161,6 +171,62 @@ pub enum ValType {
     None,
     Number,
     Boolean,
+}
+
+impl ValType {
+    pub fn get_result_type(&self, rhs: ValType, op: &Token) -> Option<Self> {
+        match (self, rhs) {
+            (Self::Number, Self::Number) => {
+                if BOOLEAN_OPERATORS.contains(&op.token_type) {
+                    Some(Self::Boolean)
+                } else if BOOLEAN_EXCLUSIVE.contains(&op.token_type) {
+                    None
+                } else {
+                    Some(Self::Number)
+                }
+            }
+            (Self::Boolean, Self::Boolean) => {
+                if BOOLEAN_OPERATORS.contains(&op.token_type)
+                    || BOOLEAN_EXCLUSIVE.contains(&op.token_type)
+                {
+                    Some(Self::Boolean)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    pub fn get_result_type_unary(&self, op: &Token) -> Option<Self> {
+        match self {
+            Self::Number => {
+                if op.token_type == TokenType::LNot {
+                    Some(Self::Boolean)
+                } else {
+                    Some(Self::Number)
+                }
+            }
+            Self::Boolean => {
+                if op.token_type == TokenType::LNot {
+                    Some(Self::Boolean)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for ValType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::None => write!(f, "ezblank"),
+            Self::Number => write!(f, "integer"),
+            Self::Boolean => write!(f, "bool"),
+        }
+    }
 }
 
 impl fmt::Display for Val {

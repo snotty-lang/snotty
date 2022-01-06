@@ -3,7 +3,26 @@ use std::{cmp, fmt};
 
 /// List of all the keywords identified by the lexer
 pub const KEYWORDS: [&str; 11] = [
-    "let", "ez", "return", "ezout", "ezin", "ezascii", "true", "false", "if", "else", "NULL",
+    "let", "ez", "return", "ezout", "ezin", "ezascii", "true", "false", "if", "else", "ezblank",
+];
+
+pub const BOOLEAN_OPERATORS: [TokenType; 6] = [
+    TokenType::Neq,
+    TokenType::Gt,
+    TokenType::Le,
+    TokenType::Lt,
+    TokenType::Ge,
+    TokenType::Eq,
+];
+
+pub const BOOLEAN_EXCLUSIVE: [TokenType; 7] = [
+    TokenType::LAnd,
+    TokenType::LOr,
+    TokenType::LNot,
+    TokenType::LNot,
+    TokenType::BAnd,
+    TokenType::BOr,
+    TokenType::BXor,
 ];
 
 pub const ASSIGNMENT_OPERATORS: [TokenType; 12] = [
@@ -71,6 +90,7 @@ pub enum TokenType {
     Keyword(String),
     Eol,
     Eof,
+    TernaryIf,
 }
 
 /// The token struct
@@ -86,6 +106,7 @@ impl fmt::Display for TokenType {
             f,
             "{}",
             match self {
+                TokenType::TernaryIf => "?".to_owned(),
                 TokenType::AddAssign => "+=".to_owned(),
                 TokenType::SubAssign => "-=".to_owned(),
                 TokenType::MulAssign => "*=".to_owned(),
@@ -135,6 +156,41 @@ impl fmt::Display for TokenType {
                 TokenType::Eof => "End of file".to_owned(),
             }
         )
+    }
+}
+
+impl TokenType {
+    pub fn get_operation_name(&self) -> String {
+        match self {
+            TokenType::Inc => "increment".to_owned(),
+            TokenType::Dec => "decrement".to_owned(),
+            TokenType::Eq => "equal to".to_owned(),
+            TokenType::Neq => "not equal to".to_owned(),
+            TokenType::Lt => "lesser than".to_owned(),
+            TokenType::Gt => "greater than".to_owned(),
+            TokenType::Le => "lesser than or equal to".to_owned(),
+            TokenType::Ge => "greater than or equal to".to_owned(),
+            TokenType::LAnd => "logical and".to_owned(),
+            TokenType::LOr => "logical or".to_owned(),
+            TokenType::LNot => "logical not".to_owned(),
+            TokenType::Add => "add".to_owned(),
+            TokenType::Sub => "subtract".to_owned(),
+            TokenType::Mul => "multiply".to_owned(),
+            TokenType::Div => "divide".to_owned(),
+            TokenType::Pow => "exponent".to_owned(),
+            TokenType::Mod => "mod".to_owned(),
+            TokenType::Shl => "left shift".to_owned(),
+            TokenType::Shr => "right shift".to_owned(),
+            TokenType::BAnd => "binary and".to_owned(),
+            TokenType::BNot => "binary not".to_owned(),
+            TokenType::BOr => "binary or".to_owned(),
+            TokenType::BXor => "binary xor".to_owned(),
+            TokenType::Identifier(_) => todo!(),
+            TokenType::Number(_) => todo!(),
+            TokenType::Assign => todo!(),
+            TokenType::Keyword(_) => todo!(),
+            _ => unreachable!(),
+        }
     }
 }
 
