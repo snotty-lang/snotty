@@ -98,9 +98,8 @@ impl CodeGenerator {
                             Ok((Val::Index(self.array_index - 1, type_), false))
                         }
                         (val, _) => {
-                            let val_type = val.r#type();
                             self.vars.insert(var.clone(), val);
-                            Ok((Val::Index(self.array_index, val_type), false))
+                            Ok((Val::None, false))
                         }
                     }
                 } else {
@@ -139,7 +138,7 @@ impl CodeGenerator {
                                 Some(self.array_index),
                             );
                             self.array_index += 1;
-                            Ok((Val::Index(self.array_index, type_), false))
+                            Ok((Val::None, false))
                         }
                         (val, _) => {
                             let var = self.vars.get_mut(var).unwrap();
@@ -178,13 +177,13 @@ impl CodeGenerator {
             Node::Print(expr) => {
                 let (expr, _) = self.match_node(expr)?;
                 self.instructions.push(Instruction::Print(expr), None);
-                Ok((Val::Index(self.array_index, ValType::None), false))
+                Ok((Val::None, false))
             }
 
             Node::Ascii(expr) => {
                 let (expr, _) = self.match_node(expr)?;
                 self.instructions.push(Instruction::Ascii(expr), None);
-                Ok((Val::Index(self.array_index, ValType::None), false))
+                Ok((Val::None, false))
             }
 
             Node::Input(_) => {
@@ -224,13 +223,9 @@ impl CodeGenerator {
                     None => None,
                 };
 
-                self.instructions.0.insert(
-                    then_part,
-                    (
-                        Some(self.array_index),
-                        Instruction::JmpFalse(cond, Label(label)),
-                    ),
-                );
+                self.instructions
+                    .0
+                    .insert(then_part, (None, Instruction::JmpFalse(cond, Label(label))));
 
                 if else_.is_some() {
                     self.instructions.0.insert(
@@ -241,7 +236,7 @@ impl CodeGenerator {
                         .push(Instruction::Label(Label(self.current_label)), None);
                     self.current_label += 1;
                 }
-                Ok((Val::Index(self.array_index, ValType::None), false))
+                Ok((Val::None, false))
             }
 
             Node::Ternary(cond1, then1, else_1) => {

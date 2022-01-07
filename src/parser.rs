@@ -70,6 +70,14 @@ impl Parser {
                     };
                     Ok(Node::If(Box::new(condition), Box::new(then_branch), else_))
                 }
+                "ezascii" => {
+                    self.advance();
+                    Ok(Node::Ascii(Box::new(self.expression(scope)?)))
+                }
+                "ezout" => {
+                    self.advance();
+                    Ok(Node::Print(Box::new(self.expression(scope)?)))
+                }
                 _ => self.expression(scope),
             },
             TokenType::Identifier(_)
@@ -264,17 +272,9 @@ impl Parser {
                     scope.register_function(node.clone());
                     Ok(node)
                 }
-                "ezout" => {
-                    self.advance();
-                    Ok(Node::Print(Box::new(self.expression(scope)?)))
-                }
                 "ezin" => {
                     self.advance();
                     Ok(Node::Input(token))
-                }
-                "ezascii" => {
-                    self.advance();
-                    Ok(Node::Ascii(Box::new(self.expression(scope)?)))
                 }
                 "true" => {
                     self.advance();

@@ -12,7 +12,7 @@ pub fn optimize(code: &Instructions) -> Instructions {
             | Instruction::Mul(a, Val::Num(1) | Val::Bool(true))
             | Instruction::Div(a, Val::Num(1) | Val::Bool(true)) => {
                 println!("{:?}", a);
-                let a = if let Val::Index(index) = a {
+                let a = if let Val::Index(index, _) = a {
                     match dbg!(vars.get(index)) {
                         None => {
                             optimized.push(instruction.clone(), *assign);
@@ -106,10 +106,10 @@ pub fn optimize(code: &Instructions) -> Instructions {
                 Instruction::Copy(val) => {
                     super::check!(2 val, optimized, vars, assign, instruction)
                 }
-                Instruction::If(_cond, _then, _else_) => {
+                Instruction::JmpFalse(_cond, _label) => {
                     // let cond = if let Val::Index(index) = cond {
                     //     match vars.get(index) {
-                    //         Some(Val::Index(_)) | None => None,
+                    //         Some(Val::Index(..)) | None => None,
                     //         Some(val) => Some(val.clone()),
                     //     }
                     // } else {
@@ -117,7 +117,7 @@ pub fn optimize(code: &Instructions) -> Instructions {
                     // };
                     // let then = if let Val::Index(index) = then {
                     //     match vars.get(index) {
-                    //         Some(Val::Index(_)) | None => None,
+                    //         Some(Val::Index(..)) | None => None,
                     //         Some(val) => Some(val.clone()),
                     //     }
                     // } else {
@@ -126,7 +126,7 @@ pub fn optimize(code: &Instructions) -> Instructions {
                     // let else_ = if let Some(val) = else_ {
                     //     if let Val::Index(index) = val {
                     //         match vars.get(index) {
-                    //             Some(Val::Index(_)) | None => None,
+                    //             Some(Val::Index(..)) | None => None,
                     //             Some(val) => Some(val.clone()),
                     //         }
                     //     } else {
@@ -148,6 +148,61 @@ pub fn optimize(code: &Instructions) -> Instructions {
                     optimized.push(instruction.clone(), *assign);
                     continue;
                 }
+                Instruction::TernaryIf(cond1, then1, else1) => {
+                    let cond = if let Val::Index(index, _) = cond1 {
+                        match vars.get(index) {
+                            Some(Val::Index(..)) | None => None,
+                            Some(val) => Some(val.clone()),
+                        }
+                    } else {
+                        Some(cond1.clone())
+                    };
+                    let then = if let Val::Index(index, _) = then1 {
+                        match vars.get(index) {
+                            Some(Val::Index(..)) | None => None,
+                            Some(val) => Some(val.clone()),
+                        }
+                    } else {
+                        Some(then1.clone())
+                    };
+                    let else_ = if let Val::Index(index, _) = else1 {
+                        match vars.get(index) {
+                            Some(Val::Index(..)) | None => None,
+                            Some(val) => Some(val.clone()),
+                        }
+                    } else {
+                        Some(else1.clone())
+                    };
+
+                    let new_ins = match (cond, then, else_) {
+                        (Some(cond), Some(then), None) => {
+                            Instruction::TernaryIf(cond, then, else1.clone())
+                        }
+                        (None, None, Some(else_)) => {
+                            Instruction::TernaryIf(cond1.clone(), then1.clone(), else_)
+                        }
+                        (None, Some(then), None) => {
+                            Instruction::TernaryIf(cond1.clone(), then, else1.clone())
+                        }
+                        (None, Some(then), Some(else_)) => {
+                            Instruction::TernaryIf(cond1.clone(), then, else_)
+                        }
+                        (Some(cond), None, None) => {
+                            Instruction::TernaryIf(cond, then1.clone(), else1.clone())
+                        }
+                        (Some(cond), None, Some(else_)) => {
+                            Instruction::TernaryIf(cond, then1.clone(), else_)
+                        }
+                        (None, None, None) | (Some(_), Some(_), Some(_)) => instruction.clone(),
+                    };
+                    optimized.push(new_ins.clone(), *assign);
+                    continue;
+                }
+                Instruction::Jmp(_) => {
+                    optimized.push(instruction.clone(), *assign);
+                    continue;
+                }
+                Instruction::Label(_) => todo!(),
             },
         };
 

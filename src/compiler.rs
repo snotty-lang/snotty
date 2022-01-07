@@ -1,3 +1,5 @@
+#![allow(clippy::unnecessary_operation)]
+
 use super::utils::{Instruction, Instructions, Val};
 
 /// Compiles the 3-address code into brainfuck code.
@@ -21,7 +23,8 @@ pub fn transpile(code: &Instructions) -> String {
                 bf_code.push_str(">>");
                 goto(&mut bf_code, &mut location, free_idx);
                 goto_add!(val, &mut bf_code, &mut location, {
-                    // goto(&mut bf_code, &mut location, free_idx);
+                    copy(&mut bf_code, location, free_idx, location);
+                    goto(&mut bf_code, &mut location, free_idx);
                 });
                 bf_code.push_str(">+[[-]<[->+<[->+<[->+<[->+<[->+<[->+<[->+<[->+<[->+<[->[-]>>+>+<<<]]]]]]]]]<]>>[>]++++++[-<++++++++>]>>]<<<[.[-]<<<]");
                 bf_code.push_str("++++++++++.----------");
@@ -83,6 +86,14 @@ pub fn transpile(code: &Instructions) -> String {
                 bf_code.push_str("[-<->]<");
                 location -= 1;
             }
+            Instruction::Pow(left, Val::Num(2)) => {
+                let start = location;
+                goto_add!(left, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
+                    goto(&mut bf_code, &mut location, start);
+                });
+                bf_code.push_str(">[-]>[-]<<[>+<-]>[-[>+<<++>-]<+>>[<+>-]<]<");
+            }
             Instruction::Pow(left, right) => {
                 if right.get_int() < 0 {
                     Val::Num(1 / left.get_int().pow(-right.get_int() as u32))
@@ -97,7 +108,17 @@ pub fn transpile(code: &Instructions) -> String {
                 Val::Bool(val.get_int() == 0);
             }
             Instruction::Mul(left, right) => {
-                Val::Num(left.get_int() * right.get_int());
+                let start = location;
+                goto_add!(left, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
+                });
+                goto(&mut bf_code, &mut location, start + 1);
+                goto_add!(right, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 1, location);
+                });
+                goto(&mut bf_code, &mut location, start);
+
+                bf_code.push_str(">>[-]>[-]<<< [>>>+<<<-]>>>[<<[<+>>+<-]>[<+>-]>-]<<<");
             }
             Instruction::Div(left, right) => {
                 Val::Num(left.get_int() / right.get_int());
@@ -142,11 +163,12 @@ pub fn transpile(code: &Instructions) -> String {
                 Val::Num(left.get_int() ^ right.get_int());
             }
             Instruction::Copy(from) => {
-                if let Val::Index(index) = from {
+                if let Val::Index(index, _) = from {
                     goto(&mut bf_code, &mut location, *index);
                 }
             }
-            Instruction::If(_, _, _) => {}
+            // Instruction::If(_, _, _) => {}
+            _ => todo!(),
         };
 
         match assign {
@@ -182,10 +204,11 @@ macro_rules! goto_add {
             Val::Bool(b) => {
                 $bf_code.push_str(&("+".repeat(*b as u32 as usize)));
             }
-            Val::Index(index) => {
+            Val::Index(index, _) => {
                 goto($bf_code, $current, *index);
                 $block
             }
+            Val::None => {}
         }
     };
     ($val: expr, $bf_code: expr, $current: expr, $block:block, $block2: block) => {
@@ -198,16 +221,20 @@ macro_rules! goto_add {
                 $bf_code.push_str(&("+".repeat(*b as u32 as usize)));
                 $block2
             }
-            Val::Index(index) => {
+            Val::Index(index, _) => {
                 goto($bf_code, $current, *index);
                 $block
             }
+            Val::None => {}
         }
     };
 }
 
 /// Copies the value from the `from` location to the `to` location. Uses the current location as a reference
 fn copy(bf_code: &mut String, from: usize, to: usize, mut current: usize) {
+    if current == to {
+        return;
+    }
     let start = current;
     goto(bf_code, &mut current, to);
     bf_code.push_str(">[-]<[-]");

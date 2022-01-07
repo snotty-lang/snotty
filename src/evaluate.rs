@@ -140,75 +140,67 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                     val.clone()
                 }
             }
-            // Instruction::If(cond, then, else_) => {
-            //     let cond2 = if let Val::Index(index, _) = cond {
-            //         match vars.get(index) {
-            //             Some(Val::Index(..)) | None => None,
-            //             Some(val) => Some(val.get_int()),
-            //         }
-            //     } else {
-            //         Some(cond.get_int())
-            //     };
-            //     let then2 = if let Val::Index(index, _) = then {
-            //         match vars.get(index) {
-            //             Some(Val::Index(..)) | None => None,
-            //             Some(val) => Some(val),
-            //         }
-            //     } else {
-            //         Some(then)
-            //     };
-            //     let else_2 = if let Some(else_) = else_ {
-            //         if let Val::Index(index, _) = else_ {
-            //             match vars.get(index) {
-            //                 Some(Val::Index(..)) | None => None,
-            //                 Some(val) => Some(val),
-            //             }
-            //         } else {
-            //             Some(else_)
-            //         }
-            //     } else {
-            //         None
-            //     };
+            Instruction::TernaryIf(cond, then, else_) => {
+                let cond2 = if let Val::Index(index, _) = cond {
+                    match vars.get(index) {
+                        Some(Val::Index(..)) | None => None,
+                        Some(val) => Some(val.get_int()),
+                    }
+                } else {
+                    Some(cond.get_int())
+                };
+                let then2 = if let Val::Index(index, _) = then {
+                    match vars.get(index) {
+                        Some(Val::Index(..)) | None => None,
+                        Some(val) => Some(val),
+                    }
+                } else {
+                    Some(then)
+                };
+                let else_2 = if let Val::Index(index, _) = else_ {
+                    match vars.get(index) {
+                        Some(Val::Index(..)) | None => None,
+                        Some(val) => Some(val),
+                    }
+                } else {
+                    Some(else_)
+                };
 
-            //     match (cond2, then2, else_2) {
-            //         (None, _, _) => {
-            //             new.push(instruction.clone(), *assign);
-            //             continue;
-            //         }
-            //         (Some(cond), None, None) => {
-            //             if cond != 0 {
-            //                 then.clone()
-            //             } else if let Some(else_) = else_ {
-            //                 else_.clone()
-            //             } else {
-            //                 continue;
-            //             }
-            //         }
-            //         (Some(cond), None, Some(else_)) => {
-            //             if cond == 0 {
-            //                 else_.clone()
-            //             } else {
-            //                 then.clone()
-            //             }
-            //         }
-            //         (Some(cond), Some(then), None) => {
-            //             if cond != 0 {
-            //                 then.clone()
-            //             } else if let Some(else_) = else_ {
-            //                 else_.clone()
-            //             } else {
-            //                 continue;
-            //             }
-            //         }
-            //         (Some(cond), Some(then), Some(else_)) => {
-            //             if cond != 0 {
-            //                 then.clone()
-            //             } else {
-            //                 else_.clone()
-            //             }
-            //         }
-            //     }
-            // }
+                match (cond2, then2, else_2) {
+                    (None, _, _) => {
+                        new.push(instruction.clone(), *assign);
+                        continue;
+                    }
+                    (Some(cond), None, None) => {
+                        if cond != 0 {
+                            then.clone()
+                        } else {
+                            else_.clone()
+                        }
+                    }
+                    (Some(cond), None, Some(else_)) => {
+                        if cond == 0 {
+                            else_.clone()
+                        } else {
+                            then.clone()
+                        }
+                    }
+                    (Some(cond), Some(then), None) => {
+                        if cond != 0 {
+                            then.clone()
+                        } else {
+                            else_.clone()
+                        }
+                    }
+                    (Some(cond), Some(then), Some(else_)) => {
+                        if cond != 0 {
+                            then.clone()
+                        } else {
+                            else_.clone()
+                        }
+                    }
+                }
+            }
             _ => todo!(),
         };
         vars.insert(assign.unwrap(), evaluated);
@@ -233,7 +225,7 @@ macro_rules! check {
         };
     };
     (2 $val:ident, $new: ident, $vars: ident, $assign: ident, $instruction: ident) => {{
-        if let Val::Index(index) = $val {
+        if let Val::Index(index, _) = $val {
             match $vars.get(index) {
                 Some(Val::Index(..)) | None => (),
                 Some(a) => {
@@ -344,7 +336,7 @@ macro_rules! check {
         };
     };
     (BINARY2 $left:ident, $right: ident, $new: ident, $vars: ident, $assign: ident, $instruction: ident) => {{
-        let $left = if let Val::Index(index) = $left {
+        let $left = if let Val::Index(index, _) = $left {
             match $vars.get(index) {
                 Some(Val::Index(..)) | None => None,
                 Some(val) => Some(val.clone()),
@@ -352,7 +344,7 @@ macro_rules! check {
         } else {
             Some($left.clone())
         };
-        let $right = if let Val::Index(index) = $right {
+        let $right = if let Val::Index(index, _) = $right {
             match $vars.get(index) {
                 Some(Val::Index(..)) | None => None,
                 Some(val) => Some(val.clone()),
