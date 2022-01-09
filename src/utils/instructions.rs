@@ -21,9 +21,7 @@ pub enum Instruction {
     Eq(Val, Val),
     Neq(Val, Val),
     Lt(Val, Val),
-    Gt(Val, Val),
     Le(Val, Val),
-    Ge(Val, Val),
     LAnd(Val, Val),
     LOr(Val, Val),
     LNot(Val),
@@ -58,15 +56,19 @@ impl Instruction {
         match t.token_type {
             TokenType::Add => Self::Add,
             TokenType::Sub => Self::Sub,
-            TokenType::Mul => Self::Mul,
+            TokenType::Mul => |val1, val2| {
+                if val1 == val2 {
+                    Self::Pow(val1, Val::Num(2))
+                } else {
+                    Self::Mul(val1, val2)
+                }
+            },
             TokenType::Div => Self::Div,
             TokenType::Mod => Self::Mod,
             TokenType::Eq => Self::Eq,
             TokenType::Neq => Self::Neq,
             TokenType::Lt => Self::Lt,
-            TokenType::Gt => Self::Gt,
             TokenType::Le => Self::Le,
-            TokenType::Ge => Self::Ge,
             TokenType::LAnd => Self::LAnd,
             TokenType::LOr => Self::LOr,
             TokenType::Pow => Self::Pow,
@@ -120,9 +122,7 @@ impl fmt::Display for Instruction {
             Self::Eq(left, right) => write!(f, "{} == {}", left, right),
             Self::Neq(left, right) => write!(f, "{} != {}", left, right),
             Self::Lt(left, right) => write!(f, "{} < {}", left, right),
-            Self::Gt(left, right) => write!(f, "{} > {}", left, right),
             Self::Le(left, right) => write!(f, "{} <= {}", left, right),
-            Self::Ge(left, right) => write!(f, "{} >= {}", left, right),
             Self::LAnd(left, right) => write!(f, "{} && {}", left, right),
             Self::LOr(left, right) => write!(f, "{} || {}", left, right),
             Self::LNot(val) => write!(f, "!{}", val),
@@ -133,7 +133,7 @@ impl fmt::Display for Instruction {
 }
 
 /// An enum to specify the type of the value.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Val {
     /// A number.
     Num(i32),
@@ -202,7 +202,7 @@ impl ValType {
         match self {
             Self::Number => {
                 if op.token_type == TokenType::LNot {
-                    Some(Self::Boolean)
+                    None
                 } else {
                     Some(Self::Number)
                 }

@@ -63,17 +63,9 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                 super::check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Bool(left < right)
             }
-            Instruction::Gt(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
-                Val::Bool(left > right)
-            }
             Instruction::Le(left, right) => {
                 super::check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Bool(left <= right)
-            }
-            Instruction::Ge(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
-                Val::Bool(left >= right)
             }
             Instruction::LAnd(left, right) => {
                 super::check!(BINARY left, right, new, vars, assign, instruction);
@@ -288,9 +280,8 @@ macro_rules! check {
                     Instruction::Mod(_, b) => Instruction::Mod(a, b),
                     Instruction::Lt(_, b) => Instruction::Lt(a, b),
                     Instruction::Le(_, b) => Instruction::Le(a, b),
-                    Instruction::Gt(_, b) => Instruction::Gt(a, b),
-                    Instruction::Ge(_, b) => Instruction::Ge(a, b),
                     Instruction::Eq(_, b) => Instruction::Eq(a, b),
+                    Instruction::Neq(_, b) => Instruction::Neq(a, b),
                     Instruction::LAnd(_, b) => Instruction::LAnd(a, b),
                     Instruction::LOr(_, b) => Instruction::LOr(a, b),
                     Instruction::Pow(_, b) => Instruction::Pow(a, b),
@@ -313,9 +304,8 @@ macro_rules! check {
                     Instruction::Mod(a, _) => Instruction::Mod(a, b),
                     Instruction::Lt(a, _) => Instruction::Lt(a, b),
                     Instruction::Le(a, _) => Instruction::Le(a, b),
-                    Instruction::Gt(a, _) => Instruction::Gt(a, b),
-                    Instruction::Ge(a, _) => Instruction::Ge(a, b),
                     Instruction::Eq(a, _) => Instruction::Eq(a, b),
+                    Instruction::Neq(a, _) => Instruction::Neq(a, b),
                     Instruction::LAnd(a, _) => Instruction::LAnd(a, b),
                     Instruction::LOr(a, _) => Instruction::LOr(a, b),
                     Instruction::Pow(a, _) => Instruction::Pow(a, b),
@@ -362,9 +352,8 @@ macro_rules! check {
                     Instruction::Mod(_, b) => Instruction::Mod(a, b),
                     Instruction::Lt(_, b) => Instruction::Lt(a, b),
                     Instruction::Le(_, b) => Instruction::Le(a, b),
-                    Instruction::Gt(_, b) => Instruction::Gt(a, b),
-                    Instruction::Ge(_, b) => Instruction::Ge(a, b),
                     Instruction::Eq(_, b) => Instruction::Eq(a, b),
+                    Instruction::Neq(_, b) => Instruction::Neq(a, b),
                     Instruction::LAnd(_, b) => Instruction::LAnd(a, b),
                     Instruction::LOr(_, b) => Instruction::LOr(a, b),
                     Instruction::Pow(_, b) => Instruction::Pow(a, b),
@@ -387,9 +376,8 @@ macro_rules! check {
                     Instruction::Mod(a, _) => Instruction::Mod(a, b),
                     Instruction::Lt(a, _) => Instruction::Lt(a, b),
                     Instruction::Le(a, _) => Instruction::Le(a, b),
-                    Instruction::Gt(a, _) => Instruction::Gt(a, b),
-                    Instruction::Ge(a, _) => Instruction::Ge(a, b),
                     Instruction::Eq(a, _) => Instruction::Eq(a, b),
+                    Instruction::Neq(a, _) => Instruction::Neq(a, b),
                     Instruction::LAnd(a, _) => Instruction::LAnd(a, b),
                     Instruction::LOr(a, _) => Instruction::LOr(a, b),
                     Instruction::Pow(a, _) => Instruction::Pow(a, b),

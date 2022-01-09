@@ -55,13 +55,7 @@ pub fn optimize(code: &Instructions) -> Instructions {
                 Instruction::LOr(a, b) => {
                     super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
-                Instruction::Gt(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
-                }
                 Instruction::Lt(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
-                }
-                Instruction::Ge(a, b) => {
                     super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::Le(a, b) => {

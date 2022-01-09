@@ -42,10 +42,28 @@ impl CodeGenerator {
                         ),
                     ));
                 }
-                self.instructions.push(
-                    Instruction::from_token_binary(op)(left, right),
-                    Some(self.array_index),
-                );
+                if let TokenType::Ge = &op.token_type {
+                    self.instructions
+                        .push(Instruction::Lt(left, right), Some(self.array_index));
+                    self.array_index += 1;
+                    self.instructions.push(
+                        Instruction::LNot(Val::Index(self.array_index - 1, ValType::Boolean)),
+                        Some(self.array_index),
+                    );
+                } else if let TokenType::Gt = &op.token_type {
+                    self.instructions
+                        .push(Instruction::Le(left, right), Some(self.array_index));
+                    self.array_index += 1;
+                    self.instructions.push(
+                        Instruction::LNot(Val::Index(self.array_index - 1, ValType::Boolean)),
+                        Some(self.array_index),
+                    );
+                } else {
+                    self.instructions.push(
+                        Instruction::from_token_binary(op)(left, right),
+                        Some(self.array_index),
+                    );
+                }
                 self.array_index += 1;
                 match left_type.get_result_type(right_type, op) {
                     Some(result_type) => Ok((Val::Index(self.array_index - 1, result_type), false)),

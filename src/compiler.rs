@@ -20,14 +20,13 @@ pub fn transpile(code: &Instructions) -> String {
             }
             Instruction::Print(val) => {
                 let start = location;
-                bf_code.push_str(">>");
                 goto(&mut bf_code, &mut location, free_idx);
                 goto_add!(val, &mut bf_code, &mut location, {
                     copy(&mut bf_code, location, free_idx, location);
                     goto(&mut bf_code, &mut location, free_idx);
                 });
-                bf_code.push_str(">+[[-]<[->+<[->+<[->+<[->+<[->+<[->+<[->+<[->+<[->+<[->[-]>>+>+<<<]]]]]]]]]<]>>[>]++++++[-<++++++++>]>>]<<<[.[-]<<<]");
-                bf_code.push_str("++++++++++.----------");
+                bf_code.push_str(">>++++++++++<<[->+>-[>+>>]>[+[-<+>]>+>>]<<<<<<]>>[-]>>>++++++++++<[->-[>+>>]>[+[-<+>]>+>>]<<<<<]>[-]>>[>++++++[-<++++++++>]<.<<+>+>[-]]<[<[->-<]++++++[->++++++++<]>.[-]]<<++++++[-<++++++++>]<.[-]<<[-<+>]<");
+                bf_code.push_str("[-]++++++++++.[-]");
                 goto(&mut bf_code, &mut location, start);
             }
             Instruction::Ascii(val) => {
@@ -55,10 +54,20 @@ pub fn transpile(code: &Instructions) -> String {
                 bf_code.push('-');
             }
             Instruction::Neg(val) => {
-                Val::Num(-val.get_int());
+                let start = location;
+                goto_add!(val, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
+                    goto(&mut bf_code, &mut location, start);
+                });
+                bf_code.push_str(">[-]<[>-<-]>[<->+]<");
             }
             Instruction::BNot(val) => {
-                Val::Num(!val.get_int());
+                let start = location;
+                goto_add!(val, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
+                    goto(&mut bf_code, &mut location, start);
+                });
+                bf_code.push_str(">[-]<[>-<-]>[<->+]<-");
             }
             Instruction::Add(left, right) => {
                 let start = location;
@@ -95,17 +104,36 @@ pub fn transpile(code: &Instructions) -> String {
                 bf_code.push_str(">[-]>[-]<<[>+<-]>[-[>+<<++>-]<+>>[<+>-]<]<");
             }
             Instruction::Pow(left, right) => {
-                if right.get_int() < 0 {
-                    Val::Num(1 / left.get_int().pow(-right.get_int() as u32))
-                } else {
-                    Val::Num(left.get_int().pow(right.get_int() as u32))
-                };
+                let start = location;
+                goto_add!(left, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
+                });
+                goto(&mut bf_code, &mut location, start + 1);
+                goto_add!(right, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 1, location);
+                });
+                goto(&mut bf_code, &mut location, start);
+                bf_code.push_str("|>>[-]<<[>>+<<-]+>[>>[-]>[-]<<<<[>>>>+<<<<-]>>>>[<<[<<+>>>+<-]>[<+>-]>-]<<<-]>[-]<<|");
             }
             Instruction::LAnd(left, right) => {
-                Val::Bool(left.get_int() != 0 && right.get_int() != 0);
+                let start = location;
+                goto_add!(left, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 1, location);
+                });
+                goto(&mut bf_code, &mut location, start + 2);
+                goto_add!(right, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 2, location);
+                });
+                goto(&mut bf_code, &mut location, start);
+                bf_code.push_str("[-]>[>[<<+>>-]<-]>[-]<<");
             }
             Instruction::LNot(val) => {
-                Val::Bool(val.get_int() == 0);
+                let start = location;
+                goto_add!(val, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 1, location);
+                    goto(&mut bf_code, &mut location, start);
+                });
+                bf_code.push_str("+>[-<->]<");
             }
             Instruction::Mul(left, right) => {
                 let start = location;
@@ -121,34 +149,100 @@ pub fn transpile(code: &Instructions) -> String {
                 bf_code.push_str(">>[-]>[-]<<< [>>>+<<<-]>>>[<<[<+>>+<-]>[<+>-]>-]<<<");
             }
             Instruction::Div(left, right) => {
-                Val::Num(left.get_int() / right.get_int());
+                let start = location;
+                goto_add!(left, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
+                });
+                goto(&mut bf_code, &mut location, start + 1);
+                goto_add!(right, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 1, location);
+                });
+                goto(&mut bf_code, &mut location, start);
+                bf_code.push_str("[>>+<<-]>>[<[>>+>+<<<-]>>>[<<<+>>>-]<[>+<<-[>>[-]>+<<<-]>>>[<<<+>>>-]<[<-[<<<->>>[-]]+>-]<-]<<<+>>]<<");
             }
             Instruction::Mod(left, right) => {
-                Val::Num(left.get_int() % right.get_int());
+                let start = location;
+                goto_add!(left, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
+                });
+                goto(&mut bf_code, &mut location, start + 1);
+                goto_add!(right, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 1, location);
+                });
+                goto(&mut bf_code, &mut location, start);
+                bf_code.push_str("[>->+<[>]>[<+>-]<<[<]>-]>[-]>[-<<+>>]<<");
             }
             Instruction::Eq(left, right) => {
-                Val::Bool(left.get_int() == right.get_int());
+                let start = location;
+                goto_add!(left, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
+                });
+                goto(&mut bf_code, &mut location, start + 1);
+                goto_add!(right, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 1, location);
+                });
+                goto(&mut bf_code, &mut location, start);
+                bf_code.push_str("[->-<]+>[<->[-]]<");
             }
             Instruction::Neq(left, right) => {
-                Val::Bool(left.get_int() != right.get_int());
+                let start = location + 1;
+                goto_add!(left, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
+                });
+                goto(&mut bf_code, &mut location, start + 1);
+                goto_add!(right, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 1, location);
+                });
+                goto(&mut bf_code, &mut location, start);
+                bf_code.push_str("[->-<]+>[<->[-]]<< +>[-<->]<");
             }
             Instruction::Lt(left, right) => {
-                Val::Bool(left.get_int() < right.get_int());
-            }
-            Instruction::Gt(left, right) => {
-                Val::Bool(left.get_int() > right.get_int());
+                let start = location;
+                goto_add!(left, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
+                });
+                goto(&mut bf_code, &mut location, start + 1);
+                goto_add!(right, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 1, location);
+                });
+                goto(&mut bf_code, &mut location, start);
+                bf_code.push_str(">>[-]>[-]>[-]+>[-]<<<<[>+>+<<-]>[<+>-]<<[>>+<<-]+>>>[>-]>[<<<<->>[-]>>->]<+<<[>-[>-]>[<<<<->>[-]+>>->]<+< <-]<[-]>[-]>[-]>[-]>[-]<<<<<|");
             }
             Instruction::Le(left, right) => {
-                Val::Bool(left.get_int() <= right.get_int());
-            }
-            Instruction::Ge(left, right) => {
-                Val::Bool(left.get_int() >= right.get_int());
+                let start = location;
+                goto_add!(left, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
+                });
+                goto(&mut bf_code, &mut location, start + 1);
+                goto_add!(right, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 1, location);
+                });
+                goto(&mut bf_code, &mut location, start);
+                bf_code.push_str(">>[-]>[-]>[-]+>[-]<<<<[>+>+<<-]>>[<<+>>-]<<<[>>>+<<<-]>>>[>-]>[<<<<+>>[-]>>->]<+<<[>-[>-]>[<<<<+>>[-]+>>->]<+<<-]<[-]>[-]>[-]>[-]>[-]<<<<<");
             }
             Instruction::LOr(left, right) => {
-                Val::Bool(left.get_int() != 0 || right.get_int() != 0);
+                let start = location;
+                goto_add!(left, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
+                });
+                goto(&mut bf_code, &mut location, start + 1);
+                goto_add!(right, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 1, location);
+                });
+                goto(&mut bf_code, &mut location, start);
+                bf_code.push_str("[>+<-]>[<+>[-]]<");
             }
             Instruction::Shl(left, right) => {
-                Val::Num(left.get_int() << right.get_int());
+                let start = location;
+                goto_add!(left, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
+                });
+                goto(&mut bf_code, &mut location, start + 1);
+                goto_add!(right, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 1, location);
+                });
+                goto(&mut bf_code, &mut location, start);
+                bf_code.push_str(">[-<[->>+<<]>>[-<<++>>]<]<");
             }
             Instruction::Shr(left, right) => {
                 Val::Num(left.get_int() >> right.get_int());
@@ -164,19 +258,11 @@ pub fn transpile(code: &Instructions) -> String {
             }
             Instruction::Copy(from) => {
                 if let Val::Index(index, _) = from {
-                    goto(&mut bf_code, &mut location, *index);
+                    copy(&mut bf_code, *index, location, location)
                 }
             }
             // Instruction::If(_, _, _) => {}
             _ => todo!(),
-        };
-
-        match assign {
-            Some(val) if *val != location => {
-                dbg!(val, location);
-                copy(&mut bf_code, location, *val, location)
-            }
-            _ => (),
         };
     }
     bf_code
