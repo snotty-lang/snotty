@@ -113,7 +113,7 @@ pub fn transpile(code: &Instructions) -> String {
                     copy(&mut bf_code, location, start + 1, location);
                 });
                 goto(&mut bf_code, &mut location, start);
-                bf_code.push_str("|>>[-]<<[>>+<<-]+>[>>[-]>[-]<<<<[>>>>+<<<<-]>>>>[<<[<<+>>>+<-]>[<+>-]>-]<<<-]>[-]<<|");
+                bf_code.push_str(">>[-]<<[>>+<<-]+>[>>[-]>[-]<<<<[>>>>+<<<<-]>>>>[<<[<<+>>>+<-]>[<+>-]>-]<<<-]>[-]<<");
             }
             Instruction::LAnd(left, right) => {
                 let start = location;
@@ -209,7 +209,7 @@ pub fn transpile(code: &Instructions) -> String {
                     copy(&mut bf_code, location, start + 1, location);
                 });
                 goto(&mut bf_code, &mut location, start);
-                bf_code.push_str(">>[-]>[-]>[-]+>[-]<<<<[>+>+<<-]>[<+>-]<<[>>+<<-]+>>>[>-]>[<<<<->>[-]>>->]<+<<[>-[>-]>[<<<<->>[-]+>>->]<+< <-]<[-]>[-]>[-]>[-]>[-]<<<<<|");
+                bf_code.push_str(">>[-]>[-]>[-]+>[-]<<<<[>+>+<<-]>[<+>-]<<[>>+<<-]+>>>[>-]>[<<<<->>[-]>>->]<+<<[>-[>-]>[<<<<->>[-]+>>->]<+< <-]<[-]>[-]>[-]>[-]>[-]<<<<<");
             }
             Instruction::Le(left, right) => {
                 let start = location;
@@ -264,8 +264,36 @@ pub fn transpile(code: &Instructions) -> String {
                     copy(&mut bf_code, *index, location, location)
                 }
             }
-            Instruction::TernaryIf(_, _, _) => todo!(),
-            Instruction::LXor(_, _) => todo!(),
+            Instruction::TernaryIf(cond, left, right) => {
+                let start = location;
+                goto(&mut bf_code, &mut location, start + 1);
+                goto_add!(cond, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 1, location);
+                });
+                goto(&mut bf_code, &mut location, start);
+                bf_code.push_str(">>[-]+>[-]<<[<");
+                goto_add!(left, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
+                });
+                bf_code.push_str(">>-<[>>+<<-]]>>[<<+>>-]<[<<");
+                goto_add!(right, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start, location);
+                });
+                bf_code.push_str(">>-]<[-]<");
+            }
+            Instruction::LXor(left, right) => {
+                let start = location;
+                goto(&mut bf_code, &mut location, start + 1);
+                goto_add!(left, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 1, location);
+                });
+                goto(&mut bf_code, &mut location, start + 2);
+                goto_add!(right, &mut bf_code, &mut location, {
+                    copy(&mut bf_code, location, start + 2, location);
+                });
+                goto(&mut bf_code, &mut location, start);
+                bf_code.push_str("[-]>[>-<-]>[<<+>>[-]]<<");
+            }
         }
     }
     bf_code
