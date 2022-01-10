@@ -193,11 +193,13 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                     }
                 }
             }
-            _ => todo!(),
+            Instruction::LXor(left, right) => {
+                super::check!(BINARY left, right, new, vars, assign, instruction);
+                Val::Bool((left != 0) ^ (right != 0))
+            }
         };
         vars.insert(assign.unwrap(), evaluated);
     }
-
     new
 }
 
@@ -290,6 +292,7 @@ macro_rules! check {
                     Instruction::BAnd(_, b) => Instruction::BAnd(a, b),
                     Instruction::BOr(_, b) => Instruction::BOr(a, b),
                     Instruction::BXor(_, b) => Instruction::BXor(a, b),
+                    Instruction::LXor(_, b) => Instruction::LXor(a, b),
                     _ => unreachable!(),
                 };
                 $new.push(new_ins, *$assign);
@@ -314,6 +317,7 @@ macro_rules! check {
                     Instruction::BAnd(a, _) => Instruction::BAnd(a, b),
                     Instruction::BOr(a, _) => Instruction::BOr(a, b),
                     Instruction::BXor(a, _) => Instruction::BXor(a, b),
+                    Instruction::LXor(a, _) => Instruction::LXor(a, b),
                     _ => unreachable!(),
                 };
                 $new.push(new_ins, *$assign);
@@ -362,6 +366,7 @@ macro_rules! check {
                     Instruction::BAnd(_, b) => Instruction::BAnd(a, b),
                     Instruction::BOr(_, b) => Instruction::BOr(a, b),
                     Instruction::BXor(_, b) => Instruction::BXor(a, b),
+                    Instruction::LXor(_, b) => Instruction::LXor(a, b),
                     _ => unreachable!(),
                 };
                 $new.push(new_ins, *$assign);
@@ -386,6 +391,7 @@ macro_rules! check {
                     Instruction::BAnd(a, _) => Instruction::BAnd(a, b),
                     Instruction::BOr(a, _) => Instruction::BOr(a, b),
                     Instruction::BXor(a, _) => Instruction::BXor(a, b),
+                    Instruction::LXor(a, _) => Instruction::LXor(a, b),
                     _ => unreachable!(),
                 };
                 $new.push(new_ins, *$assign);

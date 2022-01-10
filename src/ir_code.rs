@@ -1,14 +1,11 @@
 use std::collections::HashMap;
 
-use super::utils::{
-    Error, ErrorType, Instruction, Instructions, Label, Node, TokenType, Val, ValType,
-};
+use super::utils::{Error, ErrorType, Instruction, Instructions, Node, TokenType, Val, ValType};
 
 /// Generates the Intermediate 3-address code from the AST
 pub struct CodeGenerator {
     instructions: Instructions,
     array_index: usize,
-    current_label: usize,
     vars: HashMap<String, Val>,
 }
 
@@ -42,27 +39,31 @@ impl CodeGenerator {
                         ),
                     ));
                 }
-                if let TokenType::Ge = &op.token_type {
-                    self.instructions
-                        .push(Instruction::Lt(left, right), Some(self.array_index));
-                    self.array_index += 1;
-                    self.instructions.push(
-                        Instruction::LNot(Val::Index(self.array_index - 1, ValType::Boolean)),
-                        Some(self.array_index),
-                    );
-                } else if let TokenType::Gt = &op.token_type {
-                    self.instructions
-                        .push(Instruction::Le(left, right), Some(self.array_index));
-                    self.array_index += 1;
-                    self.instructions.push(
-                        Instruction::LNot(Val::Index(self.array_index - 1, ValType::Boolean)),
-                        Some(self.array_index),
-                    );
-                } else {
-                    self.instructions.push(
-                        Instruction::from_token_binary(op)(left, right),
-                        Some(self.array_index),
-                    );
+                match op.token_type {
+                    TokenType::Ge => {
+                        self.instructions
+                            .push(Instruction::Lt(left, right), Some(self.array_index));
+                        self.array_index += 1;
+                        self.instructions.push(
+                            Instruction::LNot(Val::Index(self.array_index - 1, ValType::Boolean)),
+                            Some(self.array_index),
+                        );
+                    }
+                    TokenType::Gt => {
+                        self.instructions
+                            .push(Instruction::Le(left, right), Some(self.array_index));
+                        self.array_index += 1;
+                        self.instructions.push(
+                            Instruction::LNot(Val::Index(self.array_index - 1, ValType::Boolean)),
+                            Some(self.array_index),
+                        );
+                    }
+                    _ => {
+                        self.instructions.push(
+                            Instruction::from_token_binary(op)(left, right),
+                            Some(self.array_index),
+                        );
+                    }
                 }
                 self.array_index += 1;
                 match left_type.get_result_type(right_type, op) {
@@ -211,49 +212,49 @@ impl CodeGenerator {
                 Ok((Val::Index(self.array_index - 1, ValType::Number), false))
             }
 
-            Node::If(cond1, then1, else_1) => {
-                let (cond, _) = self.match_node(cond1)?;
-                if cond.r#type() != ValType::Boolean {
-                    return Err(Error::new(
-                        ErrorType::TypeError,
-                        cond1.position(),
-                        format!(
-                            "Condition in an if statement can only be of type Boolean, and not of type {:?}",
-                            cond.r#type()
-                        ),
-                    ));
-                }
+            Node::If(_, _, _) => {
+                // let (cond, _) = self.match_node(cond1)?;
+                // if cond.r#type() != ValType::Boolean {
+                //     return Err(Error::new(
+                //         ErrorType::TypeError,
+                //         cond1.position(),
+                //         format!(
+                //             "Condition in an if statement can only be of type Boolean, and not of type {:?}",
+                //             cond.r#type()
+                //         ),
+                //     ));
+                // }
 
-                let then_part = self.instructions.0.len();
-                self.match_node(then1)?;
+                // let then_part = self.instructions.0.len();
+                // self.match_node(then1)?;
 
-                let label = self.current_label;
-                self.current_label += 1;
-                self.instructions
-                    .push(Instruction::Label(Label(label)), None);
+                // let label = self.current_label;
+                // self.current_label += 1;
+                // self.instructions
+                //     .push(Instruction::Label(Label(label)), None);
 
-                let else_part = self.instructions.0.len();
-                let else_ = match else_1.as_ref().map(|e| self.match_node(e)) {
-                    Some(Ok((else_, _))) => Some(else_),
-                    Some(Err(e)) => {
-                        return Err(e);
-                    }
-                    None => None,
-                };
+                // let else_part = self.instructions.0.len();
+                // let else_ = match else_1.as_ref().map(|e| self.match_node(e)) {
+                //     Some(Ok((else_, _))) => Some(else_),
+                //     Some(Err(e)) => {
+                //         return Err(e);
+                //     }
+                //     None => None,
+                // };
 
-                self.instructions
-                    .0
-                    .insert(then_part, (None, Instruction::JmpFalse(cond, Label(label))));
+                // self.instructions
+                //     .0
+                //     .insert(then_part, (None, Instruction::JmpFalse(cond, Label(label))));
 
-                if else_.is_some() {
-                    self.instructions.0.insert(
-                        else_part,
-                        (None, Instruction::Jmp(Label(self.current_label))),
-                    );
-                    self.instructions
-                        .push(Instruction::Label(Label(self.current_label)), None);
-                    self.current_label += 1;
-                }
+                // if else_.is_some() {
+                //     self.instructions.0.insert(
+                //         else_part,
+                //         (None, Instruction::Jmp(Label(self.current_label))),
+                //     );
+                //     self.instructions
+                //         .push(Instruction::Label(Label(self.current_label)), None);
+                //     self.current_label += 1;
+                // }
                 Ok((Val::None, false))
             }
 
@@ -306,7 +307,6 @@ impl CodeGenerator {
 /// Generates and returns the Intermediate Representation of the AST
 pub fn generate_code(ast: Node) -> Result<Instructions, Error> {
     let mut obj = CodeGenerator {
-        current_label: 0,
         instructions: Instructions::new(),
         array_index: 0,
         vars: HashMap::new(),

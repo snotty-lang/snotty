@@ -5,10 +5,8 @@ use std::fmt;
 #[derive(Debug, Clone)]
 pub enum Instruction {
     TernaryIf(Val, Val, Val),
-    JmpFalse(Val, Label),
-    Jmp(Label),
-    Label(Label),
     Copy(Val),
+    LXor(Val, Val),
     Input,
     Add(Val, Val),
     Sub(Val, Val),
@@ -34,15 +32,6 @@ pub enum Instruction {
     BOr(Val, Val),
     BXor(Val, Val),
     BNot(Val),
-}
-
-#[derive(Debug, Clone)]
-pub struct Label(pub usize);
-
-impl fmt::Display for Label {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "L{}", self.0)
-    }
 }
 
 impl Instruction {
@@ -75,6 +64,7 @@ impl Instruction {
             TokenType::Shl => Self::Shl,
             TokenType::Shr => Self::Shr,
             TokenType::BAnd => Self::BAnd,
+            TokenType::LXor => Self::LXor,
             TokenType::BOr => Self::BOr,
             TokenType::BXor => Self::BXor,
             _ => unreachable!("{}", t),
@@ -96,13 +86,9 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Instruction::TernaryIf(a, b, c) => write!(f, "if {} then {} else {}", a, b, c),
-            Instruction::JmpFalse(cond, goto) => {
-                write!(f, "ifFalse {} jmp {}", cond, goto)
-            }
-            Instruction::Label(l) => write!(f, "{}:", l),
-            Instruction::Jmp(goto) => write!(f, "jmp {}", goto),
-            Instruction::Copy(val) => write!(f, "{}", val),
+            Self::LXor(left, right) => write!(f, "{} !&| {}", left, right),
+            Self::TernaryIf(a, b, c) => write!(f, "if {} then {} else {}", a, b, c),
+            Self::Copy(val) => write!(f, "{}", val),
             Self::Input => write!(f, "?"),
             Self::Add(left, right) => write!(f, "{} + {}", left, right),
             Self::Sub(left, right) => write!(f, "{} - {}", left, right),

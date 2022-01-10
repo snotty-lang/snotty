@@ -1,5 +1,3 @@
-#![allow(clippy::while_let_on_iterator)]
-
 use super::utils::{Error, ErrorType, Position, Token, TokenType, KEYWORDS};
 
 /// A Result type for Lexing
@@ -24,7 +22,6 @@ type LexResult = Result<Vec<Token>, Error>;
 /// ```
 pub fn lex(input: &str) -> LexResult {
     let mut parentheses = Vec::new();
-    let mut curly = Vec::new();
     let mut tokens = Vec::new();
     let mut chars = input.chars().enumerate().peekable();
     let mut line = 1;
@@ -86,7 +83,7 @@ pub fn lex(input: &str) -> LexResult {
                     chars.next();
                 }
                 Some((_, '/')) => {
-                    while let Some((i, c)) = chars.next() {
+                    for (i, c) in chars.by_ref() {
                         if c == '\n' {
                             line += 1;
                             last_line = i + 1;
@@ -133,29 +130,43 @@ pub fn lex(input: &str) -> LexResult {
             }
             '(' => {
                 tokens.push(Token::new(TokenType::LParen, line, i, i));
-                parentheses.push(Position::new(line, i, i));
+                parentheses.push((Position::new(line, i, i), 0));
             }
             ')' => {
                 tokens.push(Token::new(TokenType::RParen, line, i, i));
-                if parentheses.pop().is_none() {
+                let paren = parentheses.pop();
+                if paren.is_none() {
                     return Err(Error::new(
                         ErrorType::SyntaxError,
                         Position::new(line, i, i),
                         "Missing opening '(' pair".to_string(),
                     ));
+                } else if paren.unwrap().1 != 0 {
+                    return Err(Error::new(
+                        ErrorType::SyntaxError,
+                        Position::new(line, i, i),
+                        "Mismatched brackets: '{'".to_string(),
+                    ));
                 }
             }
             '{' => {
                 tokens.push(Token::new(TokenType::LCurly, line, i, i));
-                curly.push(Position::new(line, i, i));
+                parentheses.push((Position::new(line, i, i), 1));
             }
             '}' => {
                 tokens.push(Token::new(TokenType::RCurly, line, i, i));
-                if curly.pop().is_none() {
+                let paren = parentheses.pop();
+                if paren.is_none() {
                     return Err(Error::new(
                         ErrorType::SyntaxError,
                         Position::new(line, i, i),
-                        "Missing opening '}' pair".to_string(),
+                        "Missing opening '{' pair".to_string(),
+                    ));
+                } else if paren.unwrap().1 != 1 {
+                    return Err(Error::new(
+                        ErrorType::SyntaxError,
+                        Position::new(line, i, i),
+                        "Mismatched brackets: '('".to_string(),
                     ));
                 }
             }
@@ -197,14 +208,31 @@ pub fn lex(input: &str) -> LexResult {
                     tokens.push(Token::new(TokenType::Lt, line, i, i));
                 }
             }
-            '!' => {
-                if let Some((_, '=')) = chars.peek() {
+            '!' => match chars.peek() {
+                Some((_, '=')) => {
                     chars.next();
                     tokens.push(Token::new(TokenType::Neq, line, i, i + 1));
-                } else {
+                }
+                Some((_, '&')) => {
+                    let mut new = chars.clone();
+                    new.next();
+                    if let Some((_, '|')) = new.peek() {
+                        chars.next();
+                        chars.next();
+                        if let Some((_, '=')) = chars.peek() {
+                            chars.next();
+                            tokens.push(Token::new(TokenType::LXorAssign, line, i, i + 3));
+                        } else {
+                            tokens.push(Token::new(TokenType::LXor, line, i, i + 2));
+                        }
+                    } else {
+                        tokens.push(Token::new(TokenType::LNot, line, i, i));
+                    }
+                }
+                _ => {
                     tokens.push(Token::new(TokenType::LNot, line, i, i));
                 }
-            }
+            },
             '=' => {
                 if let Some((_, '=')) = chars.peek() {
                     chars.next();
@@ -216,7 +244,12 @@ pub fn lex(input: &str) -> LexResult {
             '&' => {
                 if let Some((_, '&')) = chars.peek() {
                     chars.next();
-                    tokens.push(Token::new(TokenType::LAnd, line, i, i + 1));
+                    if let Some((_, '=')) = chars.peek() {
+                        chars.next();
+                        tokens.push(Token::new(TokenType::LAndAssign, line, i, i + 2));
+                    } else {
+                        tokens.push(Token::new(TokenType::LAnd, line, i, i + 1));
+                    }
                 } else if let Some((_, '=')) = chars.peek() {
                     chars.next();
                     tokens.push(Token::new(TokenType::BAndAssign, line, i, i + 1));
@@ -230,7 +263,12 @@ pub fn lex(input: &str) -> LexResult {
             '|' => {
                 if let Some((_, '|')) = chars.peek() {
                     chars.next();
-                    tokens.push(Token::new(TokenType::LOr, line, i, i + 1));
+                    if let Some((_, '=')) = chars.peek() {
+                        chars.next();
+                        tokens.push(Token::new(TokenType::LOrAssign, line, i, i + 2));
+                    } else {
+                        tokens.push(Token::new(TokenType::LOr, line, i, i + 1));
+                    }
                 } else if let Some((_, '=')) = chars.peek() {
                     chars.next();
                     tokens.push(Token::new(TokenType::BOrAssign, line, i, i + 1));
@@ -309,16 +347,8 @@ pub fn lex(input: &str) -> LexResult {
     if !parentheses.is_empty() {
         return Err(Error::new(
             ErrorType::SyntaxError,
-            parentheses.pop().unwrap(),
-            "Unclosed '('".to_string(),
-        ));
-    }
-
-    if !curly.is_empty() {
-        return Err(Error::new(
-            ErrorType::SyntaxError,
-            curly.pop().unwrap(),
-            "Unclosed '}'".to_string(),
+            parentheses.pop().unwrap().0,
+            "Unclosed Parentheses".to_string(),
         ));
     }
 

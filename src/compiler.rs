@@ -117,6 +117,7 @@ pub fn transpile(code: &Instructions) -> String {
             }
             Instruction::LAnd(left, right) => {
                 let start = location;
+                goto(&mut bf_code, &mut location, start + 1);
                 goto_add!(left, &mut bf_code, &mut location, {
                     copy(&mut bf_code, location, start + 1, location);
                 });
@@ -129,6 +130,7 @@ pub fn transpile(code: &Instructions) -> String {
             }
             Instruction::LNot(val) => {
                 let start = location;
+                goto(&mut bf_code, &mut location, start + 1);
                 goto_add!(val, &mut bf_code, &mut location, {
                     copy(&mut bf_code, location, start + 1, location);
                     goto(&mut bf_code, &mut location, start);
@@ -161,6 +163,7 @@ pub fn transpile(code: &Instructions) -> String {
                 bf_code.push_str("[>>+<<-]>>[<[>>+>+<<<-]>>>[<<<+>>>-]<[>+<<-[>>[-]>+<<<-]>>>[<<<+>>>-]<[<-[<<<->>>[-]]+>-]<-]<<<+>>]<<");
             }
             Instruction::Mod(left, right) => {
+                bf_code.push('>');
                 let start = location;
                 goto_add!(left, &mut bf_code, &mut location, {
                     copy(&mut bf_code, location, start, location);
@@ -170,7 +173,7 @@ pub fn transpile(code: &Instructions) -> String {
                     copy(&mut bf_code, location, start + 1, location);
                 });
                 goto(&mut bf_code, &mut location, start);
-                bf_code.push_str("[>->+<[>]>[<+>-]<<[<]>-]>[-]>[-<<+>>]<<");
+                bf_code.push_str("[>->+<[>]>[<+>-]<<[<]>-]>[-]>[-<<<+>>>]<<<");
             }
             Instruction::Eq(left, right) => {
                 let start = location;
@@ -261,9 +264,9 @@ pub fn transpile(code: &Instructions) -> String {
                     copy(&mut bf_code, *index, location, location)
                 }
             }
-            // Instruction::If(_, _, _) => {}
-            _ => todo!(),
-        };
+            Instruction::TernaryIf(_, _, _) => todo!(),
+            Instruction::LXor(_, _) => todo!(),
+        }
     }
     bf_code
 }

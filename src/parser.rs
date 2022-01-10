@@ -95,7 +95,7 @@ impl Parser {
     fn expression(&mut self, scope: &mut Scope) -> ParseResult {
         self.binary_op(
             Self::comparison,
-            vec![TokenType::LAnd, TokenType::LOr],
+            vec![TokenType::LAnd, TokenType::LOr, TokenType::LXor],
             Self::comparison,
             scope,
         )

@@ -1,4 +1,4 @@
-use super::{error::Position, token::Token};
+use super::{Position, Token};
 
 /// A Node in the AST.
 #[derive(Debug, Clone, PartialEq)]

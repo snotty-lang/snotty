@@ -1,4 +1,4 @@
-use super::error::Position;
+use super::Position;
 use std::{cmp, fmt};
 
 /// List of all the keywords identified by the lexer
@@ -15,17 +15,14 @@ pub const BOOLEAN_OPERATORS: [TokenType; 6] = [
     TokenType::Eq,
 ];
 
-pub const BOOLEAN_EXCLUSIVE: [TokenType; 7] = [
+pub const BOOLEAN_EXCLUSIVE: [TokenType; 4] = [
     TokenType::LAnd,
     TokenType::LOr,
     TokenType::LNot,
-    TokenType::LNot,
-    TokenType::BAnd,
-    TokenType::BOr,
-    TokenType::BXor,
+    TokenType::LXor,
 ];
 
-pub const ASSIGNMENT_OPERATORS: [TokenType; 12] = [
+pub const ASSIGNMENT_OPERATORS: [TokenType; 15] = [
     TokenType::Assign,
     TokenType::SubAssign,
     TokenType::AddAssign,
@@ -38,6 +35,9 @@ pub const ASSIGNMENT_OPERATORS: [TokenType; 12] = [
     TokenType::BOrAssign,
     TokenType::BXorAssign,
     TokenType::PowAssign,
+    TokenType::LXorAssign,
+    TokenType::LAndAssign,
+    TokenType::LOrAssign,
 ];
 
 /// Different types of Tokens converted by the lexer
@@ -54,6 +54,13 @@ pub enum TokenType {
     BAndAssign,
     BOrAssign,
     PowAssign,
+    LXorAssign,
+    LAndAssign,
+    LOrAssign,
+    LAnd,
+    LOr,
+    LNot,
+    LXor,
     Inc,
     Dec,
     Arrow,
@@ -64,9 +71,6 @@ pub enum TokenType {
     Gt,
     Le,
     Ge,
-    LAnd,
-    LOr,
-    LNot,
     Add,
     Sub,
     Mul,
@@ -154,6 +158,10 @@ impl fmt::Display for TokenType {
                 TokenType::Keyword(ref keyword) => keyword.to_owned(),
                 TokenType::Eol => ";".to_owned(),
                 TokenType::Eof => "End of file".to_owned(),
+                TokenType::LXorAssign => "!&|=".to_owned(),
+                TokenType::LAndAssign => "&&=".to_owned(),
+                TokenType::LOrAssign => "||=".to_owned(),
+                TokenType::LXor => "!&|".to_owned(),
             }
         )
     }
@@ -185,6 +193,7 @@ impl TokenType {
             TokenType::BNot => "binary not".to_owned(),
             TokenType::BOr => "binary or".to_owned(),
             TokenType::BXor => "binary xor".to_owned(),
+            TokenType::LXor => "logical xor".to_owned(),
             TokenType::Identifier(_) => todo!(),
             TokenType::Number(_) => todo!(),
             TokenType::Assign => todo!(),
@@ -215,6 +224,9 @@ impl Token {
             TokenType::BAndAssign => TokenType::BAnd,
             TokenType::BOrAssign => TokenType::BOr,
             TokenType::PowAssign => TokenType::Pow,
+            TokenType::LXorAssign => TokenType::LXor,
+            TokenType::LAndAssign => TokenType::LAnd,
+            TokenType::LOrAssign => TokenType::LOr,
             _ => self.token_type,
         };
         Self {

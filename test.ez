@@ -1,1 +1,4 @@
-ezout 5 * 5
+ezout true !&| false
+
+//x !&|= true
+//x &|= true

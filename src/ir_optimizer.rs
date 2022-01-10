@@ -7,10 +7,10 @@ pub fn optimize(code: &Instructions) -> Instructions {
     let mut vars = HashMap::new();
     for (assign, instruction) in &code.0 {
         let optimize = match instruction {
-            Instruction::Add(a, Val::Num(0) | Val::Bool(false))
-            | Instruction::Sub(a, Val::Num(0) | Val::Bool(false))
-            | Instruction::Mul(a, Val::Num(1) | Val::Bool(true))
-            | Instruction::Div(a, Val::Num(1) | Val::Bool(true)) => {
+            Instruction::Add(a, Val::Num(0))
+            | Instruction::Sub(a, Val::Num(0))
+            | Instruction::Mul(a, Val::Num(1))
+            | Instruction::Div(a, Val::Num(1)) => {
                 println!("{:?}", a);
                 let a = if let Val::Index(index, _) = a {
                     match dbg!(vars.get(index)) {
@@ -100,48 +100,47 @@ pub fn optimize(code: &Instructions) -> Instructions {
                 Instruction::Copy(val) => {
                     super::check!(2 val, optimized, vars, assign, instruction)
                 }
-                Instruction::JmpFalse(_cond, _label) => {
-                    // let cond = if let Val::Index(index) = cond {
-                    //     match vars.get(index) {
-                    //         Some(Val::Index(..)) | None => None,
-                    //         Some(val) => Some(val.clone()),
-                    //     }
-                    // } else {
-                    //     Some(cond.clone())
-                    // };
-                    // let then = if let Val::Index(index) = then {
-                    //     match vars.get(index) {
-                    //         Some(Val::Index(..)) | None => None,
-                    //         Some(val) => Some(val.clone()),
-                    //     }
-                    // } else {
-                    //     Some(then.clone())
-                    // };
-                    // let else_ = if let Some(val) = else_ {
-                    //     if let Val::Index(index) = val {
-                    //         match vars.get(index) {
-                    //             Some(Val::Index(..)) | None => None,
-                    //             Some(val) => Some(val.clone()),
-                    //         }
-                    //     } else {
-                    //         Some(val.clone())
-                    //     }
-                    // } else {
-                    //     None
-                    // };
-
-                    // let new_ins = match (cond, then, else_) {
-                    //     (Some(cond), Some(then), None) => Instruction::If(cond, then, None),
-                    //     (None, None, Some(else_)) => Instruction::If(cond, then, None),
-                    //     (None, Some(_), None) => Instruction::If(cond, then, None),
-                    //     (None, Some(_), Some(_)) => Instruction::If(cond, then, else_),
-                    //     (Some(_), None, None) => Instruction::If(cond, then, else_),
-                    //     (Some(_), None, Some(_)) => Instruction::If(cond, then, else_),
-                    //     (None, None, None) | (Some(_), Some(_), Some(_)) => instruction.clone(),
-                    // };
-                    optimized.push(instruction.clone(), *assign);
-                    continue;
-                }
+                // Instruction::JmpFalse(_cond, _label) => {
+                // let cond = if let Val::Index(index) = cond {
+                //     match vars.get(index) {
+                //         Some(Val::Index(..)) | None => None,
+                //         Some(val) => Some(val.clone()),
+                //     }
+                // } else {
+                //     Some(cond.clone())
+                // };
+                // let then = if let Val::Index(index) = then {
+                //     match vars.get(index) {
+                //         Some(Val::Index(..)) | None => None,
+                //         Some(val) => Some(val.clone()),
+                //     }
+                // } else {
+                //     Some(then.clone())
+                // };
+                // let else_ = if let Some(val) = else_ {
+                //     if let Val::Index(index) = val {
+                //         match vars.get(index) {
+                //             Some(Val::Index(..)) | None => None,
+                //             Some(val) => Some(val.clone()),
+                //         }
+                //     } else {
+                //         Some(val.clone())
+                //     }
+                // } else {
+                //     None
+                // };
+                // let new_ins = match (cond, then, else_) {
+                //     (Some(cond), Some(then), None) => Instruction::If(cond, then, None),
+                //     (None, None, Some(else_)) => Instruction::If(cond, then, None),
+                //     (None, Some(_), None) => Instruction::If(cond, then, None),
+                //     (None, Some(_), Some(_)) => Instruction::If(cond, then, else_),
+                //     (Some(_), None, None) => Instruction::If(cond, then, else_),
+                //     (Some(_), None, Some(_)) => Instruction::If(cond, then, else_),
+                //     (None, None, None) | (Some(_), Some(_), Some(_)) => instruction.clone(),
+                // };
+                //     optimized.push(instruction.clone(), *assign);
+                //     continue;
+                // }
                 Instruction::TernaryIf(cond1, then1, else1) => {
                     let cond = if let Val::Index(index, _) = cond1 {
                         match vars.get(index) {
@@ -192,11 +191,9 @@ pub fn optimize(code: &Instructions) -> Instructions {
                     optimized.push(new_ins.clone(), *assign);
                     continue;
                 }
-                Instruction::Jmp(_) => {
-                    optimized.push(instruction.clone(), *assign);
-                    continue;
+                Instruction::LXor(a, b) => {
+                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
-                Instruction::Label(_) => todo!(),
             },
         };
 
