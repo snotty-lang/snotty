@@ -1,4 +1,4 @@
-use super::Position;
+use super::{LexNumber, Position};
 use std::{cmp, fmt};
 
 /// List of all the keywords identified by the lexer
@@ -84,7 +84,7 @@ pub enum TokenType {
     BOr,
     BXor,
     Identifier(String),
-    Number(u16),
+    Number(LexNumber),
     LParen,
     RParen,
     LCurly,
@@ -204,10 +204,16 @@ impl TokenType {
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, line: usize, start: usize, end: usize) -> Self {
+    pub fn new(
+        token_type: TokenType,
+        line: usize,
+        start: usize,
+        end: usize,
+        filename: &'static str,
+    ) -> Self {
         Self {
             token_type,
-            position: Position::new(line, start, end),
+            position: Position::new(line, start, end, filename),
         }
     }
 

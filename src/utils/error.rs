@@ -35,8 +35,9 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{:?} at {}:{} to {}:{} :: {}",
+            "{:?} in {} at {}:{} to {}:{} :: {}",
             self.error_type,
+            self.position.file,
             self.position.line_start,
             self.position.start,
             self.position.line_end,
@@ -47,21 +48,23 @@ impl fmt::Display for Error {
 }
 
 /// A position in the source code.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Position {
     pub line_start: usize,
     pub line_end: usize,
     pub start: usize,
     pub end: usize,
+    pub file: &'static str,
 }
 
 impl Position {
-    pub fn new(line: usize, start: usize, end: usize) -> Position {
+    pub fn new(line: usize, start: usize, end: usize, file: &'static str) -> Position {
         Position {
             line_start: line,
             line_end: line,
             start,
             end,
+            file,
         }
     }
 }

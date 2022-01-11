@@ -294,6 +294,8 @@ pub fn transpile(code: &Instructions) -> String {
                 goto(&mut bf_code, &mut location, start);
                 bf_code.push_str("[-]>[>-<-]>[<<+>>[-]]<<");
             }
+            Instruction::Ref(_) => todo!(),
+            Instruction::Deref(_) => todo!(),
         }
     }
     bf_code

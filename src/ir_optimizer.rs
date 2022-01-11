@@ -25,7 +25,15 @@ pub fn optimize(code: &Instructions) -> Instructions {
                 };
                 a.clone()
             }
-            Instruction::Mul(_, Val::Num(0) | Val::Bool(false)) => Val::Num(0),
+            Instruction::Mul(_, Val::Num(0)) => Val::Num(0),
+            Instruction::Mul(left, right) if left == right => {
+                optimized.push(Instruction::Pow(left.clone(), Val::Num(2)), *assign);
+                continue;
+            }
+            Instruction::Mul(left, Val::Num(-1)) => {
+                optimized.push(Instruction::Neg(left.clone()), *assign);
+                continue;
+            }
             _ => match instruction {
                 Instruction::Input => {
                     optimized.push(Instruction::Input, *assign);
@@ -194,6 +202,8 @@ pub fn optimize(code: &Instructions) -> Instructions {
                 Instruction::LXor(a, b) => {
                     super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
+                Instruction::Ref(_) => todo!(),
+                Instruction::Deref(_) => todo!(),
             },
         };
 

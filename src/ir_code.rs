@@ -10,7 +10,7 @@ pub struct CodeGenerator {
 }
 
 impl CodeGenerator {
-    fn match_node(&mut self, node: &Node) -> Result<(Val, bool), Error> {
+    fn make_instruction(&mut self, node: &Node) -> Result<(Val, bool), Error> {
         match node {
             Node::Number(num) => match num.token_type {
                 TokenType::Number(num1) => Ok((Val::Num(num1 as i32), false)),
@@ -23,14 +23,14 @@ impl CodeGenerator {
             },
 
             Node::BinaryOp(op, left, right) => {
-                let (left, _) = self.match_node(left)?;
-                let (right, _) = self.match_node(right)?;
+                let (left, lr) = self.make_instruction(left)?;
+                let (right, rr) = self.make_instruction(right)?;
                 let left_type = left.r#type();
                 let right_type = right.r#type();
                 if left_type != right.r#type() {
                     return Err(Error::new(
                         ErrorType::TypeError,
-                        op.position,
+                        op.position.clone(),
                         format!(
                             "Cannot {} `{}` to `{}`",
                             op.token_type.get_operation_name(),
@@ -67,10 +67,12 @@ impl CodeGenerator {
                 }
                 self.array_index += 1;
                 match left_type.get_result_type(right_type, op) {
-                    Some(result_type) => Ok((Val::Index(self.array_index - 1, result_type), false)),
+                    Some(result_type) => {
+                        Ok((Val::Index(self.array_index - 1, result_type), lr || rr))
+                    }
                     None => Err(Error::new(
                         ErrorType::TypeError,
-                        op.position,
+                        op.position.clone(),
                         format!(
                             "Cannot {} `{}` to `{}`",
                             op.token_type.get_operation_name(),
@@ -82,7 +84,7 @@ impl CodeGenerator {
             }
 
             Node::UnaryOp(op, expr) => {
-                let (expr, _) = self.match_node(expr)?;
+                let (expr, r) = self.make_instruction(expr)?;
                 let expr_type = expr.r#type();
                 self.instructions.push(
                     Instruction::from_token_unary(op)(expr),
@@ -90,10 +92,10 @@ impl CodeGenerator {
                 );
                 self.array_index += 1;
                 match expr_type.get_result_type_unary(op) {
-                    Some(result_type) => Ok((Val::Index(self.array_index - 1, result_type), false)),
+                    Some(result_type) => Ok((Val::Index(self.array_index - 1, result_type), r)),
                     None => Err(Error::new(
                         ErrorType::TypeError,
-                        op.position,
+                        op.position.clone(),
                         format!(
                             "Cannot apply `{}` to `{}`",
                             op.token_type.get_operation_name(),
@@ -105,8 +107,8 @@ impl CodeGenerator {
 
             Node::VarAssign(var, expr) => {
                 if let TokenType::Identifier(ref var) = var.token_type {
-                    match self.match_node(expr)? {
-                        (Val::Index(index, type_), _) => {
+                    match self.make_instruction(expr)? {
+                        (Val::Index(index, type_), r) => {
                             self.vars
                                 .insert(var.clone(), Val::Index(self.array_index, type_));
                             self.instructions.push(
@@ -114,11 +116,11 @@ impl CodeGenerator {
                                 Some(self.array_index),
                             );
                             self.array_index += 1;
-                            Ok((Val::Index(self.array_index - 1, type_), false))
+                            Ok((Val::Index(self.array_index - 1, type_), r))
                         }
-                        (val, _) => {
+                        (val, r) => {
                             self.vars.insert(var.clone(), val);
-                            Ok((Val::None, false))
+                            Ok((Val::None, r))
                         }
                     }
                 } else {
@@ -136,13 +138,13 @@ impl CodeGenerator {
 
             Node::VarReassign(var1, expr) => {
                 if let TokenType::Identifier(ref var) = var1.token_type {
-                    match self.match_node(expr)? {
-                        (Val::Index(index, type_), _) => {
+                    match self.make_instruction(expr)? {
+                        (Val::Index(index, type_), r) => {
                             let var = self.vars.get_mut(var).unwrap();
                             if var.r#type() != type_ {
                                 return Err(Error::new(
                                     ErrorType::TypeError,
-                                    var1.position,
+                                    var1.position.clone(),
                                     format!(
                                         "Variable {} is of type {:?} but is being assigned to type {:?}",
                                         var1,
@@ -157,15 +159,15 @@ impl CodeGenerator {
                                 Some(self.array_index),
                             );
                             self.array_index += 1;
-                            Ok((Val::None, false))
+                            Ok((Val::None, r))
                         }
-                        (val, _) => {
+                        (val, r) => {
                             let var = self.vars.get_mut(var).unwrap();
                             let val_type = val.r#type();
                             if var.r#type() != val_type {
                                 return Err(Error::new(
                                     ErrorType::TypeError,
-                                    var1.position,
+                                    var1.position.clone(),
                                     format!(
                                         "Variable {} is of type {:?} but is being assigned to type {:?}",
                                         var1,
@@ -175,7 +177,7 @@ impl CodeGenerator {
                                 ));
                             }
                             *var = val;
-                            Ok((Val::Index(self.array_index, val_type), false))
+                            Ok((Val::Index(self.array_index, val_type), r))
                         }
                     }
                 } else {
@@ -183,9 +185,9 @@ impl CodeGenerator {
                 }
             }
 
-            Node::Statements(statements) => {
+            Node::Statements(statements, _) => {
                 for statement in statements {
-                    let (val, return_) = self.match_node(statement)?;
+                    let (val, return_) = self.make_instruction(statement)?;
                     if return_ {
                         return Ok((val, false));
                     }
@@ -193,16 +195,16 @@ impl CodeGenerator {
                 Ok((Val::None, false))
             }
 
-            Node::Print(expr) => {
-                let (expr, _) = self.match_node(expr)?;
+            Node::Print(expr, _) => {
+                let (expr, r) = self.make_instruction(expr)?;
                 self.instructions.push(Instruction::Print(expr), None);
-                Ok((Val::None, false))
+                Ok((Val::None, r))
             }
 
-            Node::Ascii(expr) => {
-                let (expr, _) = self.match_node(expr)?;
+            Node::Ascii(expr, _) => {
+                let (expr, r) = self.make_instruction(expr)?;
                 self.instructions.push(Instruction::Ascii(expr), None);
-                Ok((Val::None, false))
+                Ok((Val::None, r))
             }
 
             Node::Input(_) => {
@@ -212,7 +214,7 @@ impl CodeGenerator {
                 Ok((Val::Index(self.array_index - 1, ValType::Number), false))
             }
 
-            Node::If(_, _, _) => {
+            Node::If(_, _, _, _) => {
                 // let (cond, _) = self.match_node(cond1)?;
                 // if cond.r#type() != ValType::Boolean {
                 //     return Err(Error::new(
@@ -258,8 +260,8 @@ impl CodeGenerator {
                 Ok((Val::None, false))
             }
 
-            Node::Ternary(cond1, then1, else_1) => {
-                let (cond, _) = self.match_node(cond1)?;
+            Node::Ternary(cond1, then1, else_1, _) => {
+                let (cond, cr) = self.make_instruction(cond1)?;
                 if cond.r#type() != ValType::Boolean {
                     return Err(Error::new(
                         ErrorType::TypeError,
@@ -271,10 +273,10 @@ impl CodeGenerator {
                     ));
                 }
 
-                let (then, _) = self.match_node(then1)?;
+                let (then, tr) = self.make_instruction(then1)?;
                 let then_type = then.r#type();
 
-                let (else_, _) = self.match_node(else_1)?;
+                let (else_, er) = self.make_instruction(else_1)?;
                 if then_type != else_.r#type() {
                     return Err(Error::new(
                         ErrorType::TypeError,
@@ -288,18 +290,21 @@ impl CodeGenerator {
                     Some(self.array_index),
                 );
                 self.array_index += 1;
-                Ok((Val::Index(self.array_index - 1, then_type), false))
+                Ok((Val::Index(self.array_index - 1, then_type), cr || tr || er))
             }
 
             Node::None(_) => Ok((Val::None, false)),
 
-            Node::Call(_, _) => todo!(),
-            Node::FuncDef(_, _, _) => todo!(),
+            Node::Call(_, _, _) => todo!(),
+            Node::FuncDef(_, _, _, _) => todo!(),
 
-            Node::Return(_, expr) => match expr {
-                Some(expr) => Ok((self.match_node(expr)?.0, true)),
+            Node::Return(expr, _) => match expr {
+                Some(expr) => Ok((self.make_instruction(expr)?.0, true)),
                 None => Ok((Val::None, true)),
             },
+
+            Node::Ref(_, _) => todo!(),
+            Node::Deref(_, _) => todo!(),
         }
     }
 }
@@ -311,6 +316,6 @@ pub fn generate_code(ast: Node) -> Result<Instructions, Error> {
         array_index: 0,
         vars: HashMap::new(),
     };
-    obj.match_node(&ast)?;
+    obj.make_instruction(&ast)?;
     Ok(obj.instructions)
 }

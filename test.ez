@@ -1,4 +1,4 @@
-ezout ? ezin < 50 4 : 8
+? false 5 : true
 
-//x !&|= true
-//x &|= true
+
+

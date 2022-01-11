@@ -40,7 +40,7 @@ impl Scope {
         if self.error.is_some() {
             return;
         }
-        if let Node::VarAssign(token, _) = assign_node {
+        if let Node::VarAssign(token, ..) = assign_node {
             return self.defined_variables.push(token);
         }
         unreachable!();
@@ -51,7 +51,7 @@ impl Scope {
             return;
         }
         match &node {
-            Node::VarAccess(token) | Node::VarReassign(token, _) | Node::VarAssign(token, _) => {
+            Node::VarAccess(token) | Node::VarReassign(token, ..) | Node::VarAssign(token, ..) => {
                 if !self.defined_variables.contains(token) {
                     if self.parent.is_some() {
                         let parent = self.parent.as_mut().unwrap();
@@ -65,7 +65,7 @@ impl Scope {
                     }
                     self.error = Some(Error::new(
                         ErrorType::UndefinedVariable,
-                        token.position,
+                        token.position.clone(),
                         format!("Variable {} is not defined", token),
                     ));
                 }
@@ -80,16 +80,16 @@ impl Scope {
         }
         let mut found = false;
         match &node {
-            Node::Call(call_node, args1) => match &**call_node {
+            Node::Call(call_node, args1, _) => match &**call_node {
                 Node::VarAccess(token1) => {
                     for function in &self.defined_functions {
                         match function {
-                            Node::FuncDef(token2, args2, _) => {
+                            Node::FuncDef(token2, args2, ..) => {
                                 if token1 == token2 {
                                     if args1.len() != args2.len() {
                                         self.func_error = Some(Error::new(
                                             ErrorType::UndefinedFunction,
-                                            token1.position,
+                                            token1.position.clone(),
                                             format!(
                                                 "Function {} takes {} arguments, but {} given",
                                                 token1,

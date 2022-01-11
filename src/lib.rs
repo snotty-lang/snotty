@@ -59,8 +59,9 @@ use utils::Error;
 /// assert!(code.is_ok());
 /// assert_eq!(&code.unwrap(), "[-]+++++++++++++++++++++++++++++++++++++++++++++++++.[-]++++++++++++++++++++++++++++++++++++++++++++++++++.[-]++++++++++.");
 /// ```
-pub fn run(contents: &str) -> Result<String, Error> {
-    let tokens = lexer::lex(contents)?;
+pub fn run(contents: &str, filename: &'static str) -> Result<String, Error> {
+    let tokens = lexer::lex(contents, filename)?;
+    // println!("{:?}", tokens.iter().map(|x| x.to_string()).collect::<Vec<String>>());
     let ast = parser::parse(tokens)?;
     // println!("{:#?}", ast);
     let code = ir_code::generate_code(ast)?;
@@ -75,11 +76,14 @@ pub fn run(contents: &str) -> Result<String, Error> {
 /// Reads and compiles the content of the passed file and returns it
 /// In case of an error, it exits the program
 #[inline(always)]
-pub fn compile(filename: &str) -> String {
-    run(&fs::read_to_string(filename).unwrap_or_else(|e| {
-        println!("{}", e);
-        process::exit(1);
-    }))
+pub fn compile(filename: &'static str) -> String {
+    run(
+        &fs::read_to_string(filename).unwrap_or_else(|e| {
+            println!("{}", e);
+            process::exit(1);
+        }),
+        filename,
+    )
     .unwrap_or_else(|e| {
         println!("{}", e);
         process::exit(1);

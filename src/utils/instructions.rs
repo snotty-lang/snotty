@@ -1,4 +1,4 @@
-use super::{Token, TokenType, BOOLEAN_EXCLUSIVE, BOOLEAN_OPERATORS};
+use super::{Token, TokenType, ValNumber, BOOLEAN_EXCLUSIVE, BOOLEAN_OPERATORS};
 use std::fmt;
 
 /// An enum to specify the type of the operator.
@@ -6,6 +6,8 @@ use std::fmt;
 pub enum Instruction {
     TernaryIf(Val, Val, Val),
     Copy(Val),
+    Ref(Val),
+    Deref(Val),
     LXor(Val, Val),
     Input,
     Add(Val, Val),
@@ -45,13 +47,7 @@ impl Instruction {
         match t.token_type {
             TokenType::Add => Self::Add,
             TokenType::Sub => Self::Sub,
-            TokenType::Mul => |val1, val2| {
-                if val1 == val2 {
-                    Self::Pow(val1, Val::Num(2))
-                } else {
-                    Self::Mul(val1, val2)
-                }
-            },
+            TokenType::Mul => Self::Mul,
             TokenType::Div => Self::Div,
             TokenType::Mod => Self::Mod,
             TokenType::Eq => Self::Eq,
@@ -114,6 +110,8 @@ impl fmt::Display for Instruction {
             Self::LNot(val) => write!(f, "!{}", val),
             Self::Inc(val) => write!(f, "++{}", val),
             Self::Dec(val) => write!(f, "--{}", val),
+            Instruction::Ref(val) => write!(f, "&{}", val),
+            Instruction::Deref(val) => write!(f, "*{}", val),
         }
     }
 }
@@ -122,7 +120,7 @@ impl fmt::Display for Instruction {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Val {
     /// A number.
-    Num(i32),
+    Num(ValNumber),
     /// A boolean.
     Bool(bool),
     /// An index (variable).

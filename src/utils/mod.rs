@@ -20,3 +20,6 @@ pub use instructions::*;
 pub use node::*;
 pub use scope::*;
 pub use token::*;
+
+type LexNumber = u16;
+type ValNumber = i32;

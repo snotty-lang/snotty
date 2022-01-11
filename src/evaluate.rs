@@ -197,6 +197,8 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                 super::check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Bool((left != 0) ^ (right != 0))
             }
+            Instruction::Ref(_) => todo!(),
+            Instruction::Deref(_) => todo!(),
         };
         vars.insert(assign.unwrap(), evaluated);
     }
