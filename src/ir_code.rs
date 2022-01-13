@@ -66,7 +66,7 @@ impl CodeGenerator {
                     }
                 }
                 self.array_index += 1;
-                match left_type.get_result_type(right_type, op) {
+                match left_type.get_result_type(&right_type, op) {
                     Some(result_type) => {
                         Ok((Val::Index(self.array_index - 1, result_type), lr || rr))
                     }
@@ -105,14 +105,27 @@ impl CodeGenerator {
                 }
             }
 
-            Node::VarAssign(var, expr) => {
-                if let TokenType::Identifier(ref var) = var.token_type {
+            Node::VarAssign(var1, expr, dec_type) => {
+                if let TokenType::Identifier(ref var) = var1.token_type {
                     match self.make_instruction(expr)? {
                         (Val::Index(index, type_), r) => {
+                            if let Some(t) = dec_type {
+                                if ValType::from_parse_type(t) != type_ {
+                                    return Err(Error::new(
+                                        ErrorType::TypeError,
+                                        var1.position.clone(),
+                                        format!(
+                                            "Cannot assign `{}` to `{}`",
+                                            type_,
+                                            ValType::from_parse_type(t)
+                                        ),
+                                    ));
+                                }
+                            }
                             self.vars
-                                .insert(var.clone(), Val::Index(self.array_index, type_));
+                                .insert(var.clone(), Val::Index(self.array_index, type_.clone()));
                             self.instructions.push(
-                                Instruction::Copy(Val::Index(index, type_)),
+                                Instruction::Copy(Val::Index(index, type_.clone())),
                                 Some(self.array_index),
                             );
                             self.array_index += 1;
@@ -296,15 +309,44 @@ impl CodeGenerator {
             Node::None(_) => Ok((Val::None, false)),
 
             Node::Call(_, _, _) => todo!(),
-            Node::FuncDef(_, _, _, _) => todo!(),
+            Node::FuncDef(_, _, _, _, _) => todo!(),
 
             Node::Return(expr, _) => match expr {
                 Some(expr) => Ok((self.make_instruction(expr)?.0, true)),
                 None => Ok((Val::None, true)),
             },
 
-            Node::Ref(_, _) => todo!(),
-            Node::Deref(_, _) => todo!(),
+            Node::Ref(val1, _) => {
+                let (val, r) = self.make_instruction(val1)?;
+                if val.is_constant() {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        val1.position(),
+                        format!("Cannot reference a {:?}", val.r#type()),
+                    ));
+                }
+                self.instructions
+                    .push(Instruction::Ref(val), Some(self.array_index));
+                self.array_index += 1;
+                Ok((Val::Index(self.array_index - 1, ValType::Number), r))
+            }
+
+            Node::Deref(val1, _) => {
+                let (val, r) = self.make_instruction(val1)?;
+                if val.r#type().is_ptr() {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        val1.position(),
+                        format!("Cannot dereference a {:?}", val.r#type()),
+                    ));
+                }
+                self.instructions
+                    .push(Instruction::Deref(val), Some(self.array_index));
+                self.array_index += 1;
+                Ok((Val::Index(self.array_index - 1, ValType::Number), r))
+            }
+
+            Node::Tuple(_) => Ok((Val::None, false)),
         }
     }
 }

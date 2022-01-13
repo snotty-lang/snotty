@@ -327,6 +327,10 @@ macro_rules! goto_add {
                 goto($bf_code, $current, *index);
                 $block
             }
+            Val::Pointer(ptr, _) => {
+                goto($bf_code, $current, *ptr);
+                $block
+            }
             Val::None => {}
         }
     };
@@ -342,6 +346,10 @@ macro_rules! goto_add {
             }
             Val::Index(index, _) => {
                 goto($bf_code, $current, *index);
+                $block
+            }
+            Val::Pointer(ptr, _) => {
+                goto($bf_code, $current, *ptr);
                 $block
             }
             Val::None => {}

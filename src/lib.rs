@@ -63,9 +63,9 @@ pub fn run(contents: &str, filename: &'static str) -> Result<String, Error> {
     let tokens = lexer::lex(contents, filename)?;
     // println!("{:?}", tokens.iter().map(|x| x.to_string()).collect::<Vec<String>>());
     let ast = parser::parse(tokens)?;
-    // println!("{:#?}", ast);
+    println!("{:#?}", ast);
     let code = ir_code::generate_code(ast)?;
-    println!("{}", code);
+    // println!("{}", code);
     // let code = evaluate::evaluate(&code);
     // println!("{}", code);
     let code = ir_optimizer::optimize(&code);

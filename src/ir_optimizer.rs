@@ -11,7 +11,6 @@ pub fn optimize(code: &Instructions) -> Instructions {
             | Instruction::Sub(a, Val::Num(0))
             | Instruction::Mul(a, Val::Num(1))
             | Instruction::Div(a, Val::Num(1)) => {
-                println!("{:?}", a);
                 let a = if let Val::Index(index, _) = a {
                     match dbg!(vars.get(index)) {
                         None => {
@@ -27,10 +26,32 @@ pub fn optimize(code: &Instructions) -> Instructions {
             }
             Instruction::Mul(_, Val::Num(0)) => Val::Num(0),
             Instruction::Mul(left, right) if left == right => {
+                let left = if let Val::Index(index, _) = left {
+                    match dbg!(vars.get(index)) {
+                        None => {
+                            optimized.push(instruction.clone(), *assign);
+                            continue;
+                        }
+                        Some(val) => val,
+                    }
+                } else {
+                    left
+                };
                 optimized.push(Instruction::Pow(left.clone(), Val::Num(2)), *assign);
                 continue;
             }
             Instruction::Mul(left, Val::Num(-1)) => {
+                let left = if let Val::Index(index, _) = left {
+                    match dbg!(vars.get(index)) {
+                        None => {
+                            optimized.push(instruction.clone(), *assign);
+                            continue;
+                        }
+                        Some(val) => val,
+                    }
+                } else {
+                    left
+                };
                 optimized.push(Instruction::Neg(left.clone()), *assign);
                 continue;
             }
@@ -202,8 +223,8 @@ pub fn optimize(code: &Instructions) -> Instructions {
                 Instruction::LXor(a, b) => {
                     super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
-                Instruction::Ref(_) => todo!(),
-                Instruction::Deref(_) => todo!(),
+                Instruction::Ref(a) => super::check!(2 a, optimized, vars, assign, instruction),
+                Instruction::Deref(a) => super::check!(2 a, optimized, vars, assign, instruction),
             },
         };
 

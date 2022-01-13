@@ -1,4 +1,4 @@
-use super::{Token, TokenType, ValNumber, BOOLEAN_EXCLUSIVE, BOOLEAN_OPERATORS};
+use super::{Token, TokenType, Type, ValNumber, BOOLEAN_EXCLUSIVE, BOOLEAN_OPERATORS};
 use std::fmt;
 
 /// An enum to specify the type of the operator.
@@ -127,11 +127,13 @@ pub enum Val {
     Index(usize, ValType),
     /// None
     None,
+    /// A pointer.
+    Pointer(usize, ValType),
 }
 
 impl Val {
     /// # Panics
-    /// Panics if the variant is `Self::Index or Self::None`.
+    /// Panics if the variant is not `Self::Num or Self::Bool`.
     pub fn get_int(&self) -> i32 {
         match self {
             Val::Num(num) => *num,
@@ -144,21 +146,47 @@ impl Val {
         match self {
             Val::Num(_) => ValType::Number,
             Val::Bool(_) => ValType::Boolean,
-            Val::Index(_, t) => *t,
+            Val::Index(_, t) => t.clone(),
+            Val::Pointer(_, t) => t.clone(),
             Val::None => ValType::None,
+        }
+    }
+
+    pub fn to_ptr(&self) -> Option<usize> {
+        match self {
+            Val::Pointer(ptr, _) => Some(*ptr),
+            Val::Num(num) => Some(*num as usize),
+            Val::Index(num, ValType::Number) => Some(*num),
+            Val::Index(ptr, ValType::Pointer(_)) => Some(*ptr),
+            _ => None,
+        }
+    }
+
+    pub fn is_constant(&self) -> bool {
+        match self {
+            Val::Num(_) => true,
+            Val::Bool(_) => true,
+            Val::Index(_, _) => false,
+            Val::Pointer(_, _) => false,
+            Val::None => true,
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ValType {
     None,
     Number,
     Boolean,
+    Pointer(Box<ValType>),
 }
 
 impl ValType {
-    pub fn get_result_type(&self, rhs: ValType, op: &Token) -> Option<Self> {
+    pub fn is_ptr(&self) -> bool {
+        matches!(self, ValType::Pointer(_))
+    }
+
+    pub fn get_result_type(&self, rhs: &ValType, op: &Token) -> Option<Self> {
         match (self, rhs) {
             (Self::Number, Self::Number) => {
                 if BOOLEAN_OPERATORS.contains(&op.token_type) {
@@ -167,6 +195,13 @@ impl ValType {
                     None
                 } else {
                     Some(Self::Number)
+                }
+            }
+            (Self::Pointer(t), Self::Number) => {
+                if [TokenType::Add, TokenType::Sub].contains(&op.token_type) {
+                    Some(Self::Pointer(t.clone()))
+                } else {
+                    None
                 }
             }
             (Self::Boolean, Self::Boolean) => {
@@ -198,7 +233,24 @@ impl ValType {
                     None
                 }
             }
+            Self::Pointer(t) => {
+                if [TokenType::Inc, TokenType::Dec].contains(&op.token_type) {
+                    Some(Self::Pointer(t.clone()))
+                } else {
+                    None
+                }
+            }
             _ => None,
+        }
+    }
+
+    pub fn from_parse_type(t: &Type) -> Self {
+        match t {
+            Type::Number => Self::Number,
+            Type::Boolean => Self::Boolean,
+            Type::Ref(t) => Self::Pointer(Box::new(Self::from_parse_type(t))),
+            Type::None => Self::None,
+            Type::Function(_, _) => todo!(),
         }
     }
 }
@@ -206,6 +258,7 @@ impl ValType {
 impl fmt::Display for ValType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::Pointer(_) => write!(f, "ezpointer"),
             Self::None => write!(f, "ezblank"),
             Self::Number => write!(f, "integer"),
             Self::Boolean => write!(f, "bool"),
@@ -216,6 +269,7 @@ impl fmt::Display for ValType {
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Val::Pointer(mem, _) => write!(f, "*{}", mem),
             Val::None => write!(f, "NULL"),
             Val::Bool(b) => write!(f, "{}", b),
             Val::Num(num) => write!(f, "{}", num),

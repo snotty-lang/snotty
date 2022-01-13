@@ -233,6 +233,8 @@ macro_rules! check {
                         Instruction::BNot(_) => Instruction::BNot(a.clone()),
                         Instruction::Print(_) => Instruction::Print(a.clone()),
                         Instruction::Ascii(_) => Instruction::Ascii(a.clone()),
+                        Instruction::Ref(_) => Instruction::Ref(a.clone()),
+                        Instruction::Deref(_) => Instruction::Deref(a.clone()),
                         _ => unreachable!(),
                     };
                     $new.push(new_ins, *$assign);

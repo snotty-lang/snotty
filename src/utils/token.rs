@@ -2,8 +2,21 @@ use super::{LexNumber, Position};
 use std::{cmp, fmt};
 
 /// List of all the keywords identified by the lexer
-pub const KEYWORDS: [&str; 11] = [
-    "let", "ez", "return", "ezout", "ezin", "ezascii", "true", "false", "if", "else", "ezblank",
+pub const KEYWORDS: [&str; 14] = [
+    "let",
+    "ez",
+    "ezreturn",
+    "ezout",
+    "ezin",
+    "ezascii",
+    "true",
+    "false",
+    "if",
+    "else",
+    "ezblank",
+    "ezbool",
+    "ezpointer",
+    "eznumber",
 ];
 
 pub const BOOLEAN_OPERATORS: [TokenType; 6] = [

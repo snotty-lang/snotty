@@ -1,4 +1,4 @@
-use crate::utils::Position;
+use crate::utils::{Position, Type};
 
 use super::utils::{Error, ErrorType, Node, Scope, Token, TokenType, ASSIGNMENT_OPERATORS};
 
@@ -51,7 +51,7 @@ impl Parser {
         match self.current_token.token_type {
             TokenType::Keyword(ref keyword) => match keyword.as_ref() {
                 // break, continue
-                "return" => {
+                "ezreturn" => {
                     let token = self.current_token.clone();
                     self.advance();
                     if self.current_token.token_type == TokenType::Eol {
@@ -133,14 +133,85 @@ impl Parser {
         )
     }
 
+    fn make_type(&mut self) -> Result<Type, Error> {
+        match self.current_token.token_type {
+            TokenType::Keyword(ref keyword) => match keyword.as_ref() {
+                "eznumber" => {
+                    self.advance();
+                    Ok(Type::Number)
+                }
+                "ezbool" => {
+                    self.advance();
+                    Ok(Type::Boolean)
+                }
+                "ezblank" => {
+                    self.advance();
+                    Ok(Type::None)
+                }
+                _ => Err(Error::new(
+                    ErrorType::SyntaxError,
+                    self.current_token.position.clone(),
+                    format!("Expected type, found {}", keyword),
+                )),
+            },
+            TokenType::BAnd => {
+                self.advance();
+                Ok(Type::Ref(Box::new(self.make_type()?)))
+            }
+            TokenType::LAnd => {
+                self.advance();
+                Ok(Type::Ref(Box::new({
+                    Type::Ref(Box::new(self.make_type()?))
+                })))
+            }
+            TokenType::LParen => {
+                self.advance();
+                let mut types = vec![];
+                if self.current_token.token_type != TokenType::RParen {
+                    types.push(self.make_type()?);
+                    while self.current_token.token_type == TokenType::Comma {
+                        self.advance();
+                        types.push(self.make_type()?);
+                    }
+                    if self.current_token.token_type != TokenType::RParen {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            "Expected ')'".to_string(),
+                        ));
+                    }
+                }
+                self.advance();
+                let ret = if self.current_token.token_type == TokenType::Arrow {
+                    self.advance();
+                    self.make_type()?
+                } else {
+                    Type::None
+                };
+                Ok(Type::Function(types, Box::new(ret)))
+            }
+            _ => Err(Error::new(
+                ErrorType::SyntaxError,
+                self.current_token.position.clone(),
+                format!("Expected type, found {}", self.current_token),
+            )),
+        }
+    }
+
     fn let_statement(&mut self, init: bool, scope: &mut Scope) -> ParseResult {
         if let TokenType::Identifier(_) = self.current_token.token_type {
             let token = self.current_token.clone();
             self.advance();
+            let t = if self.current_token.token_type == TokenType::Colon {
+                self.advance();
+                Some(self.make_type()?)
+            } else {
+                None
+            };
             match self.current_token.token_type {
                 TokenType::Assign if init => {
                     self.advance();
-                    Ok(Node::VarAssign(token, Box::new(self.expression(scope)?)))
+                    Ok(Node::VarAssign(token, Box::new(self.expression(scope)?), t))
                 }
                 TokenType::Assign => {
                     self.advance();
@@ -359,6 +430,10 @@ impl Parser {
             }
             TokenType::LParen => {
                 self.advance();
+                if self.current_token.token_type == TokenType::RParen {
+                    self.advance();
+                    return Ok(Node::Tuple(token.position));
+                }
                 let node = self.expression(scope)?;
                 if self.current_token.token_type != TokenType::RParen {
                     return Err(Error::new(
@@ -387,12 +462,30 @@ impl Parser {
                 pos.line_end = self.current_token.position.line_end;
                 Ok(Node::Deref(Box::new(self.atom(scope)?), pos))
             }
+            TokenType::Pow => {
+                self.advance();
+                let mut pos = token.position;
+                pos.end = self.current_token.position.end - 1;
+                pos.line_end = self.current_token.position.line_end;
+                let node = Node::Deref(Box::new(self.atom(scope)?), pos.clone());
+                pos.start += 1;
+                Ok(Node::Deref(Box::new(node), pos))
+            }
             TokenType::BAnd => {
                 self.advance();
                 let mut pos = token.position;
                 pos.end = self.current_token.position.end;
                 pos.line_end = self.current_token.position.line_end;
                 Ok(Node::Ref(Box::new(self.atom(scope)?), pos))
+            }
+            TokenType::LAnd => {
+                self.advance();
+                let mut pos = token.position;
+                pos.end = self.current_token.position.end - 1;
+                pos.line_end = self.current_token.position.line_end;
+                let node = Node::Ref(Box::new(self.atom(scope)?), pos.clone());
+                pos.start += 1;
+                Ok(Node::Ref(Box::new(node), pos))
             }
             _ => Err(Error::new(
                 ErrorType::SyntaxError,
@@ -423,13 +516,33 @@ impl Parser {
         self.advance();
         let mut params = vec![];
         if let TokenType::Identifier(_) = self.current_token.token_type {
-            params.push(self.current_token.clone());
+            let p = self.current_token.clone();
             self.advance();
+            if self.current_token.token_type != TokenType::Colon {
+                return Err(Error::new(
+                    ErrorType::SyntaxError,
+                    self.current_token.position.clone(),
+                    format!("Expected ':', found {}", self.current_token),
+                ));
+            }
+            self.advance();
+            let t = self.make_type()?;
+            params.push((p, t));
             while self.current_token.token_type == TokenType::Comma {
                 self.advance();
                 if let TokenType::Identifier(_) = self.current_token.token_type {
-                    params.push(self.current_token.clone());
+                    let p = self.current_token.clone();
                     self.advance();
+                    if self.current_token.token_type != TokenType::Colon {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            format!("Expected ':', found {}", self.current_token),
+                        ));
+                    }
+                    self.advance();
+                    let t = self.make_type()?;
+                    params.push((p, t));
                 } else {
                     return Err(Error::new(
                         ErrorType::SyntaxError,
@@ -454,14 +567,21 @@ impl Parser {
         }
         self.advance();
 
+        let ret = if self.current_token.token_type == TokenType::Arrow {
+            self.advance();
+            self.make_type()?
+        } else {
+            Type::None
+        };
+
         let mut new_scope = Scope::new(Some(scope));
-        new_scope.args = Some(params.clone());
+        new_scope.args = Some(params.iter().map(|x| x.0.clone()).collect());
         let expr = self.expression(&mut new_scope)?;
         scope.scopes.push(new_scope);
         let mut pos = name.position.clone();
         pos.end = expr.position().end;
         pos.line_end = expr.position().line_end;
-        Ok(Node::FuncDef(name, params, Box::new(expr), pos))
+        Ok(Node::FuncDef(name, params, Box::new(expr), ret, pos))
     }
 
     fn binary_op(
@@ -595,6 +715,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
         match node {
             Node::None(_) => None,
             Node::Number(_) => None,
+            Node::Tuple(_) => None,
             Node::BinaryOp(_, n1, n2) => {
                 let n1 = check_return(n1);
                 if n1.is_some() {
@@ -607,7 +728,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
                 None
             }
             Node::UnaryOp(_, n1) => check_return(n1),
-            Node::VarAssign(_, n1) => check_return(n1),
+            Node::VarAssign(_, n1, _) => check_return(n1),
             Node::VarAccess(_) => None,
             Node::VarReassign(_, n1) => check_return(n1),
             Node::Statements(..) => None,

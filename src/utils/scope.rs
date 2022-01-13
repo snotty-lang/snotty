@@ -1,13 +1,27 @@
-use super::{Error, ErrorType, Node, Token};
+use super::{Error, ErrorType, Node, Token, Type};
 use std::fmt;
+
+#[derive(Debug, Clone)]
+pub enum VarType {
+    Variable(Option<Type>, Token),
+    Function(Vec<Type>, Type, Token),
+}
+
+impl VarType {
+    fn get_name(&self) -> &Token {
+        match self {
+            VarType::Variable(_, name) => name,
+            VarType::Function(_, _, name) => name,
+        }
+    }
+}
 
 /// Scope struct
 /// It is used to find undefined variables and functions
 #[derive(Debug, Clone)]
 pub struct Scope {
     pub unresolved_functions: Vec<Node>,
-    pub defined_functions: Vec<Node>,
-    pub defined_variables: Vec<Token>,
+    pub defined: Vec<VarType>,
     pub args: Option<Vec<Token>>,
     pub scopes: Vec<Scope>,
     pub parent: Option<Box<Scope>>,
@@ -19,8 +33,7 @@ impl Scope {
     pub fn new(parent: Option<&Scope>) -> Self {
         Self {
             unresolved_functions: Vec::new(),
-            defined_functions: Vec::new(),
-            defined_variables: Vec::new(),
+            defined: Vec::new(),
             scopes: Vec::new(),
             args: None,
             parent: parent.map(|p| Box::new(p.clone())),
@@ -33,17 +46,24 @@ impl Scope {
         if self.error.is_some() {
             return;
         }
-        self.defined_functions.push(function);
+        if let Node::FuncDef(token, args, _, ret, _) = function {
+            self.defined.push(VarType::Function(
+                args.iter().map(|a| a.1.clone()).collect(),
+                ret,
+                token,
+            ));
+        }
     }
 
     pub fn register_variable(&mut self, assign_node: Node) {
         if self.error.is_some() {
             return;
         }
-        if let Node::VarAssign(token, ..) = assign_node {
-            return self.defined_variables.push(token);
+        if let Node::VarAssign(token, _, t) = assign_node {
+            self.defined.push(VarType::Variable(t, token));
+        } else {
+            unreachable!();
         }
-        unreachable!();
     }
 
     pub fn access_variable(&mut self, node: Node) {
@@ -52,7 +72,12 @@ impl Scope {
         }
         match &node {
             Node::VarAccess(token) | Node::VarReassign(token, ..) | Node::VarAssign(token, ..) => {
-                if !self.defined_variables.contains(token) {
+                if self
+                    .defined
+                    .iter()
+                    .find(|a| a.get_name() == token)
+                    .is_none()
+                {
                     if self.parent.is_some() {
                         let parent = self.parent.as_mut().unwrap();
                         parent.access_variable(node.clone());
@@ -82,9 +107,9 @@ impl Scope {
         match &node {
             Node::Call(call_node, args1, _) => match &**call_node {
                 Node::VarAccess(token1) => {
-                    for function in &self.defined_functions {
+                    for function in &self.defined {
                         match function {
-                            Node::FuncDef(token2, args2, ..) => {
+                            VarType::Function(args2, _, token2) => {
                                 if token1 == token2 {
                                     if args1.len() != args2.len() {
                                         self.func_error = Some(Error::new(
@@ -103,7 +128,19 @@ impl Scope {
                                     break;
                                 }
                             }
-                            _ => unreachable!(),
+                            VarType::Variable(_, token2) => {
+                                if token1 == token2 {
+                                    self.error = Some(Error::new(
+                                        ErrorType::UndefinedFunction,
+                                        token1.position.clone(),
+                                        format!(
+                                            "Can only call a function, not a variable {}",
+                                            token2
+                                        ),
+                                    ));
+                                    return;
+                                }
+                            }
                         }
                     }
                 }
