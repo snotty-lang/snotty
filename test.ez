@@ -1,3 +1,1 @@
-let x : &eznumber = &ezin
-let y : eznumber = *x;
-ezout x
+ezout 4, 5 ,6

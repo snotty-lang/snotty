@@ -97,18 +97,26 @@ impl Parser {
                 "ezascii" => {
                     let mut pos = self.current_token.position.clone();
                     self.advance();
-                    let node = self.expression(scope)?;
+                    let mut nodes = vec![self.expression(scope)?];
+                    while let TokenType::Comma = self.current_token.token_type {
+                        self.advance();
+                        nodes.push(self.expression(scope)?);
+                    }
                     pos.end = self.current_token.position.end;
                     pos.line_end = self.current_token.position.line_end;
-                    Ok(Node::Ascii(Box::new(node), pos))
+                    Ok(Node::Ascii(nodes, pos))
                 }
                 "ezout" => {
                     let mut pos = self.current_token.position.clone();
                     self.advance();
-                    let node = self.expression(scope)?;
+                    let mut nodes = vec![self.expression(scope)?];
+                    while let TokenType::Comma = self.current_token.token_type {
+                        self.advance();
+                        nodes.push(self.expression(scope)?);
+                    }
                     pos.end = self.current_token.position.end;
                     pos.line_end = self.current_token.position.line_end;
-                    Ok(Node::Print(Box::new(node), pos))
+                    Ok(Node::Print(nodes, pos))
                 }
                 _ => self.expression(scope),
             },
@@ -778,8 +786,14 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
             }
             Node::FuncDef(..) => None,
             Node::Return(_, pos) => Some(pos.clone()),
-            Node::Print(n1, _) | Node::Ascii(n1, _) | Node::Ref(n1, _) | Node::Deref(n1, _) => {
-                check_return(n1)
+            Node::Ref(n1, _) | Node::Deref(n1, _) => check_return(n1),
+            Node::Print(n1, _) | Node::Ascii(n1, _) => {
+                for n in n1 {
+                    if let Some(t) = check_return(n) {
+                        return Some(t);
+                    }
+                }
+                None
             }
             Node::Input(_) => None,
         }

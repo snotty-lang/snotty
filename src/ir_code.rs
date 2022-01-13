@@ -221,15 +221,23 @@ impl CodeGenerator {
                 Ok((Val::None, false))
             }
 
-            Node::Print(expr, _) => {
-                let (expr, r) = self.make_instruction(expr)?;
-                self.instructions.push(Instruction::Print(expr), None);
+            Node::Print(exprs, _) => {
+                let mut r = false;
+                for expr in exprs {
+                    let (expr, r1) = self.make_instruction(expr)?;
+                    r |= r1;
+                    self.instructions.push(Instruction::Print(expr), None);
+                }
                 Ok((Val::None, r))
             }
 
-            Node::Ascii(expr, _) => {
-                let (expr, r) = self.make_instruction(expr)?;
-                self.instructions.push(Instruction::Ascii(expr), None);
+            Node::Ascii(exprs, _) => {
+                let mut r = false;
+                for expr in exprs {
+                    let (expr, r1) = self.make_instruction(expr)?;
+                    r |= r1;
+                    self.instructions.push(Instruction::Print(expr), None);
+                }
                 Ok((Val::None, r))
             }
 
