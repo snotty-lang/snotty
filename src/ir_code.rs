@@ -132,6 +132,19 @@ impl CodeGenerator {
                             Ok((Val::Index(self.array_index - 1, type_), r))
                         }
                         (val, r) => {
+                            if let Some(t) = dec_type {
+                                if ValType::from_parse_type(t) != val.r#type() {
+                                    return Err(Error::new(
+                                        ErrorType::TypeError,
+                                        var1.position.clone(),
+                                        format!(
+                                            "Cannot assign `{}` to `{}`",
+                                            val.r#type(),
+                                            ValType::from_parse_type(t)
+                                        ),
+                                    ));
+                                }
+                            }
                             self.vars.insert(var.clone(), val);
                             Ok((Val::None, r))
                         }
@@ -322,28 +335,33 @@ impl CodeGenerator {
                     return Err(Error::new(
                         ErrorType::TypeError,
                         val1.position(),
-                        format!("Cannot reference a {:?}", val.r#type()),
+                        format!("Cannot reference a {}", val.r#type()),
                     ));
                 }
+                let t = val.r#type();
                 self.instructions
                     .push(Instruction::Ref(val), Some(self.array_index));
                 self.array_index += 1;
-                Ok((Val::Index(self.array_index - 1, ValType::Number), r))
+                Ok((
+                    Val::Index(self.array_index - 1, ValType::Pointer(Box::new(t))),
+                    r,
+                ))
             }
 
             Node::Deref(val1, _) => {
                 let (val, r) = self.make_instruction(val1)?;
-                if val.r#type().is_ptr() {
-                    return Err(Error::new(
+                if let ValType::Pointer(t) = val.r#type() {
+                    self.instructions
+                        .push(Instruction::Deref(val), Some(self.array_index));
+                    self.array_index += 1;
+                    Ok((Val::Index(self.array_index - 1, *t), r))
+                } else {
+                    Err(Error::new(
                         ErrorType::TypeError,
                         val1.position(),
-                        format!("Cannot dereference a {:?}", val.r#type()),
-                    ));
+                        format!("Cannot dereference a {}", val.r#type()),
+                    ))
                 }
-                self.instructions
-                    .push(Instruction::Deref(val), Some(self.array_index));
-                self.array_index += 1;
-                Ok((Val::Index(self.array_index - 1, ValType::Number), r))
             }
 
             Node::Tuple(_) => Ok((Val::None, false)),

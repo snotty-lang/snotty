@@ -318,7 +318,11 @@ macro_rules! goto_add {
     ($val: expr, $bf_code: expr, $current: expr, $block:block) => {
         match $val {
             Val::Num(val) => {
-                $bf_code.push_str(&("+".repeat(*val as u32 as usize)));
+                if *val < 0 {
+                    $bf_code.push_str(&("-".repeat(*val as u32 as usize)));
+                } else {
+                    $bf_code.push_str(&("+".repeat(*val as u32 as usize)));
+                }
             }
             Val::Bool(b) => {
                 $bf_code.push_str(&("+".repeat(*b as u32 as usize)));

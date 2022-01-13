@@ -72,12 +72,7 @@ impl Scope {
         }
         match &node {
             Node::VarAccess(token) | Node::VarReassign(token, ..) | Node::VarAssign(token, ..) => {
-                if self
-                    .defined
-                    .iter()
-                    .find(|a| a.get_name() == token)
-                    .is_none()
-                {
+                if !self.defined.iter().any(|a| a.get_name() == token) {
                     if self.parent.is_some() {
                         let parent = self.parent.as_mut().unwrap();
                         parent.access_variable(node.clone());

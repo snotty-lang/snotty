@@ -258,7 +258,7 @@ impl ValType {
 impl fmt::Display for ValType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Pointer(_) => write!(f, "ezpointer"),
+            Self::Pointer(t) => write!(f, "&{}", **t),
             Self::None => write!(f, "ezblank"),
             Self::Number => write!(f, "integer"),
             Self::Boolean => write!(f, "bool"),
@@ -270,7 +270,7 @@ impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Val::Pointer(mem, _) => write!(f, "*{}", mem),
-            Val::None => write!(f, "NULL"),
+            Val::None => write!(f, "ezblank"),
             Val::Bool(b) => write!(f, "{}", b),
             Val::Num(num) => write!(f, "{}", num),
             Val::Index(index, _) => write!(f, "[{}]", index),

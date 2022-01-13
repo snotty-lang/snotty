@@ -1,1 +1,3 @@
-$
+let x : &eznumber = &ezin
+let y : eznumber = *x;
+ezout x
