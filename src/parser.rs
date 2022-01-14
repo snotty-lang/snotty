@@ -156,6 +156,10 @@ impl Parser {
                     self.advance();
                     Ok(Type::None)
                 }
+                "ezchar" => {
+                    self.advance();
+                    Ok(Type::Char)
+                }
                 _ => Err(Error::new(
                     ErrorType::SyntaxError,
                     self.current_token.position.clone(),
@@ -390,11 +394,11 @@ impl Parser {
                 }
                 "true" => {
                     self.advance();
-                    Ok(Node::Number(token))
+                    Ok(Node::Boolean(token))
                 }
                 "false" => {
                     self.advance();
-                    Ok(Node::Number(token))
+                    Ok(Node::Boolean(token))
                 }
                 "ezblank" => {
                     self.advance();
@@ -429,6 +433,11 @@ impl Parser {
                     Box::new(else_branch),
                     pos,
                 ))
+            }
+            TokenType::Char(_) => {
+                self.advance();
+                let pos = token.position.clone();
+                Ok(Node::Char(token, pos))
             }
             TokenType::Identifier(_) => {
                 self.advance();
@@ -721,9 +730,6 @@ fn check_undefined(global: &mut Scope) -> Option<Error> {
 fn keyword_checks(ast: &Node) -> Option<Error> {
     fn check_return(node: &Node) -> Option<Position> {
         match node {
-            Node::None(_) => None,
-            Node::Number(_) => None,
-            Node::Tuple(_) => None,
             Node::BinaryOp(_, n1, n2) => {
                 let n1 = check_return(n1);
                 if n1.is_some() {
@@ -795,7 +801,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
                 }
                 None
             }
-            Node::Input(_) => None,
+            _ => None,
         }
     }
     match ast {

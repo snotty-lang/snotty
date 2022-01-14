@@ -96,7 +96,7 @@ pub fn optimize(code: &Instructions) -> Instructions {
                 Instruction::Neg(a) => super::check!(2 a, optimized, vars, assign, instruction),
                 Instruction::Inc(a) => super::check!(2 a, optimized, vars, assign, instruction),
                 Instruction::Dec(a) => super::check!(2 a, optimized, vars, assign, instruction),
-                Instruction::Print(a) => {
+                Instruction::Print(a) | Instruction::PrintChar(a) => {
                     super::check!(2 a, optimized, vars, assign, instruction)
                 }
                 Instruction::Ascii(a) => {

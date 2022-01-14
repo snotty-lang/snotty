@@ -5,6 +5,7 @@ pub enum Type {
     Number,
     Boolean,
     None,
+    Char,
     Ref(Box<Type>),
     Function(Vec<Type>, Box<Type>),
 }
@@ -13,6 +14,7 @@ pub enum Type {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
     Number(Token),
+    Boolean(Token),
     BinaryOp(Token, Box<Node>, Box<Node>),
     UnaryOp(Token, Box<Node>),
     VarAssign(Token, Box<Node>, Option<Type>),
@@ -30,13 +32,16 @@ pub enum Node {
     Ternary(Box<Node>, Box<Node>, Box<Node>, Position),
     If(Box<Node>, Box<Node>, Option<Box<Node>>, Position),
     None(Position),
+    Char(Token, Position),
     Tuple(Position),
 }
 
 impl Node {
     pub fn position(&self) -> Position {
         match self {
-            Node::Number(token) | Node::VarAccess(token) => token.position.clone(),
+            Node::Number(token) | Node::Boolean(token) | Node::VarAccess(token) => {
+                token.position.clone()
+            }
             Node::Ref(.., pos)
             | Node::Deref(.., pos)
             | Node::Statements(.., pos)
@@ -49,6 +54,7 @@ impl Node {
             | Node::Return(.., pos)
             | Node::Tuple(pos)
             | Node::None(pos)
+            | Node::Char(.., pos)
             | Node::Input(pos) => pos.clone(),
             Node::BinaryOp(_, left, right) => {
                 let mut pos = left.position();

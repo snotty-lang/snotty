@@ -17,6 +17,7 @@ pub enum Instruction {
     Mod(Val, Val),
     Neg(Val),
     Print(Val),
+    PrintChar(Val),
     Ascii(Val),
     Eq(Val, Val),
     Neq(Val, Val),
@@ -82,42 +83,42 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::LXor(left, right) => write!(f, "{} !&| {}", left, right),
-            Self::TernaryIf(a, b, c) => write!(f, "if {} then {} else {}", a, b, c),
-            Self::Copy(val) => write!(f, "{}", val),
+            Self::LXor(left, right) => write!(f, "{:?} !&| {:?}", left, right),
+            Self::TernaryIf(a, b, c) => write!(f, "if {:?} then {:?} else {:?}", a, b, c),
+            Self::Copy(val) => write!(f, "{:?}", val),
             Self::Input => write!(f, "?"),
-            Self::Add(left, right) => write!(f, "{} + {}", left, right),
-            Self::Sub(left, right) => write!(f, "{} - {}", left, right),
-            Self::Mul(left, right) => write!(f, "{} * {}", left, right),
-            Self::Div(left, right) => write!(f, "{} / {}", left, right),
-            Self::Mod(left, right) => write!(f, "{} % {}", left, right),
-            Self::Neg(val) => write!(f, "-{}", val),
-            Self::Print(val) => write!(f, "print {}", val),
-            Self::Ascii(val) => write!(f, "ascii {}", val),
-            Self::Pow(base, exp) => write!(f, "{} ** {}", base, exp),
-            Self::Shl(left, right) => write!(f, "{} << {}", left, right),
-            Self::Shr(left, right) => write!(f, "{} >> {}", left, right),
-            Self::BAnd(left, right) => write!(f, "{} & {}", left, right),
-            Self::BOr(left, right) => write!(f, "{} | {}", left, right),
-            Self::BXor(left, right) => write!(f, "{} ^ {}", left, right),
-            Self::BNot(val) => write!(f, "~{}", val),
-            Self::Eq(left, right) => write!(f, "{} == {}", left, right),
-            Self::Neq(left, right) => write!(f, "{} != {}", left, right),
-            Self::Lt(left, right) => write!(f, "{} < {}", left, right),
-            Self::Le(left, right) => write!(f, "{} <= {}", left, right),
-            Self::LAnd(left, right) => write!(f, "{} && {}", left, right),
-            Self::LOr(left, right) => write!(f, "{} || {}", left, right),
-            Self::LNot(val) => write!(f, "!{}", val),
-            Self::Inc(val) => write!(f, "++{}", val),
-            Self::Dec(val) => write!(f, "--{}", val),
-            Instruction::Ref(val) => write!(f, "&{}", val),
-            Instruction::Deref(val) => write!(f, "*{}", val),
+            Self::Add(left, right) => write!(f, "{:?} + {:?}", left, right),
+            Self::Sub(left, right) => write!(f, "{:?} - {:?}", left, right),
+            Self::Mul(left, right) => write!(f, "{:?} * {:?}", left, right),
+            Self::Div(left, right) => write!(f, "{:?} / {:?}", left, right),
+            Self::Mod(left, right) => write!(f, "{:?} % {:?}", left, right),
+            Self::Neg(val) => write!(f, "-{:?}", val),
+            Self::Print(val) | Self::PrintChar(val) => write!(f, "print {:?}", val),
+            Self::Ascii(val) => write!(f, "ascii {:?}", val),
+            Self::Pow(base, exp) => write!(f, "{:?} ** {:?}", base, exp),
+            Self::Shl(left, right) => write!(f, "{:?} << {:?}", left, right),
+            Self::Shr(left, right) => write!(f, "{:?} >> {:?}", left, right),
+            Self::BAnd(left, right) => write!(f, "{:?} & {:?}", left, right),
+            Self::BOr(left, right) => write!(f, "{:?} | {:?}", left, right),
+            Self::BXor(left, right) => write!(f, "{:?} ^ {:?}", left, right),
+            Self::BNot(val) => write!(f, "~{:?}", val),
+            Self::Eq(left, right) => write!(f, "{:?} == {:?}", left, right),
+            Self::Neq(left, right) => write!(f, "{:?} != {:?}", left, right),
+            Self::Lt(left, right) => write!(f, "{:?} < {:?}", left, right),
+            Self::Le(left, right) => write!(f, "{:?} <= {:?}", left, right),
+            Self::LAnd(left, right) => write!(f, "{:?} && {:?}", left, right),
+            Self::LOr(left, right) => write!(f, "{:?} || {:?}", left, right),
+            Self::LNot(val) => write!(f, "!{:?}", val),
+            Self::Inc(val) => write!(f, "++{:?}", val),
+            Self::Dec(val) => write!(f, "--{:?}", val),
+            Instruction::Ref(val) => write!(f, "&{:?}", val),
+            Instruction::Deref(val) => write!(f, "*{:?}", val),
         }
     }
 }
 
 /// An enum to specify the type of the value.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Val {
     /// A number.
     Num(ValNumber),
@@ -129,21 +130,25 @@ pub enum Val {
     None,
     /// A pointer.
     Pointer(usize, ValType),
+    /// A Char
+    Char(u8),
 }
 
 impl Val {
     /// # Panics
-    /// Panics if the variant is not `Self::Num or Self::Bool`.
+    /// Panics if the variant is not `Self::Num or Self::Bool` or `Self::Char`.
     pub fn get_int(&self) -> i32 {
         match self {
             Val::Num(num) => *num,
             Val::Bool(b) => *b as i32,
+            Val::Char(c) => *c as i32,
             _ => unreachable!(),
         }
     }
 
     pub fn r#type(&self) -> ValType {
         match self {
+            Val::Char(_) => ValType::Char,
             Val::Num(_) => ValType::Number,
             Val::Bool(_) => ValType::Boolean,
             Val::Index(_, t) => t.clone(),
@@ -164,6 +169,7 @@ impl Val {
 
     pub fn is_constant(&self) -> bool {
         match self {
+            Val::Char(_) => true,
             Val::Num(_) => true,
             Val::Bool(_) => true,
             Val::Index(_, _) => false,
@@ -177,6 +183,7 @@ impl Val {
 pub enum ValType {
     None,
     Number,
+    Char,
     Boolean,
     Pointer(Box<ValType>),
 }
@@ -208,6 +215,13 @@ impl ValType {
                 if BOOLEAN_OPERATORS.contains(&op.token_type)
                     || BOOLEAN_EXCLUSIVE.contains(&op.token_type)
                 {
+                    Some(Self::Boolean)
+                } else {
+                    None
+                }
+            }
+            (Self::Char, Self::Char) => {
+                if BOOLEAN_OPERATORS.contains(&op.token_type) {
                     Some(Self::Boolean)
                 } else {
                     None
@@ -246,6 +260,7 @@ impl ValType {
 
     pub fn from_parse_type(t: &Type) -> Self {
         match t {
+            Type::Char => Self::Char,
             Type::Number => Self::Number,
             Type::Boolean => Self::Boolean,
             Type::Ref(t) => Self::Pointer(Box::new(Self::from_parse_type(t))),
@@ -258,6 +273,7 @@ impl ValType {
 impl fmt::Display for ValType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::Char => write!(f, "ezchar"),
             Self::Pointer(t) => write!(f, "&{}", **t),
             Self::None => write!(f, "ezblank"),
             Self::Number => write!(f, "integer"),
@@ -269,11 +285,25 @@ impl fmt::Display for ValType {
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Val::Char(c) => write!(f, "{}", *c as char),
             Val::Pointer(mem, _) => write!(f, "*{}", mem),
             Val::None => write!(f, "ezblank"),
             Val::Bool(b) => write!(f, "{}", b),
             Val::Num(num) => write!(f, "{}", num),
             Val::Index(index, _) => write!(f, "[{}]", index),
+        }
+    }
+}
+
+impl fmt::Debug for Val {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Val::Char(c) => write!(f, "'{}'", *c as char),
+            Val::Pointer(mem, t) => write!(f, "*{}({})", mem, t),
+            Val::None => write!(f, "ezblank"),
+            Val::Bool(b) => write!(f, "{}", b),
+            Val::Num(num) => write!(f, "{}", num),
+            Val::Index(index, t) => write!(f, "[{}]({})", index, t),
         }
     }
 }

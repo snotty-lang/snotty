@@ -61,6 +61,22 @@ pub fn transpile(code: &Instructions) -> String {
                 });
                 bf_code.push_str(">[-]<[>-<-]>[<->+]<");
             }
+            Instruction::PrintChar(val) => {
+                let start = location;
+                goto(&mut bf_code, &mut location, free_idx);
+                goto_add!(
+                    val,
+                    &mut bf_code,
+                    &mut location,
+                    {
+                        bf_code.push_str(".++++++++++.[-]");
+                    },
+                    {
+                        bf_code.push_str(".[-]++++++++++.[-]");
+                    }
+                );
+                goto(&mut bf_code, &mut location, start);
+            }
             Instruction::BNot(val) => {
                 let start = location;
                 goto_add!(val, &mut bf_code, &mut location, {
@@ -247,18 +263,10 @@ pub fn transpile(code: &Instructions) -> String {
                 goto(&mut bf_code, &mut location, start);
                 bf_code.push_str(">[-<[->>+<<]>>[-<<++>>]<]<");
             }
-            Instruction::Shr(left, right) => {
-                Val::Num(left.get_int() >> right.get_int());
-            }
-            Instruction::BAnd(left, right) => {
-                Val::Num(left.get_int() & right.get_int());
-            }
-            Instruction::BOr(left, right) => {
-                Val::Num(left.get_int() | right.get_int());
-            }
-            Instruction::BXor(left, right) => {
-                Val::Num(left.get_int() ^ right.get_int());
-            }
+            Instruction::Shr(_, _) => todo!(),
+            Instruction::BAnd(_, _) => todo!(),
+            Instruction::BOr(_, _) => todo!(),
+            Instruction::BXor(_, _) => todo!(),
             Instruction::Copy(from) => {
                 if let Val::Index(index, _) = from {
                     copy(&mut bf_code, *index, location, location)
@@ -324,6 +332,9 @@ macro_rules! goto_add {
                     $bf_code.push_str(&("+".repeat(*val as u32 as usize)));
                 }
             }
+            Val::Char(val) => {
+                $bf_code.push_str(&("+".repeat(*val as u32 as usize)));
+            }
             Val::Bool(b) => {
                 $bf_code.push_str(&("+".repeat(*b as u32 as usize)));
             }
@@ -341,11 +352,19 @@ macro_rules! goto_add {
     ($val: expr, $bf_code: expr, $current: expr, $block:block, $block2: block) => {
         match $val {
             Val::Num(val) => {
-                $bf_code.push_str(&("+".repeat(*val as u32 as usize)));
+                if *val < 0 {
+                    $bf_code.push_str(&("-".repeat(*val as u32 as usize)));
+                } else {
+                    $bf_code.push_str(&("+".repeat(*val as u32 as usize)));
+                }
                 $block2
             }
             Val::Bool(b) => {
                 $bf_code.push_str(&("+".repeat(*b as u32 as usize)));
+                $block2
+            }
+            Val::Char(val) => {
+                $bf_code.push_str(&("+".repeat(*val as u32 as usize)));
                 $block2
             }
             Val::Index(index, _) => {

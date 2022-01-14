@@ -41,7 +41,7 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                 new.push(instruction.clone(), *assign);
                 continue;
             }
-            Instruction::Print(val) => {
+            Instruction::Print(val) | Instruction::PrintChar(val) => {
                 super::check!(VAL val, new, vars, assign, instruction);
                 let left_str = val.to_string();
                 let left_vec = left_str.chars().collect::<Vec<char>>();

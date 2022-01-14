@@ -12,15 +12,25 @@ pub struct CodeGenerator {
 impl CodeGenerator {
     fn make_instruction(&mut self, node: &Node) -> Result<(Val, bool), Error> {
         match node {
-            Node::Number(num) => match num.token_type {
-                TokenType::Number(num1) => Ok((Val::Num(num1 as i32), false)),
-                TokenType::Keyword(ref boolean) => match boolean.as_ref() {
-                    "true" => Ok((Val::Bool(true), false)),
-                    "false" => Ok((Val::Bool(false), false)),
-                    _ => unreachable!(),
-                },
-                _ => unreachable!(),
-            },
+            Node::Number(num) => {
+                if let TokenType::Number(num1) = num.token_type {
+                    Ok((Val::Num(num1 as i32), false))
+                } else {
+                    unreachable!()
+                }
+            }
+
+            Node::Boolean(b) => {
+                if let TokenType::Keyword(ref boolean) = b.token_type {
+                    match boolean.as_ref() {
+                        "true" => Ok((Val::Bool(true), false)),
+                        "false" => Ok((Val::Bool(false), false)),
+                        _ => unreachable!(),
+                    }
+                } else {
+                    unreachable!()
+                }
+            }
 
             Node::BinaryOp(op, left, right) => {
                 let (left, lr) = self.make_instruction(left)?;
@@ -226,7 +236,11 @@ impl CodeGenerator {
                 for expr in exprs {
                     let (expr, r1) = self.make_instruction(expr)?;
                     r |= r1;
-                    self.instructions.push(Instruction::Print(expr), None);
+                    if let Val::Char(_) = expr {
+                        self.instructions.push(Instruction::PrintChar(expr), None);
+                    } else {
+                        self.instructions.push(Instruction::Print(expr), None);
+                    }
                 }
                 Ok((Val::None, r))
             }
@@ -236,7 +250,7 @@ impl CodeGenerator {
                 for expr in exprs {
                     let (expr, r1) = self.make_instruction(expr)?;
                     r |= r1;
-                    self.instructions.push(Instruction::Print(expr), None);
+                    self.instructions.push(Instruction::Ascii(expr), None);
                 }
                 Ok((Val::None, r))
             }
@@ -373,6 +387,14 @@ impl CodeGenerator {
             }
 
             Node::Tuple(_) => Ok((Val::None, false)),
+
+            Node::Char(c, _) => {
+                if let TokenType::Char(c) = c.token_type {
+                    Ok((Val::Char(c), false))
+                } else {
+                    unreachable!()
+                }
+            }
         }
     }
 }

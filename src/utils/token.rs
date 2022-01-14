@@ -2,7 +2,7 @@ use super::{LexNumber, Position};
 use std::{cmp, fmt};
 
 /// List of all the keywords identified by the lexer
-pub const KEYWORDS: [&str; 14] = [
+pub const KEYWORDS: [&str; 15] = [
     "let",
     "ez",
     "ezreturn",
@@ -17,6 +17,7 @@ pub const KEYWORDS: [&str; 14] = [
     "ezbool",
     "ezpointer",
     "eznumber",
+    "ezchar",
 ];
 
 pub const BOOLEAN_OPERATORS: [TokenType; 6] = [
@@ -96,6 +97,7 @@ pub enum TokenType {
     BNot,
     BOr,
     BXor,
+    Char(u8),
     Identifier(String),
     Number(LexNumber),
     LParen,
@@ -123,6 +125,7 @@ impl fmt::Display for TokenType {
             f,
             "{}",
             match self {
+                TokenType::Char(c) => format!("'{}'", *c as char),
                 TokenType::TernaryIf => "?".to_owned(),
                 TokenType::AddAssign => "+=".to_owned(),
                 TokenType::SubAssign => "-=".to_owned(),

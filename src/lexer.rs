@@ -38,6 +38,37 @@ pub fn lex(input: &str, filename: &'static str) -> LexResult {
                     last_line = j + 1;
                 }
             }
+            '\'' => {
+                let c = match chars.next() {
+                    Some((_, c)) => c as u8,
+                    None => {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            Position::new(line, i, i + 2, filename),
+                            "Unclosed char literal".to_owned(),
+                        ));
+                    }
+                };
+                match chars.next() {
+                    Some((_, '\'')) => {
+                        tokens.push(Token::new(TokenType::Char(c), line, i, i + 3, filename));
+                    }
+                    Some((_, c)) => {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            Position::new(line, i, i + 2, filename),
+                            format!("Expected \', found {}", c),
+                        ));
+                    }
+                    None => {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            Position::new(line, i, i + 3, filename),
+                            "Unclosed char literal".to_owned(),
+                        ));
+                    }
+                }
+            }
             '+' => {
                 if let Some((_, '=')) = chars.peek() {
                     tokens.push(Token::new(TokenType::AddAssign, line, i, i + 2, filename));
