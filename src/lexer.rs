@@ -119,7 +119,7 @@ pub fn lex(input: &str, filename: &'static str) -> LexResult {
                     for (i, c) in chars.by_ref() {
                         if c == '\n' {
                             line += 1;
-                            last_line = i + 2;
+                            last_line = i + 1;
                             break;
                         }
                     }
@@ -135,7 +135,7 @@ pub fn lex(input: &str, filename: &'static str) -> LexResult {
                             }
                         } else if c == '\n' {
                             line += 1;
-                            last_line = i + 2;
+                            last_line = i + 1;
                         }
                     }
                     if !end {

@@ -304,6 +304,7 @@ pub fn transpile(code: &Instructions) -> String {
             }
             Instruction::Ref(_) => todo!(),
             Instruction::Deref(_) => todo!(),
+            Instruction::Index(_, _) => todo!(),
         }
     }
     bf_code

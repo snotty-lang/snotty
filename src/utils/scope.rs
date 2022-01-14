@@ -118,8 +118,6 @@ impl Scope {
                                 format!("Variable {} is not an array", token),
                             ));
                         }
-                    } else {
-                        unreachable!();
                     }
                 } else {
                     if self.parent.is_some() {

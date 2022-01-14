@@ -1,7 +1,7 @@
 use super::{Token, TokenType, Type, ValNumber, BOOLEAN_EXCLUSIVE, BOOLEAN_OPERATORS};
 use std::fmt;
 
-/// An enum to specify the type of the operator.
+/// An enum to specify the type of the instruction.
 #[derive(Debug, Clone)]
 pub enum Instruction {
     TernaryIf(Val, Val, Val),
@@ -35,6 +35,7 @@ pub enum Instruction {
     BOr(Val, Val),
     BXor(Val, Val),
     BNot(Val),
+    Index(Val, Val),
 }
 
 impl Instruction {
@@ -83,6 +84,7 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::Index(a, b) => write!(f, "{:?}[{:?}]", a, b),
             Self::LXor(left, right) => write!(f, "{:?} !&| {:?}", left, right),
             Self::TernaryIf(a, b, c) => write!(f, "if {:?} then {:?} else {:?}", a, b, c),
             Self::Copy(val) => write!(f, "{:?}", val),

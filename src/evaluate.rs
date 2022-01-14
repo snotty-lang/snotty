@@ -199,6 +199,7 @@ pub fn evaluate(code: &Instructions) -> Instructions {
             }
             Instruction::Ref(_) => todo!(),
             Instruction::Deref(_) => todo!(),
+            Instruction::Index(_, _) => todo!(),
         };
         vars.insert(assign.unwrap(), evaluated);
     }

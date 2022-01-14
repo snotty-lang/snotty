@@ -346,7 +346,33 @@ impl CodeGenerator {
             Node::Call(_, _, _) => todo!(),
             Node::FuncDef(_, _, _, _, _) => todo!(),
 
-            Node::Index(_, _, _) => todo!(),
+            Node::Index(arr, index1, _) => {
+                let arr = if let TokenType::Identifier(ref var) = arr.token_type {
+                    self.vars.get(var).cloned().unwrap()
+                } else {
+                    unreachable!();
+                };
+                let (index, _) = self.make_instruction(index1)?;
+                if index.r#type() != ValType::Number {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        index1.position(),
+                        format!(
+                            "Indexing can only be done with numbers, and not of type {:?}",
+                            index.r#type()
+                        ),
+                    ));
+                }
+                let arr_type = match arr.r#type() {
+                    ValType::Array(_, t) => *t,
+                    _ => unreachable!(),
+                };
+                self.instructions
+                    .push(Instruction::Index(arr, index), Some(self.array_index));
+                self.array_index += 1;
+                Ok((Val::Index(self.array_index - 1, arr_type), false))
+            }
+
             Node::IndexAssign(_, _, _) => todo!(),
 
             Node::Array(elements, _) => {

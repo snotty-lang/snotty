@@ -225,6 +225,7 @@ pub fn optimize(code: &Instructions) -> Instructions {
                 }
                 Instruction::Ref(a) => super::check!(2 a, optimized, vars, assign, instruction),
                 Instruction::Deref(a) => super::check!(2 a, optimized, vars, assign, instruction),
+                Instruction::Index(_, _) => todo!(),
             },
         };
 

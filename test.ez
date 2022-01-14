@@ -1,3 +1,5 @@
-let x:[eznumber;1] = [6]
-x[0] = 8
-ezout x[1]
+let x = 5
+let y = [10, 67]
+let z = y[x]
+ezout z
+ezout y
