@@ -100,6 +100,8 @@ pub enum TokenType {
     Char(u8),
     Identifier(String),
     Number(LexNumber),
+    LSquare,
+    RSquare,
     LParen,
     RParen,
     LCurly,
@@ -125,6 +127,8 @@ impl fmt::Display for TokenType {
             f,
             "{}",
             match self {
+                TokenType::LSquare => "[".to_owned(),
+                TokenType::RSquare => "]".to_owned(),
                 TokenType::Char(c) => format!("'{}'", *c as char),
                 TokenType::TernaryIf => "?".to_owned(),
                 TokenType::AddAssign => "+=".to_owned(),

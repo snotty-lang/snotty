@@ -1,1 +1,3 @@
-ezout 'x' == 'y'
+let x:[eznumber;1] = [6]
+x[0] = 8
+ezout x[1]

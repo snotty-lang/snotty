@@ -347,6 +347,7 @@ macro_rules! goto_add {
                 $block
             }
             Val::None => {}
+            Val::Array(_, _) => todo!(),
         }
     };
     ($val: expr, $bf_code: expr, $current: expr, $block:block, $block2: block) => {
@@ -376,6 +377,7 @@ macro_rules! goto_add {
                 $block
             }
             Val::None => {}
+            Val::Array(_, _) => todo!(),
         }
     };
 }

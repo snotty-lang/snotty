@@ -11,6 +11,7 @@ pub enum ErrorType {
     DivisionByZero,
     InvalidReturn,
     TypeError,
+    IndexOutOfBounds,
 }
 
 /// An error that can occur during the compilation of the source code.

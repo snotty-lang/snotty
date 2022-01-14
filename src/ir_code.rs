@@ -346,6 +346,35 @@ impl CodeGenerator {
             Node::Call(_, _, _) => todo!(),
             Node::FuncDef(_, _, _, _, _) => todo!(),
 
+            Node::Index(_, _, _) => todo!(),
+            Node::IndexAssign(_, _, _) => todo!(),
+
+            Node::Array(elements, _) => {
+                let mut r = false;
+                let mut type_ = None;
+                let mut new = vec![];
+                for element1 in elements {
+                    let (element, r1) = self.make_instruction(element1)?;
+                    r |= r1;
+                    if let Some(t) = type_ {
+                        if t != element.r#type() {
+                            return Err(Error::new(
+                                ErrorType::TypeError,
+                                element1.position(),
+                                format!(
+                                    "Array elements have different types, expected type {}, found type {}",
+                                    t,
+                                    element.r#type()
+                                ),
+                            ));
+                        }
+                    }
+                    type_ = Some(element.r#type());
+                    new.push(element);
+                }
+                Ok((Val::Array(new, type_.unwrap_or(ValType::None)), r))
+            }
+
             Node::Return(expr, _) => match expr {
                 Some(expr) => Ok((self.make_instruction(expr)?.0, true)),
                 None => Ok((Val::None, true)),

@@ -6,6 +6,7 @@ pub enum Type {
     Boolean,
     None,
     Char,
+    Array(Box<Type>, usize),
     Ref(Box<Type>),
     Function(Vec<Type>, Box<Type>),
 }
@@ -21,7 +22,7 @@ pub enum Node {
     VarAccess(Token),
     VarReassign(Token, Box<Node>),
     Statements(Vec<Node>, Position),
-    Call(Box<Node>, Vec<Node>, Position),
+    Call(Token, Vec<Node>, Position),
     FuncDef(Token, Vec<(Token, Type)>, Box<Node>, Type, Position),
     Return(Option<Box<Node>>, Position),
     Print(Vec<Node>, Position),
@@ -34,6 +35,9 @@ pub enum Node {
     None(Position),
     Char(Token, Position),
     Tuple(Position),
+    Array(Vec<Node>, Position),
+    Index(Token, Box<Node>, Position),
+    IndexAssign(Token, Box<Node>, Box<Node>),
 }
 
 impl Node {
@@ -55,6 +59,8 @@ impl Node {
             | Node::Tuple(pos)
             | Node::None(pos)
             | Node::Char(.., pos)
+            | Node::Array(.., pos)
+            | Node::Index(.., pos)
             | Node::Input(pos) => pos.clone(),
             Node::BinaryOp(_, left, right) => {
                 let mut pos = left.position();
@@ -65,6 +71,7 @@ impl Node {
             }
             Node::VarReassign(token, expr)
             | Node::VarAssign(token, expr, _)
+            | Node::IndexAssign(token, _, expr)
             | Node::UnaryOp(token, expr) => {
                 let mut pos = token.position.clone();
                 let end_pos = expr.position();

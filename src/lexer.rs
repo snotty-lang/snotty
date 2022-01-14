@@ -178,7 +178,28 @@ pub fn lex(input: &str, filename: &'static str) -> LexResult {
                     return Err(Error::new(
                         ErrorType::SyntaxError,
                         Position::new(line, i, i + 1, filename),
-                        "Mismatched brackets: '{'".to_string(),
+                        "Mismatched brackets".to_string(),
+                    ));
+                }
+            }
+            '[' => {
+                tokens.push(Token::new(TokenType::LSquare, line, i, i + 1, filename));
+                parentheses.push((Position::new(line, i, i + 1, filename), 2));
+            }
+            ']' => {
+                tokens.push(Token::new(TokenType::RSquare, line, i, i + 1, filename));
+                let paren = parentheses.pop();
+                if paren.is_none() {
+                    return Err(Error::new(
+                        ErrorType::SyntaxError,
+                        Position::new(line, i, i + 1, filename),
+                        "Missing opening '[' pair".to_string(),
+                    ));
+                } else if paren.unwrap().1 != 2 {
+                    return Err(Error::new(
+                        ErrorType::SyntaxError,
+                        Position::new(line, i, i + 1, filename),
+                        "Mismatched brackets".to_string(),
                     ));
                 }
             }
@@ -199,7 +220,7 @@ pub fn lex(input: &str, filename: &'static str) -> LexResult {
                     return Err(Error::new(
                         ErrorType::SyntaxError,
                         Position::new(line, i, i + 1, filename),
-                        "Mismatched brackets: '('".to_string(),
+                        "Mismatched brackets".to_string(),
                     ));
                 }
             }

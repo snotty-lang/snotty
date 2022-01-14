@@ -132,6 +132,8 @@ pub enum Val {
     Pointer(usize, ValType),
     /// A Char
     Char(u8),
+    /// Array
+    Array(Vec<Val>, ValType),
 }
 
 impl Val {
@@ -148,6 +150,7 @@ impl Val {
 
     pub fn r#type(&self) -> ValType {
         match self {
+            Val::Array(v, t) => ValType::Array(v.len(), Box::new(t.clone())),
             Val::Char(_) => ValType::Char,
             Val::Num(_) => ValType::Number,
             Val::Bool(_) => ValType::Boolean,
@@ -169,6 +172,7 @@ impl Val {
 
     pub fn is_constant(&self) -> bool {
         match self {
+            Val::Array(v, _) => v.iter().any(|v| v.is_constant()) || v.is_empty(),
             Val::Char(_) => true,
             Val::Num(_) => true,
             Val::Bool(_) => true,
@@ -186,6 +190,7 @@ pub enum ValType {
     Char,
     Boolean,
     Pointer(Box<ValType>),
+    Array(usize, Box<ValType>),
 }
 
 impl ValType {
@@ -266,6 +271,7 @@ impl ValType {
             Type::Ref(t) => Self::Pointer(Box::new(Self::from_parse_type(t))),
             Type::None => Self::None,
             Type::Function(_, _) => todo!(),
+            Type::Array(t, l) => Self::Array(*l, Box::new(Self::from_parse_type(t))),
         }
     }
 }
@@ -273,6 +279,7 @@ impl ValType {
 impl fmt::Display for ValType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::Array(l, t) => write!(f, "[{}; {}]", t, l),
             Self::Char => write!(f, "ezchar"),
             Self::Pointer(t) => write!(f, "&{}", **t),
             Self::None => write!(f, "ezblank"),
@@ -285,6 +292,14 @@ impl fmt::Display for ValType {
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Val::Array(v, _) => write!(
+                f,
+                "[{}]",
+                v.iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Val::Char(c) => write!(f, "{}", *c as char),
             Val::Pointer(mem, _) => write!(f, "*{}", mem),
             Val::None => write!(f, "ezblank"),
@@ -298,6 +313,15 @@ impl fmt::Display for Val {
 impl fmt::Debug for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Val::Array(v, t) => write!(
+                f,
+                "[{}]({})",
+                v.iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                t
+            ),
             Val::Char(c) => write!(f, "'{}'", *c as char),
             Val::Pointer(mem, t) => write!(f, "*{}({})", mem, t),
             Val::None => write!(f, "ezblank"),

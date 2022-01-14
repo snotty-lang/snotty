@@ -1,4 +1,4 @@
-use super::{Error, ErrorType, Node, Token, Type};
+use super::{Error, ErrorType, Node, Token, TokenType, Type};
 use std::fmt;
 
 #[derive(Debug, Clone)]
@@ -66,7 +66,7 @@ impl Scope {
         }
     }
 
-    pub fn access_variable(&mut self, node: Node) {
+    pub fn access_variable(&mut self, node: &Node) {
         if self.error.is_some() {
             return;
         }
@@ -75,7 +75,56 @@ impl Scope {
                 if !self.defined.iter().any(|a| a.get_name() == token) {
                     if self.parent.is_some() {
                         let parent = self.parent.as_mut().unwrap();
-                        parent.access_variable(node.clone());
+                        parent.access_variable(node);
+                        if parent.error.is_none() {
+                            return;
+                        }
+                    }
+                    if self.args.is_some() && self.args.as_ref().unwrap().contains(token) {
+                        return;
+                    }
+                    self.error = Some(Error::new(
+                        ErrorType::UndefinedVariable,
+                        token.position.clone(),
+                        format!("Variable {} is not defined", token),
+                    ));
+                }
+            }
+            Node::IndexAssign(token, index, ..) | Node::Index(token, index, ..) => {
+                if let Some(t) = self.defined.iter().find(|a| a.get_name() == token) {
+                    if let VarType::Variable(Some(t), _) = t {
+                        if let Type::Array(_, l) = t {
+                            if let Node::Number(n) = &**index {
+                                let n = if let TokenType::Number(n) = n.token_type {
+                                    n
+                                } else {
+                                    unreachable!();
+                                };
+                                if n as usize >= *l {
+                                    self.error = Some(Error::new(
+                                        ErrorType::IndexOutOfBounds,
+                                        token.position.clone(),
+                                        format!(
+                                            "Length of the array is {}, but the index is {}",
+                                            l, n
+                                        ),
+                                    ));
+                                }
+                            }
+                        } else {
+                            self.error = Some(Error::new(
+                                ErrorType::SyntaxError,
+                                token.position.clone(),
+                                format!("Variable {} is not an array", token),
+                            ));
+                        }
+                    } else {
+                        unreachable!();
+                    }
+                } else {
+                    if self.parent.is_some() {
+                        let parent = self.parent.as_mut().unwrap();
+                        parent.access_variable(node);
                         if parent.error.is_none() {
                             return;
                         }
@@ -94,76 +143,70 @@ impl Scope {
         }
     }
 
-    pub fn access_function(&mut self, node: Node) {
+    pub fn access_function(&mut self, node: &Node) {
         if self.func_error.is_some() {
             return;
         }
         let mut found = false;
         match &node {
-            Node::Call(call_node, args1, _) => match &**call_node {
-                Node::VarAccess(token1) => {
-                    for function in &self.defined {
-                        match function {
-                            VarType::Function(args2, _, token2) => {
-                                if token1 == token2 {
-                                    if args1.len() != args2.len() {
-                                        self.func_error = Some(Error::new(
-                                            ErrorType::UndefinedFunction,
-                                            token1.position.clone(),
-                                            format!(
-                                                "Function {} takes {} arguments, but {} given",
-                                                token1,
-                                                args2.len(),
-                                                args1.len()
-                                            ),
-                                        ));
-                                        return;
-                                    }
-                                    found = true;
-                                    break;
-                                }
-                            }
-                            VarType::Variable(_, token2) => {
-                                if token1 == token2 {
-                                    self.error = Some(Error::new(
+            Node::Call(token1, args1, _) => {
+                for function in &self.defined {
+                    match function {
+                        VarType::Function(args2, _, token2) => {
+                            if token1 == token2 {
+                                if args1.len() != args2.len() {
+                                    self.func_error = Some(Error::new(
                                         ErrorType::UndefinedFunction,
                                         token1.position.clone(),
                                         format!(
-                                            "Can only call a function, not a variable {}",
-                                            token2
+                                            "Function {} takes {} arguments, but {} given",
+                                            token1,
+                                            args2.len(),
+                                            args1.len()
                                         ),
                                     ));
                                     return;
                                 }
+                                found = true;
+                                break;
+                            }
+                        }
+                        VarType::Variable(_, token2) => {
+                            if token1 == token2 {
+                                self.error = Some(Error::new(
+                                    ErrorType::UndefinedFunction,
+                                    token1.position.clone(),
+                                    format!("Can only call a function, not a variable {}", token2),
+                                ));
+                                return;
                             }
                         }
                     }
                 }
-                _ => unreachable!(),
-            },
+            }
             _ => unreachable!(),
         }
         if !found {
             if self.parent.is_some() {
                 let parent = self.parent.as_mut().unwrap();
                 let old = parent.unresolved_functions.len();
-                parent.access_function(node.clone());
+                parent.access_function(node);
                 self.func_error = parent.func_error.clone();
                 if parent.unresolved_functions.len() <= old {
-                    return self.unresolved_functions.retain(|n| n != &node);
+                    return self.unresolved_functions.retain(|n| n != node);
                 }
             }
-            if !self.unresolved_functions.contains(&node) {
-                self.unresolved_functions.push(node)
+            if !self.unresolved_functions.contains(node) {
+                self.unresolved_functions.push(node.clone())
             }
-        } else if self.unresolved_functions.contains(&node) {
-            self.unresolved_functions.retain(|n| n != &node);
+        } else if self.unresolved_functions.contains(node) {
+            self.unresolved_functions.retain(|n| n != node);
         }
     }
 
     pub fn refresh(&mut self) {
         for node in self.unresolved_functions.clone() {
-            self.access_function(node);
+            self.access_function(&node);
         }
     }
 }
