@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::utils::{Instruction, Instructions, Val};
+use super::utils::{Instruction, Instructions, Val, ValNumber};
 
 /// Evaluates constant time operations during compile time
 pub fn evaluate(code: &Instructions) -> Instructions {
@@ -22,10 +22,18 @@ pub fn evaluate(code: &Instructions) -> Instructions {
             }
             Instruction::Div(left, right) => {
                 super::check!(BINARY left, right, new, vars, assign, instruction);
+                if right == 0 {
+                    new.push(Instruction::Div(Val::Num(left), Val::Num(right)), *assign);
+                    continue;
+                }
                 Val::Num(left / right)
             }
             Instruction::Mod(left, right) => {
                 super::check!(BINARY left, right, new, vars, assign, instruction);
+                if right == 0 {
+                    new.push(Instruction::Mod(Val::Num(left), Val::Num(right)), *assign);
+                    continue;
+                }
                 Val::Num(left % right)
             }
             Instruction::Neg(val) => {
@@ -46,7 +54,7 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                 let left_str = val.to_string();
                 let left_vec = left_str.chars().collect::<Vec<char>>();
                 for left in left_vec {
-                    new.push(Instruction::Ascii(Val::Num(left as u32 as i32)), *assign);
+                    new.push(Instruction::Ascii(Val::Num(left as ValNumber)), *assign);
                 }
                 new.push(Instruction::Ascii(Val::Num(10)), *assign);
                 continue;
@@ -199,7 +207,7 @@ pub fn evaluate(code: &Instructions) -> Instructions {
             }
             Instruction::Ref(_) => todo!(),
             Instruction::Deref(_) => todo!(),
-            Instruction::Index(_, _) => todo!(),
+            _ => todo!(),
         };
         vars.insert(assign.unwrap(), evaluated);
     }

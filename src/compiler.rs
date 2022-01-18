@@ -304,7 +304,7 @@ pub fn transpile(code: &Instructions) -> String {
             }
             Instruction::Ref(_) => todo!(),
             Instruction::Deref(_) => todo!(),
-            Instruction::Index(_, _) => todo!(),
+            _ => todo!(),
         }
     }
     bf_code
@@ -349,6 +349,7 @@ macro_rules! goto_add {
             }
             Val::None => {}
             Val::Array(_, _) => todo!(),
+            Val::Function(_, _, _) => todo!(),
         }
     };
     ($val: expr, $bf_code: expr, $current: expr, $block:block, $block2: block) => {
@@ -379,6 +380,7 @@ macro_rules! goto_add {
             }
             Val::None => {}
             Val::Array(_, _) => todo!(),
+            Val::Function(_, _, _) => todo!(),
         }
     };
 }

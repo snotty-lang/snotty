@@ -225,7 +225,28 @@ pub fn optimize(code: &Instructions) -> Instructions {
                 }
                 Instruction::Ref(a) => super::check!(2 a, optimized, vars, assign, instruction),
                 Instruction::Deref(a) => super::check!(2 a, optimized, vars, assign, instruction),
-                Instruction::Index(_, _) => todo!(),
+                Instruction::If(cond) => {
+                    super::check!(2 cond, optimized, vars, assign, instruction)
+                }
+                Instruction::Else | Instruction::EndIf => {
+                    optimized.push(instruction.clone(), *assign);
+                    continue;
+                }
+                Instruction::Call(f, args) => {
+                    let mut new = vec![];
+                    for arg in args {
+                        if let Val::Index(index, _) = arg {
+                            match vars.get(index) {
+                                Some(Val::Index(..)) | None => unreachable!(),
+                                Some(a) => {
+                                    new.push(a.clone());
+                                }
+                            }
+                        }
+                    }
+                    optimized.push(Instruction::Call(*f, new), *assign);
+                    continue;
+                }
             },
         };
 

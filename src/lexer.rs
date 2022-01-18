@@ -425,6 +425,10 @@ pub fn lex(input: &str, filename: &'static str) -> LexResult {
         ));
     }
 
+    if let Some(s) = last.checked_sub(last_line) {
+        last = s;
+    }
+
     tokens.push(Token::new(TokenType::Eof, line, last, last, filename));
     Ok(tokens)
 }

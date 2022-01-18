@@ -4,6 +4,10 @@ use std::fmt;
 /// An enum to specify the type of the instruction.
 #[derive(Debug, Clone)]
 pub enum Instruction {
+    If(Val),
+    Call(usize, Vec<Val>),
+    Else,
+    EndIf,
     TernaryIf(Val, Val, Val),
     Copy(Val),
     Ref(Val),
@@ -35,7 +39,6 @@ pub enum Instruction {
     BOr(Val, Val),
     BXor(Val, Val),
     BNot(Val),
-    Index(Val, Val),
 }
 
 impl Instruction {
@@ -84,7 +87,7 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Index(a, b) => write!(f, "{:?}[{:?}]", a, b),
+            Self::Call(a, b) => write!(f, "call {:?} : {:?}", a, b),
             Self::LXor(left, right) => write!(f, "{:?} !&| {:?}", left, right),
             Self::TernaryIf(a, b, c) => write!(f, "if {:?} then {:?} else {:?}", a, b, c),
             Self::Copy(val) => write!(f, "{:?}", val),
@@ -113,8 +116,11 @@ impl fmt::Display for Instruction {
             Self::LNot(val) => write!(f, "!{:?}", val),
             Self::Inc(val) => write!(f, "++{:?}", val),
             Self::Dec(val) => write!(f, "--{:?}", val),
-            Instruction::Ref(val) => write!(f, "&{:?}", val),
-            Instruction::Deref(val) => write!(f, "*{:?}", val),
+            Self::Ref(val) => write!(f, "&{:?}", val),
+            Self::Deref(val) => write!(f, "*{:?}", val),
+            Self::If(cond) => write!(f, "IF {:?}", cond),
+            Self::Else => write!(f, "ELSE"),
+            Self::EndIf => write!(f, "ENDIF"),
         }
     }
 }
@@ -136,22 +142,25 @@ pub enum Val {
     Char(u8),
     /// Array
     Array(Vec<Val>, ValType),
+    /// Function
+    Function(usize, Vec<Val>, ValType),
 }
 
 impl Val {
     /// # Panics
     /// Panics if the variant is not `Self::Num or Self::Bool` or `Self::Char`.
-    pub fn get_int(&self) -> i32 {
+    pub fn get_int(&self) -> ValNumber {
         match self {
             Val::Num(num) => *num,
-            Val::Bool(b) => *b as i32,
-            Val::Char(c) => *c as i32,
+            Val::Bool(b) => *b as ValNumber,
+            Val::Char(c) => *c as ValNumber,
             _ => unreachable!(),
         }
     }
 
     pub fn r#type(&self) -> ValType {
         match self {
+            Val::Function(_, _, ty) => ty.clone(),
             Val::Array(v, t) => ValType::Array(v.len(), Box::new(t.clone())),
             Val::Char(_) => ValType::Char,
             Val::Num(_) => ValType::Number,
@@ -174,6 +183,7 @@ impl Val {
 
     pub fn is_constant(&self) -> bool {
         match self {
+            Val::Function(_, _, _) => true,
             Val::Array(v, _) => v.iter().any(|v| v.is_constant()) || v.is_empty(),
             Val::Char(_) => true,
             Val::Num(_) => true,
@@ -182,6 +192,10 @@ impl Val {
             Val::Pointer(_, _) => false,
             Val::None => true,
         }
+    }
+
+    pub fn get_size(&self) -> usize {
+        self.r#type().get_size()
     }
 }
 
@@ -276,6 +290,17 @@ impl ValType {
             Type::Array(t, l) => Self::Array(*l, Box::new(Self::from_parse_type(t))),
         }
     }
+
+    pub fn get_size(&self) -> usize {
+        match self {
+            Self::None => 0,
+            Self::Number => std::mem::size_of::<ValNumber>(),
+            Self::Char => 1,
+            Self::Boolean => 1,
+            Self::Pointer(t) => t.get_size(),
+            Self::Array(l, t) => l * t.get_size(),
+        }
+    }
 }
 
 impl fmt::Display for ValType {
@@ -294,6 +319,16 @@ impl fmt::Display for ValType {
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Val::Function(name, args, ret) => write!(
+                f,
+                "func {} : {} -> {}",
+                name,
+                args.iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                ret
+            ),
             Val::Array(v, _) => write!(
                 f,
                 "[{}]",
@@ -315,6 +350,16 @@ impl fmt::Display for Val {
 impl fmt::Debug for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Val::Function(name, args, ret) => write!(
+                f,
+                "func {} : {} -> {}",
+                name,
+                args.iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                ret
+            ),
             Val::Array(v, t) => write!(
                 f,
                 "[{}]({})",

@@ -1,5 +1,5 @@
-let x = 5
-let y = [10, 67]
-let z = y[x]
-ezout z
-ezout y
+let x = 9
+let y = [5, 7, 9, 5]
+//let z = x + y
+let y = x
+ezout x

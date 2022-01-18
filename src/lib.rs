@@ -66,9 +66,9 @@ pub fn run(contents: &str, filename: &'static str) -> Result<String, Error> {
     // println!("{:#?}", ast);
     let code = ir_code::generate_code(ast)?;
     println!("{}", code);
-    let code = evaluate::evaluate(&code);
+    // let code = evaluate::evaluate(&code);
     // println!("{}", code);
-    let code = ir_optimizer::optimize(&code);
+    // let code = ir_optimizer::optimize(&code);
     println!("{}", code);
     Ok(compiler::transpile(&code))
 }
