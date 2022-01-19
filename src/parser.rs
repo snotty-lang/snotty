@@ -1,6 +1,6 @@
-use crate::utils::{Position, Type};
-
-use super::utils::{Error, ErrorType, Node, Scope, Token, TokenType, ASSIGNMENT_OPERATORS};
+use crate::utils::{
+    Error, ErrorType, Node, Position, Scope, Token, TokenType, Type, ASSIGNMENT_OPERATORS,
+};
 
 /// A result type for parsing
 type ParseResult = Result<Node, Error>;
@@ -58,17 +58,22 @@ impl Parser {
         let idx = self.token_index;
         match self.current_token.token_type {
             TokenType::Keyword(ref keyword) => match keyword.as_ref() {
-                // break, continue
-                "ezreturn" => {
-                    let token = self.current_token.clone();
+                "while" => {
+                    let mut pos = self.current_token.position.clone();
+                    self.advance();
+                    let condition = self.expression(scope)?;
+                    let body = self.statement(scope)?;
+                    pos.end = body.position().end;
+                    pos.line_end = body.position().line_end;
+                    Ok(Node::While(Box::new(condition), Box::new(body), pos))
+                }
+                "return" => {
+                    let pos = self.current_token.position.clone();
                     self.advance();
                     if self.current_token.token_type == TokenType::Eol {
-                        Ok(Node::Return(None, token.position))
+                        Ok(Node::Return(None, pos))
                     } else {
-                        Ok(Node::Return(
-                            Some(Box::new(self.expression(scope)?)),
-                            token.position,
-                        ))
+                        Ok(Node::Return(Some(Box::new(self.expression(scope)?)), pos))
                     }
                 }
                 "let" => {
@@ -309,19 +314,15 @@ impl Parser {
     fn make_type(&mut self) -> Result<Type, Error> {
         match self.current_token.token_type {
             TokenType::Keyword(ref keyword) => match keyword.as_ref() {
-                "eznumber" => {
+                "number" => {
                     self.advance();
                     Ok(Type::Number)
                 }
-                "ezbool" => {
+                "bool" => {
                     self.advance();
                     Ok(Type::Boolean)
                 }
-                "ezblank" => {
-                    self.advance();
-                    Ok(Type::None)
-                }
-                "ezchar" => {
+                "char" => {
                     self.advance();
                     Ok(Type::Char)
                 }
@@ -359,13 +360,12 @@ impl Parser {
                     }
                 }
                 self.advance();
-                let ret = if self.current_token.token_type == TokenType::Arrow {
+                if self.current_token.token_type == TokenType::Arrow {
                     self.advance();
-                    self.make_type()?
+                    Ok(Type::Function(types, Box::new(self.make_type()?)))
                 } else {
-                    Type::None
-                };
-                Ok(Type::Function(types, Box::new(ret)))
+                    Ok(Type::None)
+                }
             }
             TokenType::LSquare => {
                 self.advance();
@@ -595,10 +595,6 @@ impl Parser {
                     self.advance();
                     Ok(Node::Boolean(token))
                 }
-                "ezblank" => {
-                    self.advance();
-                    Ok(Node::None(token.position))
-                }
                 _ => Err(Error::new(
                     ErrorType::SyntaxError,
                     self.current_token.position.clone(),
@@ -666,7 +662,7 @@ impl Parser {
                     pos.end = self.current_token.position.end;
                     pos.line_end = self.current_token.position.line_end;
                     self.advance();
-                    return Ok(Node::Tuple(pos));
+                    return Ok(Node::None(pos));
                 }
                 let node = self.expression(scope)?;
                 if self.current_token.token_type != TokenType::RParen {
@@ -1058,6 +1054,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
         match node {
             Node::BinaryOp(_, n1, n2)
             | Node::IndexAssign(_, n1, n2)
+            | Node::While(n1, n2, _)
             | Node::DerefAssign(n1, n2, _) => {
                 let n1 = check_return(n1);
                 if n1.is_some() {
@@ -1141,7 +1138,6 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
             Node::Input(_) => None,
             Node::None(_) => None,
             Node::Char(_, _) => None,
-            Node::Tuple(_) => None,
             Node::Array(_, _) => None,
             // _ => None,
         }

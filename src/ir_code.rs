@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
-use super::utils::{
+use crate::utils::{
     Error, ErrorType, Instruction, Instructions, Memory, Node, TokenType, Val, ValNumber, ValType,
+    POINTER_SIZE,
 };
 
 /// Generates the Intermediate 3-address code from the AST
@@ -42,18 +43,6 @@ impl CodeGenerator {
                 let right = self.make_instruction(right, vars, memory)?;
                 let left_type = left.r#type();
                 let right_type = right.r#type();
-                if left_type != right.r#type() {
-                    return Err(Error::new(
-                        ErrorType::TypeError,
-                        op.position.clone(),
-                        format!(
-                            "Cannot {} `{}` to `{}`",
-                            op.token_type.get_operation_name(),
-                            right_type,
-                            left_type
-                        ),
-                    ));
-                }
                 let t = match left_type.get_result_type(&right_type, op) {
                     Some(result_type) => result_type,
                     None => {
@@ -69,7 +58,7 @@ impl CodeGenerator {
                         ))
                     }
                 };
-                let mem = memory.allocate(t.get_size());
+                let mut mem = memory.allocate(t.get_size());
                 match op.token_type {
                     TokenType::Ge => {
                         self.instructions
@@ -79,6 +68,7 @@ impl CodeGenerator {
                             Instruction::LNot(Val::Index(mem, ValType::Boolean)),
                             Some(new_mem),
                         );
+                        mem = new_mem;
                     }
                     TokenType::Gt => {
                         self.instructions
@@ -88,6 +78,7 @@ impl CodeGenerator {
                             Instruction::LNot(Val::Index(mem, ValType::Boolean)),
                             Some(new_mem),
                         );
+                        mem = new_mem;
                     }
                     _ => {
                         self.instructions
@@ -100,21 +91,24 @@ impl CodeGenerator {
             Node::UnaryOp(op, expr) => {
                 let expr = self.make_instruction(expr, vars, memory)?;
                 let expr_type = expr.r#type();
-                let mem = memory.allocate(1);
+                let t = match expr_type.get_result_type_unary(op) {
+                    Some(result_type) => result_type,
+                    None => {
+                        return Err(Error::new(
+                            ErrorType::TypeError,
+                            op.position.clone(),
+                            format!(
+                                "Cannot apply `{}` to `{}`",
+                                op.token_type.get_operation_name(),
+                                expr_type,
+                            ),
+                        ))
+                    }
+                };
+                let mem = memory.allocate(t.get_size());
                 self.instructions
                     .push(Instruction::from_token_unary(op)(expr), Some(mem));
-                match expr_type.get_result_type_unary(op) {
-                    Some(result_type) => Ok(Val::Index(mem, result_type)),
-                    None => Err(Error::new(
-                        ErrorType::TypeError,
-                        op.position.clone(),
-                        format!(
-                            "Cannot apply `{}` to `{}`",
-                            op.token_type.get_operation_name(),
-                            expr_type,
-                        ),
-                    )),
-                }
+                Ok(Val::Index(mem, t))
             }
 
             Node::VarAssign(var1, expr, dec_type) => {
@@ -177,10 +171,10 @@ impl CodeGenerator {
             }
 
             Node::VarReassign(var1, expr) => {
-                if let TokenType::Identifier(ref var) = var1.token_type {
+                if let TokenType::Identifier(ref var2) = var1.token_type {
                     match self.make_instruction(expr, vars, memory)? {
                         Val::Index(index, type_) => {
-                            let var = vars.get_mut(var).unwrap();
+                            let var = vars.get_mut(var2).unwrap();
                             if var.r#type() != type_ {
                                 return Err(Error::new(
                                     ErrorType::TypeError,
@@ -193,32 +187,36 @@ impl CodeGenerator {
                                     ),
                                 ));
                             }
-                            let mem = memory.allocate(1);
-                            *var = Val::Index(mem, var.r#type());
-                            self.instructions
-                                .push(Instruction::Copy(Val::Index(index, type_)), Some(mem));
+                            if let Val::Index(mem, _) = var {
+                                self.instructions.push(
+                                    Instruction::Copy(Val::Index(index, type_)),
+                                    Some(*mem),
+                                );
+                            } else {
+                                unreachable!();
+                            }
                             Ok(Val::None)
                         }
                         val => {
-                            let var2 = vars.get_mut(var).unwrap();
+                            let var = vars.get_mut(var2).unwrap();
                             let val_type = val.r#type();
-                            if var2.r#type() != val_type {
+                            if var.r#type() != val_type {
                                 return Err(Error::new(
                                     ErrorType::TypeError,
                                     var1.position.clone(),
                                     format!(
                                         "Variable {} is of type {:?} but is being assigned to type {:?}",
-                                        var1,
-                                        var2.r#type(),
+                                        val_type,
+                                        var.r#type(),
                                         val_type
                                     ),
                                 ));
                             }
-                            *var2 = val.clone();
-                            let mem = memory.allocate(1);
-                            let v = val.r#type();
-                            self.instructions.push(Instruction::Copy(val), Some(mem));
-                            vars.insert(var.clone(), Val::Index(mem, v));
+                            if let Val::Index(mem, _) = var {
+                                self.instructions.push(Instruction::Copy(val), Some(*mem));
+                            } else {
+                                unreachable!();
+                            }
                             Ok(Val::None)
                         }
                     }
@@ -228,8 +226,9 @@ impl CodeGenerator {
             }
 
             Node::Statements(statements, _) => {
+                let mut new = memory.clone();
                 for statement in statements {
-                    self.make_instruction(statement, vars, memory)?;
+                    self.make_instruction(statement, vars, &mut new)?;
                 }
                 Ok(Val::None)
             }
@@ -255,69 +254,57 @@ impl CodeGenerator {
             }
 
             Node::Input(_) => {
-                let mem = memory.allocate(1);
+                let t = ValType::Number;
+                let mem = memory.allocate(t.get_size());
                 self.instructions.push(Instruction::Input, Some(mem));
-                Ok(Val::Index(mem, ValType::Number))
+                Ok(Val::Index(mem, t))
             }
 
             Node::If(cond1, then1, else1, _) => {
-                // let cond = self.make_instruction(cond1, vars, memory)?;
-                // if cond.r#type() != ValType::Boolean {
-                //     return Err(Error::new(
-                //         ErrorType::TypeError,
-                //         cond1.position(),
-                //         format!(
-                //             "Condition in an if statement can only be of type Boolean, and not of type {:?}",
-                //             cond.r#type()
-                //         ),
-                //     ));
-                // }
+                let cond = self.make_instruction(cond1, vars, memory)?;
+                if cond.r#type() != ValType::Boolean {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        cond1.position(),
+                        format!(
+                            "Condition in an if statement can only be of type Boolean, and not of type {:?}",
+                            cond.r#type()
+                        ),
+                    ));
+                }
 
-                // self.instructions.push(Instruction::If(cond), None);
+                self.instructions.push(Instruction::If(cond), None);
+                let then = self.make_instruction(then1, vars, memory)?;
+                if then.r#type() != ValType::None {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        then1.position(),
+                        format!(
+                            "If statement can only return None, and not type {:?}",
+                            then.r#type()
+                        ),
+                    ));
+                }
 
-                // let mut idx = *memory;
-                // let mut v = vars.clone();
-                // let then = self.make_instruction(then1, &mut v, &mut idx)?;
-                // if then.r#type() != ValType::None {
-                //     return Err(Error::new(
-                //         ErrorType::TypeError,
-                //         then1.position(),
-                //         format!(
-                //             "If statement can only return None, and not type {:?}",
-                //             then.r#type()
-                //         ),
-                //     ));
-                // }
+                match else1 {
+                    Some(else_) => {
+                        self.instructions.push(Instruction::Else, None);
+                        let e = self.make_instruction(else_, vars, memory)?;
+                        if e.r#type() != ValType::None {
+                            return Err(Error::new(
+                                ErrorType::TypeError,
+                                then1.position(),
+                                format!(
+                                    "If statement can only return None, and not type {:?}",
+                                    then.r#type()
+                                ),
+                            ));
+                        }
+                    }
+                    None => {}
+                };
 
-                // match else1 {
-                //     Some(else_) => {
-                //         self.instructions.push(Instruction::Else, None);
-                //         let mut idx2 = *memory;
-                //         let mut v2 = vars.clone();
-                //         let e = self.make_instruction(else_, &mut v2, &mut idx2)?;
-                //         if e.r#type() != ValType::None {
-                //             return Err(Error::new(
-                //                 ErrorType::TypeError,
-                //                 then1.position(),
-                //                 format!(
-                //                     "If statement can only return None, and not type {:?}",
-                //                     then.r#type()
-                //                 ),
-                //             ));
-                //         }
-                //         v.extend(v2);
-                //         *vars = v;
-                //         // if idx2 > idx {
-                //         //     idx = idx2;
-                //         // }
-                //     }
-                //     None => {
-                //     }
-                // };
-
-                // *memory = idx;
-
-                // self.instructions.push(Instruction::EndIf, None);
+                self.instructions.push(Instruction::EndIf, None);
                 Ok(Val::None)
             }
 
@@ -431,7 +418,15 @@ impl CodeGenerator {
                 Ok(Val::Array(new, type_.unwrap_or(ValType::None)))
             }
 
-            Node::Return(_, _) => todo!(),
+            Node::Return(val, _) => {
+                let val = if let Some(val) = val {
+                    self.make_instruction(val, vars, memory)?
+                } else {
+                    Val::None
+                };
+                self.instructions.push(Instruction::Return(val), None);
+                Ok(Val::None)
+            }
 
             Node::Ref(val1, _) => {
                 let val = self.make_instruction(val1, vars, memory)?;
@@ -443,7 +438,7 @@ impl CodeGenerator {
                     ));
                 }
                 let t = val.r#type();
-                let mem = memory.allocate(1);
+                let mem = memory.allocate(POINTER_SIZE);
                 self.instructions.push(Instruction::Ref(val), Some(mem));
                 Ok(Val::Index(mem, ValType::Pointer(Box::new(t))))
             }
@@ -451,7 +446,7 @@ impl CodeGenerator {
             Node::Deref(val1, _) => {
                 let val = self.make_instruction(val1, vars, memory)?;
                 if let ValType::Pointer(t) = val.r#type() {
-                    let mem = memory.allocate(1);
+                    let mem = memory.allocate(t.get_size());
                     self.instructions.push(Instruction::Deref(val), Some(mem));
                     Ok(Val::Index(mem, *t))
                 } else {
@@ -463,8 +458,6 @@ impl CodeGenerator {
                 }
             }
 
-            Node::Tuple(_) => todo!(),
-
             Node::Char(c, _) => {
                 if let TokenType::Char(c) = c.token_type {
                     Ok(Val::Char(c))
@@ -475,6 +468,35 @@ impl CodeGenerator {
 
             Node::Lambda(_, _, _, _) => todo!(),
             Node::DerefAssign(_, _, _) => todo!(),
+
+            Node::While(cond1, body1, _) => {
+                let cond = self.make_instruction(cond1, vars, memory)?;
+                if cond.r#type() != ValType::Boolean {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        cond1.position(),
+                        format!(
+                            "Condition in an if statement can only be of type Boolean, and not of type {:?}",
+                            cond.r#type()
+                        ),
+                    ));
+                }
+
+                self.instructions.push(Instruction::While(cond), None);
+                let body = self.make_instruction(body1, vars, memory)?;
+                if body.r#type() != ValType::None {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        body1.position(),
+                        format!(
+                            "Body of a while loop can only be of type None, and not of type {:?}",
+                            body.r#type()
+                        ),
+                    ));
+                }
+                self.instructions.push(Instruction::EndWhile, None);
+                Ok(Val::None)
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
-use super::{Error, ErrorType, Node, Token, TokenType, Type};
+use crate::utils::{Error, ErrorType, Node, Token, TokenType, Type};
 use std::fmt;
 
 #[derive(Debug, Clone)]

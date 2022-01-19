@@ -1,4 +1,4 @@
-use super::utils::{Error, ErrorType, Position, Token, TokenType, KEYWORDS};
+use crate::utils::{Error, ErrorType, Position, Token, TokenType, KEYWORDS};
 
 /// A Result type for Lexing
 type LexResult = Result<Vec<Token>, Error>;

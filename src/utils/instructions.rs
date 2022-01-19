@@ -1,10 +1,16 @@
-use super::{Token, TokenType, Type, ValNumber, BOOLEAN_EXCLUSIVE, BOOLEAN_OPERATORS};
+use crate::utils::{
+    Token, TokenType, Type, ValNumber, BOOLEAN_EXCLUSIVE, BOOLEAN_OPERATORS, NONE_SIZE,
+    POINTER_SIZE,
+};
 use std::fmt;
 
 /// An enum to specify the type of the instruction.
 #[derive(Debug, Clone)]
 pub enum Instruction {
     If(Val),
+    While(Val),
+    EndWhile,
+    Return(Val),
     Call(usize, Vec<Val>),
     Else,
     EndIf,
@@ -87,6 +93,9 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::While(cond) => write!(f, "WHILE {}", cond),
+            Self::EndWhile => write!(f, "END WHILE"),
+            Self::Return(v) => write!(f, "return {}", v),
             Self::Call(a, b) => write!(f, "call {:?} : {:?}", a, b),
             Self::LXor(left, right) => write!(f, "{:?} !&| {:?}", left, right),
             Self::TernaryIf(a, b, c) => write!(f, "if {:?} then {:?} else {:?}", a, b, c),
@@ -211,7 +220,7 @@ pub enum ValType {
 
 impl ValType {
     pub fn is_ptr(&self) -> bool {
-        matches!(self, ValType::Pointer(_))
+        matches!(self, ValType::Pointer(_) | ValType::Array(_, _))
     }
 
     pub fn get_result_type(&self, rhs: &ValType, op: &Token) -> Option<Self> {
@@ -225,7 +234,7 @@ impl ValType {
                     Some(Self::Number)
                 }
             }
-            (Self::Pointer(t), Self::Number) => {
+            (Self::Pointer(t) | Self::Array(_, t), Self::Number) => {
                 if [TokenType::Add, TokenType::Sub].contains(&op.token_type) {
                     Some(Self::Pointer(t.clone()))
                 } else {
@@ -293,11 +302,11 @@ impl ValType {
 
     pub fn get_size(&self) -> usize {
         match self {
-            Self::None => 0,
+            Self::None => NONE_SIZE,
             Self::Number => std::mem::size_of::<ValNumber>(),
             Self::Char => 1,
             Self::Boolean => 1,
-            Self::Pointer(t) => t.get_size(),
+            Self::Pointer(_) => POINTER_SIZE,
             Self::Array(l, t) => l * t.get_size(),
         }
     }
@@ -307,9 +316,9 @@ impl fmt::Display for ValType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Array(l, t) => write!(f, "[{}; {}]", t, l),
-            Self::Char => write!(f, "ezchar"),
+            Self::Char => write!(f, "char"),
             Self::Pointer(t) => write!(f, "&{}", **t),
-            Self::None => write!(f, "ezblank"),
+            Self::None => write!(f, "()"),
             Self::Number => write!(f, "integer"),
             Self::Boolean => write!(f, "bool"),
         }
@@ -339,7 +348,7 @@ impl fmt::Display for Val {
             ),
             Val::Char(c) => write!(f, "{}", *c as char),
             Val::Pointer(mem, _) => write!(f, "*{}", mem),
-            Val::None => write!(f, "ezblank"),
+            Val::None => write!(f, "()"),
             Val::Bool(b) => write!(f, "{}", b),
             Val::Num(num) => write!(f, "{}", num),
             Val::Index(index, _) => write!(f, "[{}]", index),
@@ -360,21 +369,20 @@ impl fmt::Debug for Val {
                     .join(", "),
                 ret
             ),
-            Val::Array(v, t) => write!(
+            Val::Array(v, _) => write!(
                 f,
-                "[{}]({})",
+                "[{}]",
                 v.iter()
                     .map(|v| v.to_string())
                     .collect::<Vec<_>>()
-                    .join(", "),
-                t
+                    .join(", ")
             ),
             Val::Char(c) => write!(f, "'{}'", *c as char),
-            Val::Pointer(mem, t) => write!(f, "*{}({})", mem, t),
-            Val::None => write!(f, "ezblank"),
+            Val::Pointer(mem, _) => write!(f, "*{}", mem),
+            Val::None => write!(f, "()"),
             Val::Bool(b) => write!(f, "{}", b),
             Val::Num(num) => write!(f, "{}", num),
-            Val::Index(index, t) => write!(f, "[{}]({})", index, t),
+            Val::Index(index, _) => write!(f, "[{}]", index),
         }
     }
 }

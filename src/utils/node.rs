@@ -1,4 +1,4 @@
-use super::{Position, Token};
+use crate::utils::{Position, Token};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
@@ -14,6 +14,8 @@ pub enum Type {
 /// A Node in the AST.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
+    /// Condition, Body
+    While(Box<Node>, Box<Node>, Position),
     /// Number
     Number(Token),
     /// Boolean
@@ -56,8 +58,6 @@ pub enum Node {
     Lambda(Vec<(Token, Type)>, Box<Node>, Type, Position),
     /// Char
     Char(Token, Position),
-    /// -
-    Tuple(Position),
     /// Elements
     Array(Vec<Node>, Position),
     /// Array, index
@@ -76,6 +76,7 @@ impl Node {
             }
             Node::Ref(.., pos)
             | Node::Deref(.., pos)
+            | Node::While(.., pos)
             | Node::Statements(.., pos)
             | Node::Lambda(.., pos)
             | Node::Call(.., pos)
@@ -84,8 +85,6 @@ impl Node {
             | Node::Ascii(.., pos)
             | Node::If(.., pos)
             | Node::Ternary(.., pos)
-            | Node::Return(.., pos)
-            | Node::Tuple(pos)
             | Node::None(pos)
             | Node::Char(.., pos)
             | Node::DerefAssign(.., pos)
@@ -107,6 +106,15 @@ impl Node {
                 let end_pos = expr.position();
                 pos.end = end_pos.end;
                 pos.line_end = end_pos.line_end;
+                pos
+            }
+            Node::Return(val, pos) => {
+                let mut pos = pos.clone();
+                if let Some(val) = val {
+                    let end_pos = val.position();
+                    pos.end = end_pos.end;
+                    pos.line_end = end_pos.line_end;
+                }
                 pos
             }
         }

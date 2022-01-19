@@ -247,6 +247,7 @@ pub fn optimize(code: &Instructions) -> Instructions {
                     optimized.push(Instruction::Call(*f, new), *assign);
                     continue;
                 }
+                _ => todo!(),
             },
         };
 

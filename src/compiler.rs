@@ -1,6 +1,6 @@
 #![allow(clippy::unnecessary_operation)]
 
-use super::utils::{Instruction, Instructions, Val};
+use crate::utils::{Instruction, Instructions, Val};
 
 /// Compiles the 3-address code into brainfuck code.
 pub fn transpile(code: &Instructions) -> String {

@@ -25,32 +25,7 @@ pub use node::*;
 pub use scope::*;
 pub use token::*;
 
-super::gen!(pub type ValNumber = i16);
-
-#[macro_export]
-macro_rules! gen {
-    (pub type ValNumber = i16) => {
-        pub type ValNumber = i16;
-        pub type LexNumber = u8;
-    };
-
-    (pub type ValNumber = i32) => {
-        pub type ValNumber = i32;
-        pub type LexNumber = u16;
-    };
-
-    (pub type ValNumber = i64) => {
-        pub type ValNumber = i64;
-        pub type LexNumber = u32;
-    };
-
-    (pub type ValNumber = i128) => {
-        pub type ValNumber = i128;
-        pub type LexNumber = u64;
-    };
-
-    (pub type ValNumber = i8) => {
-        pub type ValNumber = i8;
-        pub type LexNumber = u8;
-    };
-}
+pub type LexNumber = u8;
+pub type ValNumber = i16;
+pub const NONE_SIZE: usize = 0;
+pub const POINTER_SIZE: usize = 4;

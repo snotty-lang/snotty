@@ -1,23 +1,10 @@
-use super::{LexNumber, Position};
+use crate::utils::{LexNumber, Position};
 use std::{cmp, fmt};
 
 /// List of all the keywords identified by the lexer
 pub const KEYWORDS: [&str; 15] = [
-    "let",
-    "ez",
-    "ezreturn",
-    "ezout",
-    "ezin",
-    "ezascii",
-    "true",
-    "false",
-    "if",
-    "else",
-    "ezblank",
-    "ezbool",
-    "ezpointer",
-    "eznumber",
-    "ezchar",
+    "let", "ez", "return", "ezout", "ezin", "ezascii", "true", "false", "if", "else", "bool",
+    "pointer", "number", "char", "while",
 ];
 
 pub const BOOLEAN_OPERATORS: [TokenType; 6] = [
