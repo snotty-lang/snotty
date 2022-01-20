@@ -26,6 +26,6 @@ pub use scope::*;
 pub use token::*;
 
 pub type LexNumber = u8;
-pub type ValNumber = i16;
+pub type ValNumber = i8;
 pub const NONE_SIZE: usize = 0;
 pub const POINTER_SIZE: usize = 4;

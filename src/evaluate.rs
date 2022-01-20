@@ -49,7 +49,7 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                 new.push(instruction.clone(), *assign);
                 continue;
             }
-            Instruction::Print(val) | Instruction::PrintChar(val) => {
+            Instruction::Print(val) => {
                 super::check!(VAL val, new, vars, assign, instruction);
                 let left_str = val.to_string();
                 let left_vec = left_str.chars().collect::<Vec<char>>();
@@ -207,7 +207,7 @@ pub fn evaluate(code: &Instructions) -> Instructions {
             }
             _ => todo!(),
         };
-        vars.insert(assign.unwrap(), evaluated);
+        vars.insert(assign.unwrap().0, evaluated);
     }
     new
 }

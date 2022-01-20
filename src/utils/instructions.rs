@@ -7,13 +7,14 @@ use std::fmt;
 /// An enum to specify the type of the instruction.
 #[derive(Debug, Clone)]
 pub enum Instruction {
-    If(Val),
+    If(Val, usize, bool),
     While(Val),
-    EndWhile,
+    EndWhile(Val),
+    Clear(usize, usize),
     Return(Val),
     Call(usize, Vec<Val>),
-    Else,
-    EndIf,
+    Else(usize),
+    EndIf(usize),
     TernaryIf(Val, Val, Val),
     Copy(Val),
     Ref(Val),
@@ -27,7 +28,6 @@ pub enum Instruction {
     Mod(Val, Val),
     Neg(Val),
     Print(Val),
-    PrintChar(Val),
     Ascii(Val),
     Eq(Val, Val),
     Neq(Val, Val),
@@ -93,8 +93,9 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::Clear(from, to) => write!(f, "clear {} - {}", from, to - 1),
             Self::While(cond) => write!(f, "WHILE {}", cond),
-            Self::EndWhile => write!(f, "END WHILE"),
+            Self::EndWhile(cond) => write!(f, "END WHILE {}", cond),
             Self::Return(v) => write!(f, "return {}", v),
             Self::Call(a, b) => write!(f, "call {:?} : {:?}", a, b),
             Self::LXor(left, right) => write!(f, "{:?} !&| {:?}", left, right),
@@ -107,7 +108,7 @@ impl fmt::Display for Instruction {
             Self::Div(left, right) => write!(f, "{:?} / {:?}", left, right),
             Self::Mod(left, right) => write!(f, "{:?} % {:?}", left, right),
             Self::Neg(val) => write!(f, "-{:?}", val),
-            Self::Print(val) | Self::PrintChar(val) => write!(f, "print {:?}", val),
+            Self::Print(val) => write!(f, "print {:?}", val),
             Self::Ascii(val) => write!(f, "ascii {:?}", val),
             Self::Pow(base, exp) => write!(f, "{:?} ** {:?}", base, exp),
             Self::Shl(left, right) => write!(f, "{:?} << {:?}", left, right),
@@ -127,9 +128,9 @@ impl fmt::Display for Instruction {
             Self::Dec(val) => write!(f, "--{:?}", val),
             Self::Ref(val) => write!(f, "&{:?}", val),
             Self::Deref(val) => write!(f, "*{:?}", val),
-            Self::If(cond) => write!(f, "IF {:?}", cond),
-            Self::Else => write!(f, "ELSE"),
-            Self::EndIf => write!(f, "ENDIF"),
+            Self::If(cond, _, _) => write!(f, "IF {:?}", cond),
+            Self::Else(_) => write!(f, "ELSE"),
+            Self::EndIf(_) => write!(f, "ENDIF"),
         }
     }
 }
@@ -377,7 +378,7 @@ impl fmt::Debug for Val {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Val::Char(c) => write!(f, "'{}'", *c as char),
+            Val::Char(c) => write!(f, "{:?}", *c as char),
             Val::Pointer(mem, _) => write!(f, "*{}", mem),
             Val::None => write!(f, "()"),
             Val::Bool(b) => write!(f, "{}", b),
@@ -389,14 +390,14 @@ impl fmt::Debug for Val {
 
 /// A vector of instructions.
 #[derive(Debug)]
-pub struct Instructions(pub Vec<(Option<usize>, Instruction)>);
+pub struct Instructions(pub Vec<(Option<(usize, usize)>, Instruction)>);
 
 impl Instructions {
     pub fn new() -> Self {
         Self(Vec::new())
     }
 
-    pub fn push(&mut self, instruction: Instruction, assign: Option<usize>) {
+    pub fn push(&mut self, instruction: Instruction, assign: Option<(usize, usize)>) {
         self.0.push((assign, instruction));
     }
 }
@@ -411,7 +412,7 @@ impl fmt::Display for Instructions {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (assign, instruction) in &self.0 {
             match assign {
-                Some(assign) => writeln!(f, "[{}] = {}", assign, instruction),
+                Some(assign) => writeln!(f, "[{}] = {}", assign.0, instruction),
                 None => writeln!(f, "{}", instruction),
             }?;
         }

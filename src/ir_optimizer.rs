@@ -96,7 +96,7 @@ pub fn optimize(code: &Instructions) -> Instructions {
                 Instruction::Neg(a) => super::check!(2 a, optimized, vars, assign, instruction),
                 Instruction::Inc(a) => super::check!(2 a, optimized, vars, assign, instruction),
                 Instruction::Dec(a) => super::check!(2 a, optimized, vars, assign, instruction),
-                Instruction::Print(a) | Instruction::PrintChar(a) => {
+                Instruction::Print(a) => {
                     super::check!(2 a, optimized, vars, assign, instruction)
                 }
                 Instruction::Ascii(a) => {
@@ -225,13 +225,6 @@ pub fn optimize(code: &Instructions) -> Instructions {
                 }
                 Instruction::Ref(a) => super::check!(2 a, optimized, vars, assign, instruction),
                 Instruction::Deref(a) => super::check!(2 a, optimized, vars, assign, instruction),
-                Instruction::If(cond) => {
-                    super::check!(2 cond, optimized, vars, assign, instruction)
-                }
-                Instruction::Else | Instruction::EndIf => {
-                    optimized.push(instruction.clone(), *assign);
-                    continue;
-                }
                 Instruction::Call(f, args) => {
                     let mut new = vec![];
                     for arg in args {
@@ -251,7 +244,7 @@ pub fn optimize(code: &Instructions) -> Instructions {
             },
         };
 
-        vars.insert(assign.unwrap(), optimize);
+        vars.insert(assign.unwrap().0, optimize);
     }
     optimized
 }

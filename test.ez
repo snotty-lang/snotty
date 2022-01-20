@@ -1,1 +1,19 @@
-while 6 > 7 ezout 6
+/*
+let lim = ezin
+let y = 0
+let x = y != lim
+while x {
+    ++y
+    x = y != lim
+    //if y % 5 == 0
+        // if y % 3 == 0 ezascii 'f', 'i', 'z', 'z', 'b', 'u', 'z', 'z', 10
+        ezascii 'f', 'i', 'z', 'z', 10
+    // else if y % 3 == 0 ezascii 'b', 'u', 'z', 'z', 10 else 
+    ezout y
+}
+*/
+if 5 % 11 {
+    ezout lim
+} else {
+    ezout lim * 2
+}

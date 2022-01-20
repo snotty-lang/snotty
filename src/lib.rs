@@ -63,14 +63,13 @@ pub fn run(contents: &str, filename: &'static str) -> Result<String, Error> {
     let tokens = lexer::lex(contents, filename)?;
     // println!("{:?}", tokens.iter().map(|x| x.to_string()).collect::<Vec<String>>());
     let ast = parser::parse(tokens)?;
-    println!("{:#?}", ast);
+    // println!("{:#?}", ast);
     let code = ir_code::generate_code(ast)?;
-    println!("{}", code);
+    println!("{}", code.0);
     // let code = evaluate::evaluate(&code);
-    // println!("{}", code);
     // let code = ir_optimizer::optimize(&code);
-    println!("{}", code);
-    Ok(compiler::transpile(&code))
+    // println!("{}", code);
+    Ok(compiler::transpile(&code.0, code.1))
 }
 
 /// Reads and compiles the content of the passed file and returns it
