@@ -1,9 +1,3 @@
-let y = 0
-let x = true
-while x {
-    y += 1
-    if y == 10 {
-        x = false
-    }
-}
-ezout y
+let i = ezin
+let m = 3 % 3 == 0
+    ezout ? m 'f' : 'u'

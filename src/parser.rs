@@ -82,6 +82,23 @@ impl Parser {
                     scope.register_variable(node.clone());
                     Ok(node)
                 }
+                "for" => {
+                    let mut pos = self.current_token.position.clone();
+                    self.advance();
+                    let init = self.statement(scope)?;
+                    let condition = self.expression(scope)?;
+                    let step = self.statement(scope)?;
+                    let body = self.statement(scope)?;
+                    pos.end = body.position().end;
+                    pos.line_end = body.position().end;
+                    Ok(Node::For(
+                        Box::new(init),
+                        Box::new(condition),
+                        Box::new(step),
+                        Box::new(body),
+                        pos,
+                    ))
+                }
                 "if" => {
                     let mut pos = self.current_token.position.clone();
                     self.advance();
@@ -296,6 +313,10 @@ impl Parser {
                     scope.access_variable(&node);
                     Ok(node)
                 }
+            }
+            TokenType::Eol => {
+                self.advance();
+                self.statement(scope)
             }
             _ => self.expression(scope),
         }
@@ -1049,6 +1070,25 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
                 let n2 = check_return(n2);
                 if n2.is_some() {
                     return n2;
+                }
+                None
+            }
+            Node::For(n1, n2, n3, n4, _) => {
+                let n1 = check_return(n1);
+                if n1.is_some() {
+                    return n1;
+                }
+                let n2 = check_return(n2);
+                if n2.is_some() {
+                    return n2;
+                }
+                let n3 = check_return(n3);
+                if n3.is_some() {
+                    return n3;
+                }
+                let n4 = check_return(n4);
+                if n4.is_some() {
+                    return n4;
                 }
                 None
             }

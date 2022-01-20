@@ -62,29 +62,33 @@ impl CodeGenerator {
                 let mut mem = memory.allocate(size);
                 match op.token_type {
                     TokenType::Ge => {
-                        self.instructions
-                            .push(Instruction::Lt(left, right), Some((mem, size)));
+                        self.instructions.push(
+                            Instruction::Lt(left, right),
+                            Some((mem, size, memory.last_memory_index)),
+                        );
                         let new_mem = memory.allocate(size);
                         self.instructions.push(
                             Instruction::LNot(Val::Index(mem, ValType::Boolean)),
-                            Some((new_mem, size)),
+                            Some((new_mem, size, memory.last_memory_index)),
                         );
                         mem = new_mem;
                     }
                     TokenType::Gt => {
-                        self.instructions
-                            .push(Instruction::Le(left, right), Some((mem, size)));
+                        self.instructions.push(
+                            Instruction::Le(left, right),
+                            Some((mem, size, memory.last_memory_index)),
+                        );
                         let new_mem = memory.allocate(size);
                         self.instructions.push(
                             Instruction::LNot(Val::Index(mem, ValType::Boolean)),
-                            Some((new_mem, size)),
+                            Some((new_mem, size, memory.last_memory_index)),
                         );
                         mem = new_mem;
                     }
                     _ => {
                         self.instructions.push(
                             Instruction::from_token_binary(op)(left, right),
-                            Some((mem, size)),
+                            Some((mem, size, memory.last_memory_index)),
                         );
                     }
                 }
@@ -110,8 +114,10 @@ impl CodeGenerator {
                 };
                 let size = t.get_size();
                 let mem = memory.allocate(size);
-                self.instructions
-                    .push(Instruction::from_token_unary(op)(expr), Some((mem, size)));
+                self.instructions.push(
+                    Instruction::from_token_unary(op)(expr),
+                    Some((mem, size, memory.last_memory_index)),
+                );
                 Ok(Val::Index(mem, t))
             }
 
@@ -137,7 +143,7 @@ impl CodeGenerator {
                             vars.insert(var.clone(), Val::Index(mem, type_.clone()));
                             self.instructions.push(
                                 Instruction::Copy(Val::Index(index, type_.clone())),
-                                Some((mem, size)),
+                                Some((mem, size, memory.last_memory_index)),
                             );
                             Ok(Val::Index(mem, type_))
                         }
@@ -158,8 +164,10 @@ impl CodeGenerator {
                                 }
                             }
                             let mem = memory.allocate(v.get_size());
-                            self.instructions
-                                .push(Instruction::Copy(val), Some((mem, size)));
+                            self.instructions.push(
+                                Instruction::Copy(val),
+                                Some((mem, size, memory.last_memory_index)),
+                            );
                             vars.insert(var.clone(), Val::Index(mem, v));
                             Ok(Val::None)
                         }
@@ -198,7 +206,7 @@ impl CodeGenerator {
                             if let Val::Index(mem, _) = var {
                                 self.instructions.push(
                                     Instruction::Copy(Val::Index(index, type_)),
-                                    Some((*mem, size)),
+                                    Some((*mem, size, memory.last_memory_index)),
                                 );
                             } else {
                                 unreachable!();
@@ -222,8 +230,10 @@ impl CodeGenerator {
                                 ));
                             }
                             if let Val::Index(mem, _) = var {
-                                self.instructions
-                                    .push(Instruction::Copy(val), Some((*mem, size)));
+                                self.instructions.push(
+                                    Instruction::Copy(val),
+                                    Some((*mem, size, memory.last_memory_index)),
+                                );
                             } else {
                                 unreachable!();
                             }
@@ -240,7 +250,7 @@ impl CodeGenerator {
                 for statement in statements {
                     self.make_instruction(statement, vars, &mut new)?;
                 }
-                if memory.last_memory_index > new.last_memory_index {
+                if new.last_memory_index > memory.last_memory_index {
                     self.instructions.push(
                         Instruction::Clear(memory.last_memory_index, new.last_memory_index),
                         None,
@@ -277,8 +287,10 @@ impl CodeGenerator {
                 let t = ValType::Number;
                 let size = t.get_size();
                 let mem = memory.allocate(size);
-                self.instructions
-                    .push(Instruction::Input, Some((mem, size)));
+                self.instructions.push(
+                    Instruction::Input,
+                    Some((mem, size, memory.last_memory_index)),
+                );
                 Ok(Val::Index(mem, t))
             }
 
@@ -366,7 +378,7 @@ impl CodeGenerator {
                 let mem = memory.allocate(1);
                 self.instructions.push(
                     Instruction::TernaryIf(cond, then, else_),
-                    Some((mem, then_type.get_size())),
+                    Some((mem, then_type.get_size(), memory.last_memory_index)),
                 );
                 Ok(Val::Index(mem, then_type))
             }
@@ -382,7 +394,7 @@ impl CodeGenerator {
                 // let size = f.get_size();
                 // let type_ = f.get_type();
                 // let mem = memory.allocate(size);
-                // self.instructions.push(Instruction::Call(0, new), Some((mem, size)));
+                // self.instructions.push(Instruction::Call(0, new), Some((mem, size, memory.last_memory_index)));
                 // Ok(Val::Index(mem, ValType::None))
                 todo!()
             }
@@ -419,11 +431,13 @@ impl CodeGenerator {
                 };
                 let size = arr.get_size();
                 let mem = memory.allocate(POINTER_SIZE + size);
-                self.instructions
-                    .push(Instruction::Add(arr, index), Some((mem, POINTER_SIZE)));
+                self.instructions.push(
+                    Instruction::Add(arr, index),
+                    Some((mem, POINTER_SIZE, memory.last_memory_index)),
+                );
                 self.instructions.push(
                     Instruction::Deref(Val::Index(mem, arr_type.clone())),
-                    Some((mem + POINTER_SIZE, size)),
+                    Some((mem + POINTER_SIZE, size, memory.last_memory_index)),
                 );
                 Ok(Val::Index(mem + POINTER_SIZE, arr_type))
             }
@@ -475,8 +489,10 @@ impl CodeGenerator {
                 }
                 let t = val.r#type();
                 let mem = memory.allocate(POINTER_SIZE);
-                self.instructions
-                    .push(Instruction::Ref(val), Some((mem, POINTER_SIZE)));
+                self.instructions.push(
+                    Instruction::Ref(val),
+                    Some((mem, POINTER_SIZE, memory.last_memory_index)),
+                );
                 Ok(Val::Index(mem, ValType::Pointer(Box::new(t))))
             }
 
@@ -485,8 +501,10 @@ impl CodeGenerator {
                 if let ValType::Pointer(t) = val.r#type() {
                     let size = t.get_size();
                     let mem = memory.allocate(size);
-                    self.instructions
-                        .push(Instruction::Deref(val), Some((mem, size)));
+                    self.instructions.push(
+                        Instruction::Deref(val),
+                        Some((mem, size, memory.last_memory_index)),
+                    );
                     Ok(Val::Index(mem, *t))
                 } else {
                     Err(Error::new(
@@ -534,7 +552,79 @@ impl CodeGenerator {
                         ),
                     ));
                 }
+                if let Val::Index(m, t) = &cond {
+                    let cond2 = self.make_instruction(cond1, vars, memory)?;
+                    self.instructions.push(
+                        Instruction::Copy(cond2),
+                        Some((*m, t.get_size(), memory.last_memory_index)),
+                    );
+                }
                 self.instructions.push(Instruction::EndWhile(cond), None);
+                Ok(Val::None)
+            }
+
+            Node::For(init1, cond1, step1, body1, _) => {
+                let init = self.make_instruction(init1, vars, memory)?;
+                if init.r#type() != ValType::None {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        init1.position(),
+                        format!(
+                            "Initialization in a for loop can only be of type None, and not of type {:?}",
+                            init.r#type()
+                        ),
+                    ));
+                }
+
+                let cond = self.make_instruction(cond1, vars, memory)?;
+                if cond.r#type() != ValType::Boolean {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        cond1.position(),
+                        format!(
+                            "Condition in a for loop can only be of type Boolean, and not of type {:?}",
+                            cond.r#type()
+                        ),
+                    ));
+                }
+
+                self.instructions
+                    .push(Instruction::While(cond.clone()), None);
+
+                let body = self.make_instruction(body1, vars, memory)?;
+                if body.r#type() != ValType::None {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        body1.position(),
+                        format!(
+                            "Body of a for loop can only be of type None, and not of type {:?}",
+                            body.r#type()
+                        ),
+                    ));
+                }
+
+                let step = self.make_instruction(step1, vars, memory)?;
+                if step.r#type() != ValType::None {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        step1.position(),
+                        format!(
+                            "Step in a for loop can only be of type None, and not of type {:?}",
+                            step.r#type()
+                        ),
+                    ));
+                }
+
+                if let Val::Index(m, t) = &cond {
+                    let cond2 = self.make_instruction(cond1, vars, memory)?;
+                    self.instructions.push(
+                        Instruction::Copy(cond2),
+                        Some((*m, t.get_size(), memory.last_memory_index)),
+                    );
+                }
+
+                self.instructions.push(Instruction::EndWhile(cond), None);
+
                 Ok(Val::None)
             }
         }
@@ -542,16 +632,12 @@ impl CodeGenerator {
 }
 
 /// Generates and returns the Intermediate Representation of the AST
-pub fn generate_code(ast: Node) -> Result<(Instructions, usize), Error> {
+pub fn generate_code(ast: Node) -> Result<Instructions, Error> {
     let mut obj = CodeGenerator {
         instructions: Instructions::new(),
     };
     let mut vars = HashMap::new();
     let mut memory = Memory::new();
-    if let Node::Statements(statements, _) = ast {
-        for statement in statements {
-            obj.make_instruction(&statement, &mut vars, &mut memory)?;
-        }
-    }
-    Ok((obj.instructions, memory.last_memory_index))
+    obj.make_instruction(&ast, &mut vars, &mut memory)?;
+    Ok(obj.instructions)
 }

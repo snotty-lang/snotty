@@ -267,6 +267,8 @@ impl ValType {
             Self::Number => {
                 if op.token_type == TokenType::LNot {
                     None
+                } else if [TokenType::Inc, TokenType::Dec].contains(&op.token_type) {
+                    Some(Self::None)
                 } else {
                     Some(Self::Number)
                 }
@@ -388,16 +390,19 @@ impl fmt::Debug for Val {
     }
 }
 
+/// Assignment Index, Result type, Free memory location
+pub type AssignType = Option<(usize, usize, usize)>;
+
 /// A vector of instructions.
 #[derive(Debug)]
-pub struct Instructions(pub Vec<(Option<(usize, usize)>, Instruction)>);
+pub struct Instructions(pub Vec<(AssignType, Instruction)>);
 
 impl Instructions {
     pub fn new() -> Self {
         Self(Vec::new())
     }
 
-    pub fn push(&mut self, instruction: Instruction, assign: Option<(usize, usize)>) {
+    pub fn push(&mut self, instruction: Instruction, assign: Option<(usize, usize, usize)>) {
         self.0.push((assign, instruction));
     }
 }

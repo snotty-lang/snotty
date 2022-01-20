@@ -63,13 +63,26 @@ pub fn run(contents: &str, filename: &'static str) -> Result<String, Error> {
     let tokens = lexer::lex(contents, filename)?;
     // println!("{:?}", tokens.iter().map(|x| x.to_string()).collect::<Vec<String>>());
     let ast = parser::parse(tokens)?;
-    println!("{}", ast);
+    println!("{}\n", ast);
     let code = ir_code::generate_code(ast)?;
-    println!("{}", code.0);
+    println!("{}", code);
     // let code = evaluate::evaluate(&code);
     // let code = ir_optimizer::optimize(&code);
     // println!("{}", code);
-    Ok(compiler::transpile(&code.0, code.1))
+    let mut bf_code = compiler::transpile(&code);
+    optimize(&mut bf_code);
+    Ok(bf_code)
+}
+
+/// Optimizes the generated Brainfuck code by removing unnecessary characters
+fn optimize(code: &mut String) {
+    while code.contains("<>") || code.contains("><") || code.contains("+-") || code.contains("-+") {
+        *code = code
+            .replace("<>", "")
+            .replace("><", "")
+            .replace("+-", "")
+            .replace("-+", "");
+    }
 }
 
 /// Reads and compiles the content of the passed file and returns it

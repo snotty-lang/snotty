@@ -68,6 +68,8 @@ pub enum Node {
     IndexAssign(Token, Box<Node>, Box<Node>),
     // Pointer, expression
     DerefAssign(Box<Node>, Box<Node>, Position),
+    /// Init, Cond, Step, Body
+    For(Box<Node>, Box<Node>, Box<Node>, Box<Node>, Position),
 }
 
 impl Node {
@@ -77,6 +79,7 @@ impl Node {
                 token.position.clone()
             }
             Node::Ref(.., pos)
+            | Node::For(.., pos)
             | Node::Deref(.., pos)
             | Node::While(.., pos)
             | Node::Statements(.., pos)
@@ -247,6 +250,9 @@ impl fmt::Display for Node {
             }
             Node::DerefAssign(expr, expr2, _) => {
                 write!(f, "DerefAssign({} = {})", expr, expr2)
+            }
+            Node::For(init, cond, step, body, _) => {
+                write!(f, "For(({} ; {} ; {}) : {})", init, cond, step, body)
             }
         }
     }
