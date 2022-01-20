@@ -1,19 +1,9 @@
-/*
-let lim = ezin
 let y = 0
-let x = y != lim
+let x = true
 while x {
-    ++y
-    x = y != lim
-    //if y % 5 == 0
-        // if y % 3 == 0 ezascii 'f', 'i', 'z', 'z', 'b', 'u', 'z', 'z', 10
-        ezascii 'f', 'i', 'z', 'z', 10
-    // else if y % 3 == 0 ezascii 'b', 'u', 'z', 'z', 10 else 
-    ezout y
+    y += 1
+    if y == 10 {
+        x = false
+    }
 }
-*/
-if 5 % 11 {
-    ezout lim
-} else {
-    ezout lim * 2
-}
+ezout y

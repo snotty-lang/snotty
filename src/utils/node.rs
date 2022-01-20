@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::utils::{Position, Token};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -116,6 +118,135 @@ impl Node {
                     pos.line_end = end_pos.line_end;
                 }
                 pos
+            }
+        }
+    }
+}
+
+impl fmt::Display for Node {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Node::Number(token) => write!(f, "Number({})", token),
+            Node::Boolean(token) => write!(f, "Boolean({})", token),
+            Node::VarAccess(token) => write!(f, "Var({})", token),
+            Node::BinaryOp(token, left, right) => {
+                write!(f, "BinaryOp({} {} {})", left, token, right)
+            }
+            Node::UnaryOp(token, expr) => write!(f, "{} {}", token, expr),
+            Node::VarReassign(token, expr) => write!(f, "Reassign({} = {})", token, expr),
+            Node::VarAssign(token, expr, _) => write!(f, "Assign({} = {})", token, expr),
+            Node::Statements(statements, _) => {
+                write!(
+                    f,
+                    "{{\n{}\n}}",
+                    statements
+                        .iter()
+                        .map(|n| n.to_string())
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )
+            }
+            Node::Call(token, args, _) => {
+                write!(
+                    f,
+                    "{}({})",
+                    token,
+                    args.iter()
+                        .map(|n| n.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            Node::FuncDef(token, args, body, ret, _) => {
+                write!(
+                    f,
+                    "{}({}) -> {:?} {}",
+                    token,
+                    args.iter()
+                        .map(|n| format!("{} : {:?}", n.0, n.1))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    ret,
+                    body
+                )
+            }
+            Node::While(cond, body, _) => {
+                write!(f, "while ({}) {}", cond, body)
+            }
+            Node::Return(expr, _) => {
+                if let Some(expr) = expr {
+                    write!(f, "Return({})", expr)
+                } else {
+                    write!(f, "Return")
+                }
+            }
+            Node::Print(expr, _) => {
+                write!(
+                    f,
+                    "Print({})",
+                    expr.iter()
+                        .map(|n| n.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            Node::Ascii(expr, _) => {
+                write!(
+                    f,
+                    "Ascii({})",
+                    expr.iter()
+                        .map(|n| n.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            Node::Input(_) => {
+                write!(f, "input")
+            }
+            Node::Ref(expr, _) => {
+                write!(f, "Ref({})", expr)
+            }
+            Node::Deref(expr, _) => {
+                write!(f, "Deref({})", expr)
+            }
+            Node::Ternary(cond, then, else_, _) => {
+                write!(f, "Ternary({} ? {} : {})", cond, then, else_)
+            }
+            Node::If(cond, then, else_, _) => {
+                write!(f, "If( if {} then {} else {:?})", cond, then, else_)
+            }
+            Node::None(_) => write!(f, "None"),
+            Node::Lambda(args, body, ret, _) => {
+                write!(
+                    f,
+                    "Lambda({} -> {:?} {})",
+                    args.iter()
+                        .map(|n| format!("{} : {:?}", n.0, n.1))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    ret,
+                    body
+                )
+            }
+            Node::Char(c, _) => write!(f, "Char({})", c),
+            Node::Array(arr, _) => {
+                write!(
+                    f,
+                    "Array({})",
+                    arr.iter()
+                        .map(|n| n.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            Node::Index(arr, idx, _) => {
+                write!(f, "Index({}[{}])", arr, idx)
+            }
+            Node::IndexAssign(arr, idx, expr) => {
+                write!(f, "IndexAssign({}[{}] = {})", arr, idx, expr)
+            }
+            Node::DerefAssign(expr, expr2, _) => {
+                write!(f, "DerefAssign({} = {})", expr, expr2)
             }
         }
     }

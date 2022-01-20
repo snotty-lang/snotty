@@ -40,7 +40,42 @@ pub fn lex(input: &str, filename: &'static str) -> LexResult {
             }
             '\'' => {
                 let c = match chars.next() {
-                    Some((_, c)) => c as u8,
+                    Some((_, c)) => match c {
+                        '\'' => {
+                            return Err(Error::new(
+                                ErrorType::SyntaxError,
+                                Position::new(line, i, i + 2, filename),
+                                "Expected char literal, found \'".to_string(),
+                            ))
+                        }
+                        '\\' => {
+                            (match chars.next() {
+                                Some((_, c)) => match c {
+                                    'n' => '\n',
+                                    'r' => '\r',
+                                    't' => '\t',
+                                    '\\' => '\\',
+                                    '\'' => '\'',
+                                    '0' => '\0',
+                                    _ => {
+                                        return Err(Error::new(
+                                            ErrorType::SyntaxError,
+                                            Position::new(line, i, i + 3, filename),
+                                            "Invalid escape sequence".to_string(),
+                                        ))
+                                    }
+                                },
+                                None => {
+                                    return Err(Error::new(
+                                        ErrorType::SyntaxError,
+                                        Position::new(line, i, i + 3, filename),
+                                        "Expected char literal, found \\".to_string(),
+                                    ))
+                                }
+                            } as u8)
+                        }
+                        _ => c as u8,
+                    },
                     None => {
                         return Err(Error::new(
                             ErrorType::SyntaxError,
@@ -57,7 +92,7 @@ pub fn lex(input: &str, filename: &'static str) -> LexResult {
                         return Err(Error::new(
                             ErrorType::SyntaxError,
                             Position::new(line, i, i + 2, filename),
-                            format!("Expected \', found {}", c),
+                            format!("Expected \', found {:?}", c),
                         ));
                     }
                     None => {

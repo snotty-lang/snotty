@@ -95,7 +95,6 @@ impl Parser {
                         let pos = node.position();
                         (Some(Box::new(node)), pos)
                     } else {
-                        self.advance();
                         (None, self.current_token.position.clone())
                     };
                     pos.end = end_pos.end;
@@ -601,6 +600,10 @@ impl Parser {
                     format!("Unexpected keyword: {}", self.current_token),
                 )),
             },
+            TokenType::Eol => {
+                self.advance();
+                Ok(Node::None(token.position))
+            }
             TokenType::TernaryIf => {
                 self.advance();
                 let condition = self.expression(scope)?;
@@ -822,22 +825,14 @@ impl Parser {
             Type::None
         };
 
-        if self.current_token.token_type != TokenType::LCurly {
-            return Err(Error::new(
-                ErrorType::SyntaxError,
-                self.current_token.position.clone(),
-                format!("Expected '{{', found {}", self.current_token),
-            ));
-        }
-        self.advance();
         let mut new_scope = Scope::new(Some(scope));
         new_scope.args = Some(params.iter().map(|x| x.0.clone()).collect());
-        let stmts = self.statements(TokenType::RCurly, false, &mut new_scope)?;
+        let stmt = self.statement(&mut new_scope)?;
         scope.scopes.push(new_scope);
         let mut pos = name.position.clone();
-        pos.end = stmts.position().end;
-        pos.line_end = stmts.position().line_end;
-        Ok(Node::FuncDef(name, params, Box::new(stmts), ret, pos))
+        pos.end = stmt.position().end;
+        pos.line_end = stmt.position().line_end;
+        Ok(Node::FuncDef(name, params, Box::new(stmt), ret, pos))
     }
 
     fn make_lambda(&mut self, scope: &mut Scope) -> ParseResult {
@@ -908,22 +903,13 @@ impl Parser {
         } else {
             Type::None
         };
-
-        if self.current_token.token_type != TokenType::LCurly {
-            return Err(Error::new(
-                ErrorType::SyntaxError,
-                self.current_token.position.clone(),
-                format!("Expected '{{', found {}", self.current_token),
-            ));
-        }
-        self.advance();
         let mut new_scope = Scope::new(Some(scope));
         new_scope.args = Some(params.iter().map(|x| x.0.clone()).collect());
-        let stmts = self.statements(TokenType::RCurly, false, &mut new_scope)?;
+        let stmt = self.statement(&mut new_scope)?;
         scope.scopes.push(new_scope);
-        pos.end = stmts.position().end;
-        pos.line_end = stmts.position().line_end;
-        Ok(Node::Lambda(params, Box::new(stmts), ret, pos))
+        pos.end = stmt.position().end;
+        pos.line_end = stmt.position().line_end;
+        Ok(Node::Lambda(params, Box::new(stmt), ret, pos))
     }
 
     fn binary_op(

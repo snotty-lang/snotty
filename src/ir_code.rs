@@ -240,10 +240,12 @@ impl CodeGenerator {
                 for statement in statements {
                     self.make_instruction(statement, vars, &mut new)?;
                 }
-                self.instructions.push(
-                    Instruction::Clear(memory.last_memory_index, new.last_memory_index),
-                    None,
-                );
+                if memory.last_memory_index > new.last_memory_index {
+                    self.instructions.push(
+                        Instruction::Clear(memory.last_memory_index, new.last_memory_index),
+                        None,
+                    );
+                }
                 Ok(Val::None)
             }
 
