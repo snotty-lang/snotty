@@ -4,13 +4,12 @@ use crate::utils::{Instruction, Instructions, Val};
 pub fn transpile(code: &Instructions) -> String {
     use super::goto_add;
     let mut location = 0;
-    let mut free_idx = 0;
     let mut bf_code = String::new();
     for (assign, instruction) in &code.0 {
-        let size = if let Some((val, size, free_idx_)) = assign {
-            goto(&mut bf_code, &mut location, *val);
-            free_idx = *free_idx_;
-            *size
+        let free_idx = assign.1;
+        let size = if let Some((val, size)) = assign.0 {
+            goto(&mut bf_code, &mut location, val);
+            size
         } else {
             1
         };
@@ -242,7 +241,13 @@ pub fn transpile(code: &Instructions) -> String {
             Instruction::Neq(left, right) => {
                 goto(&mut bf_code, &mut location, start + size);
                 goto_add!(left, &mut bf_code, &mut location, {
-                    copy(&mut bf_code, location, start + size, location, free_idx);
+                    copy(
+                        &mut bf_code,
+                        location,
+                        start + size,
+                        location,
+                        free_idx + size,
+                    );
                 });
                 goto(&mut bf_code, &mut location, start + 2 * size);
                 goto_add!(right, &mut bf_code, &mut location, {
@@ -264,7 +269,13 @@ pub fn transpile(code: &Instructions) -> String {
                 });
                 goto(&mut bf_code, &mut location, start + size);
                 goto_add!(right, &mut bf_code, &mut location, {
-                    copy(&mut bf_code, location, start + size, location, free_idx);
+                    copy(
+                        &mut bf_code,
+                        location,
+                        start + size,
+                        location,
+                        free_idx + size,
+                    );
                 });
                 goto(&mut bf_code, &mut location, start);
                 bf_code.push_str(">>[-]>[-]>[-]+>[-]<<<<[>+>+<<-]>[<+>-]<<[>>+<<-]+>>>[>-]>[<<<<->>[-]>>->]<+<<[>-[>-]>[<<<<->>[-]+>>->]<+< <-]<[-]>[-]>[-]>[-]>[-]<<<<<");
@@ -275,7 +286,13 @@ pub fn transpile(code: &Instructions) -> String {
                 });
                 goto(&mut bf_code, &mut location, start + size);
                 goto_add!(right, &mut bf_code, &mut location, {
-                    copy(&mut bf_code, location, start + size, location, free_idx);
+                    copy(
+                        &mut bf_code,
+                        location,
+                        start + size,
+                        location,
+                        free_idx + size,
+                    );
                 });
                 goto(&mut bf_code, &mut location, start);
                 bf_code.push_str(">>[-]>[-]>[-]+>[-]<<<<[>+>+<<-]>>[<<+>>-]<<<[>>>+<<<-]>>>[>-]>[<<<<+>>[-]>>->]<+<<[>-[>-]>[<<<<+>>[-]+>>->]<+<<-]<[-]>[-]>[-]>[-]>[-]<<<<<");
@@ -286,7 +303,13 @@ pub fn transpile(code: &Instructions) -> String {
                 });
                 goto(&mut bf_code, &mut location, start + size);
                 goto_add!(right, &mut bf_code, &mut location, {
-                    copy(&mut bf_code, location, start + size, location, free_idx);
+                    copy(
+                        &mut bf_code,
+                        location,
+                        start + size,
+                        location,
+                        free_idx + size,
+                    );
                 });
                 goto(&mut bf_code, &mut location, start);
                 bf_code.push_str("[>+<-]>[<+>[-]]<");
@@ -297,7 +320,13 @@ pub fn transpile(code: &Instructions) -> String {
                 });
                 goto(&mut bf_code, &mut location, start + size);
                 goto_add!(right, &mut bf_code, &mut location, {
-                    copy(&mut bf_code, location, start + size, location, free_idx);
+                    copy(
+                        &mut bf_code,
+                        location,
+                        start + size,
+                        location,
+                        free_idx + size,
+                    );
                 });
                 goto(&mut bf_code, &mut location, start);
                 bf_code.push_str(">[-<[->>+<<]>>[-<<++>>]<]<");
@@ -311,7 +340,13 @@ pub fn transpile(code: &Instructions) -> String {
             Instruction::TernaryIf(cond, left, right) => {
                 goto(&mut bf_code, &mut location, start + size);
                 goto_add!(cond, &mut bf_code, &mut location, {
-                    copy(&mut bf_code, location, start + size, location, free_idx);
+                    copy(
+                        &mut bf_code,
+                        location,
+                        start + size,
+                        location,
+                        free_idx + size,
+                    );
                 });
                 goto(&mut bf_code, &mut location, start);
                 bf_code.push_str(">>[-]+>[-]<<[<");
@@ -357,12 +392,11 @@ pub fn transpile(code: &Instructions) -> String {
                 bf_code.push(']');
             }
             Instruction::If(cond, mem, else_) => {
-                let start = *mem;
                 goto_add!(cond, &mut bf_code, &mut location, {
-                    copy(&mut bf_code, location, start, location, free_idx);
+                    copy(&mut bf_code, location, *mem, location, free_idx);
                 });
                 if *else_ {
-                    goto(&mut bf_code, &mut location, start);
+                    goto(&mut bf_code, &mut location, *mem);
                     bf_code.push_str(">+<");
                 }
                 bf_code.push('[');
@@ -439,6 +473,7 @@ macro_rules! goto_add {
     ($val: expr, $bf_code: expr, $current: expr, $block:block, $block2: block) => {
         match $val {
             Val::Num(val) => {
+                $bf_code.push_str("[-]");
                 if *val < 0 {
                     $bf_code.push_str(&("-".repeat(*val as u32 as usize)));
                 } else {
@@ -447,10 +482,12 @@ macro_rules! goto_add {
                 $block2
             }
             Val::Bool(b) => {
+                $bf_code.push_str("[-]");
                 $bf_code.push_str(&("+".repeat(*b as u32 as usize)));
                 $block2
             }
             Val::Char(val) => {
+                $bf_code.push_str("[-]");
                 $bf_code.push_str(&("+".repeat(*val as u32 as usize)));
                 $block2
             }
@@ -471,9 +508,10 @@ macro_rules! goto_add {
 
 /// Copies the value from the `from` location to the `to` location. Uses the current location as a reference
 fn copy(bf_code: &mut String, from: usize, to: usize, mut current: usize, free: usize) {
-    if current == to {
+    if from == to {
         return;
     }
+    assert!(from != free && to != free, "{} {} {}", from, to, free);
     let start = current;
     goto(bf_code, &mut current, free);
     bf_code.push_str("[-]");

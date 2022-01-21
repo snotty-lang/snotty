@@ -207,7 +207,7 @@ pub fn evaluate(code: &Instructions) -> Instructions {
             }
             _ => todo!(),
         };
-        vars.insert(assign.unwrap().0, evaluated);
+        vars.insert(assign.0.unwrap().0, evaluated);
     }
     new
 }

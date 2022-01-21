@@ -244,7 +244,7 @@ pub fn optimize(code: &Instructions) -> Instructions {
             },
         };
 
-        vars.insert(assign.unwrap().0, optimize);
+        vars.insert(assign.0.unwrap().0, optimize);
     }
     optimized
 }

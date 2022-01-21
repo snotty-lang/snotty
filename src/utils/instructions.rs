@@ -391,7 +391,7 @@ impl fmt::Debug for Val {
 }
 
 /// Assignment Index, Result type, Free memory location
-pub type AssignType = Option<(usize, usize, usize)>;
+pub type AssignType = (Option<(usize, usize)>, usize);
 
 /// A vector of instructions.
 #[derive(Debug)]
@@ -402,7 +402,7 @@ impl Instructions {
         Self(Vec::new())
     }
 
-    pub fn push(&mut self, instruction: Instruction, assign: Option<(usize, usize, usize)>) {
+    pub fn push(&mut self, instruction: Instruction, assign: AssignType) {
         self.0.push((assign, instruction));
     }
 }
@@ -416,7 +416,7 @@ impl Default for Instructions {
 impl fmt::Display for Instructions {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (assign, instruction) in &self.0 {
-            match assign {
+            match assign.0 {
                 Some(assign) => writeln!(f, "[{}] = {}", assign.0, instruction),
                 None => writeln!(f, "{}", instruction),
             }?;

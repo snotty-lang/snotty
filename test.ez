@@ -1,3 +1,7 @@
-let i = ezin
-let m = 3 % 3 == 0
-    ezout ? m 'f' : 'u'
+for let i = 0 i < 100 ++i {
+    let none = true
+    if i % 3 == 0 {ezascii 'f', 'i', 'z', 'z' none = false}
+    if i % 5 == 0 {ezascii 'b', 'u', 'z', 'z' none = false}
+    if none ezout i
+    else ezascii 10
+}
