@@ -1,4 +1,4 @@
-for let i = 0 i < 100 ++i {
+for let i = 1 i < 101 ++i {
     let none = true
     if i % 3 == 0 {ezascii 'f', 'i', 'z', 'z' none = false}
     if i % 5 == 0 {ezascii 'b', 'u', 'z', 'z' none = false}

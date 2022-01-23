@@ -39,7 +39,7 @@ pub enum Node {
     /// Function, args, body, return type
     FuncDef(Token, Vec<(Token, Type)>, Box<Node>, Type, Position),
     /// Expression
-    Return(Option<Box<Node>>, Position),
+    Return(Box<Node>, Position),
     /// Expressions
     Print(Vec<Node>, Position),
     /// Expressions
@@ -115,11 +115,9 @@ impl Node {
             }
             Node::Return(val, pos) => {
                 let mut pos = pos.clone();
-                if let Some(val) = val {
-                    let end_pos = val.position();
-                    pos.end = end_pos.end;
-                    pos.line_end = end_pos.line_end;
-                }
+                let end_pos = val.position();
+                pos.end = end_pos.end;
+                pos.line_end = end_pos.line_end;
                 pos
             }
         }
@@ -177,11 +175,7 @@ impl fmt::Display for Node {
                 write!(f, "while ({}) {}", cond, body)
             }
             Node::Return(expr, _) => {
-                if let Some(expr) = expr {
-                    write!(f, "Return({})", expr)
-                } else {
-                    write!(f, "Return")
-                }
+                write!(f, "Return({})", expr)
             }
             Node::Print(expr, _) => {
                 write!(

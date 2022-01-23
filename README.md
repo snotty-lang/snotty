@@ -9,7 +9,7 @@ ezout x
 ```
 
 # TODO
-* fix
+* fixes
 * functions
 * classes
 ```

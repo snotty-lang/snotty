@@ -70,11 +70,7 @@ impl Parser {
                 "return" => {
                     let pos = self.current_token.position.clone();
                     self.advance();
-                    if self.current_token.token_type == TokenType::Eol {
-                        Ok(Node::Return(None, pos))
-                    } else {
-                        Ok(Node::Return(Some(Box::new(self.expression(scope)?)), pos))
-                    }
+                    Ok(Node::Return(Box::new(self.expression(scope)?), pos))
                 }
                 "let" => {
                     self.advance();

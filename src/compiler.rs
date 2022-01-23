@@ -392,17 +392,22 @@ pub fn transpile(code: &Instructions) -> String {
                 bf_code.push(']');
             }
             Instruction::If(cond, mem, else_) => {
+                goto(&mut bf_code, &mut location, *mem);
                 goto_add!(cond, &mut bf_code, &mut location, {
                     copy(&mut bf_code, location, *mem, location, free_idx);
+                    goto(&mut bf_code, &mut location, *mem);
                 });
                 if *else_ {
-                    goto(&mut bf_code, &mut location, *mem);
                     bf_code.push_str(">+<");
                 }
                 bf_code.push('[');
             }
-            Instruction::EndIf(mem) => {
-                goto(&mut bf_code, &mut location, *mem);
+            Instruction::EndIf(mem, else_) => {
+                goto(
+                    &mut bf_code,
+                    &mut location,
+                    if *else_ { *mem + 1 } else { *mem },
+                );
                 bf_code.push_str("[-]]");
             }
             Instruction::Else(mem) => {
@@ -481,14 +486,14 @@ macro_rules! goto_add {
                 }
                 $block2
             }
-            Val::Bool(b) => {
-                $bf_code.push_str("[-]");
-                $bf_code.push_str(&("+".repeat(*b as u32 as usize)));
-                $block2
-            }
             Val::Char(val) => {
                 $bf_code.push_str("[-]");
                 $bf_code.push_str(&("+".repeat(*val as u32 as usize)));
+                $block2
+            }
+            Val::Bool(b) => {
+                $bf_code.push_str("[-]");
+                $bf_code.push_str(&("+".repeat(*b as u32 as usize)));
                 $block2
             }
             Val::Index(index, _) => {

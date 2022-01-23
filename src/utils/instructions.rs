@@ -14,7 +14,7 @@ pub enum Instruction {
     Return(Val),
     Call(usize, Vec<Val>),
     Else(usize),
-    EndIf(usize),
+    EndIf(usize, bool),
     TernaryIf(Val, Val, Val),
     Copy(Val),
     Ref(Val),
@@ -130,7 +130,7 @@ impl fmt::Display for Instruction {
             Self::Deref(val) => write!(f, "*{:?}", val),
             Self::If(cond, _, _) => write!(f, "IF {:?}", cond),
             Self::Else(_) => write!(f, "ELSE"),
-            Self::EndIf(_) => write!(f, "ENDIF"),
+            Self::EndIf(_, _) => write!(f, "ENDIF"),
         }
     }
 }

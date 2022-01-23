@@ -313,8 +313,11 @@ impl CodeGenerator {
                         ),
                     ));
                 }
-                let mut mem = memory.allocate(2);
-                let idx = self.instructions.0.len();
+                let mem = memory.allocate(2);
+                self.instructions.push(
+                    Instruction::If(cond, mem, else1.is_some()),
+                    (None, memory.last_memory_index),
+                );
                 let then = self.make_instruction(then1, vars, memory)?;
                 if then.r#type() != ValType::None {
                     return Err(Error::new(
@@ -327,13 +330,12 @@ impl CodeGenerator {
                     ));
                 }
 
-                match else1 {
-                    Some(else_) => {
-                        self.instructions
-                            .push(Instruction::Else(mem), (None, memory.last_memory_index));
-                        let e = self.make_instruction(else_, vars, memory)?;
-                        if e.r#type() != ValType::None {
-                            return Err(Error::new(
+                if let Some(else_) = else1 {
+                    self.instructions
+                        .push(Instruction::Else(mem), (None, memory.last_memory_index));
+                    let e = self.make_instruction(else_, vars, memory)?;
+                    if e.r#type() != ValType::None {
+                        return Err(Error::new(
                                 ErrorType::TypeError,
                                 then1.position(),
                                 format!(
@@ -341,29 +343,12 @@ impl CodeGenerator {
                                     then.r#type()
                                 ),
                             ));
-                        }
-                        self.instructions.0.insert(
-                            idx,
-                            (
-                                (None, memory.last_memory_index),
-                                Instruction::If(cond, mem, true),
-                            ),
-                        );
-                        mem += 1;
                     }
-                    None => {
-                        self.instructions.0.insert(
-                            idx,
-                            (
-                                (None, memory.last_memory_index),
-                                Instruction::If(cond, mem, false),
-                            ),
-                        );
-                    }
-                };
-
-                self.instructions
-                    .push(Instruction::EndIf(mem), (None, memory.last_memory_index));
+                }
+                self.instructions.push(
+                    Instruction::EndIf(mem, else1.is_some()),
+                    (None, memory.last_memory_index),
+                );
                 Ok(Val::None)
             }
 
@@ -486,11 +471,7 @@ impl CodeGenerator {
             }
 
             Node::Return(val, _) => {
-                let val = if let Some(val) = val {
-                    self.make_instruction(val, vars, memory)?
-                } else {
-                    Val::None
-                };
+                let val = self.make_instruction(val, vars, memory)?;
                 self.instructions
                     .push(Instruction::Return(val), (None, memory.last_memory_index));
                 Ok(Val::None)
