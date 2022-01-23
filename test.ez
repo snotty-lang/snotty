@@ -1,5 +1,9 @@
-inline ez add(num1: number, num2: number) -> number {
-    return num1 + num2
-}
+let sum = 0
 
-ezout add(1, 2)
+inline ez sub(num1: number, num2: number) sum = num1 - num2
+inline ez add(num1: number, num2: number) sum = num1 + num2
+
+add(1, 2)
+ezout sum
+sub(1, 2)
+ezout sum

@@ -73,15 +73,15 @@ impl Scope {
         match &node {
             Node::VarAccess(token) | Node::VarReassign(token, ..) | Node::VarAssign(token, ..) => {
                 if !self.defined.iter().any(|a| a.get_name() == token) {
+                    if self.args.is_some() && self.args.as_ref().unwrap().contains(token) {
+                        return;
+                    }
                     if self.parent.is_some() {
                         let parent = self.parent.as_mut().unwrap();
                         parent.access_variable(node);
                         if parent.error.is_none() {
                             return;
                         }
-                    }
-                    if self.args.is_some() && self.args.as_ref().unwrap().contains(token) {
-                        return;
                     }
                     self.error = Some(Error::new(
                         ErrorType::UndefinedVariable,

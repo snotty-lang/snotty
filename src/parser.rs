@@ -1230,9 +1230,12 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
 fn expand_inline(mut ast: Node) -> Node {
     fn find_functions(node: &Node) -> Option<Vec<Node>> {
         match node {
-            Node::FuncDef(_, _, body, _, true, _) => find_functions(body).and_then(|mut f| {
-                f.push(node.clone());
-                Some(f)
+            Node::FuncDef(_, _, body, _, true, _) => Some(match find_functions(body) {
+                Some(mut nodes) => {
+                    nodes.push(node.clone());
+                    nodes
+                }
+                None => vec![node.clone()],
             }),
 
             Node::Statements(nodes, _) => {
