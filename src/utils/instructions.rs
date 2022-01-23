@@ -8,6 +8,7 @@ use std::fmt;
 #[derive(Debug, Clone)]
 pub enum Instruction {
     If(Val, usize, bool),
+    DerefAssign(Val, Val),
     While(Val),
     EndWhile(Val),
     Clear(usize, usize),
@@ -17,7 +18,7 @@ pub enum Instruction {
     EndIf(usize, bool),
     TernaryIf(Val, Val, Val),
     Copy(Val),
-    Ref(Val),
+    Ref(usize),
     Deref(Val),
     LXor(Val, Val),
     Input,
@@ -93,6 +94,7 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::DerefAssign(val, expr) => write!(f, "{} = {}", val, expr),
             Self::Clear(from, to) => write!(f, "clear {} - {}", from, to - 1),
             Self::While(cond) => write!(f, "WHILE {}", cond),
             Self::EndWhile(cond) => write!(f, "END WHILE {}", cond),
@@ -126,7 +128,7 @@ impl fmt::Display for Instruction {
             Self::LNot(val) => write!(f, "!{:?}", val),
             Self::Inc(val) => write!(f, "++{:?}", val),
             Self::Dec(val) => write!(f, "--{:?}", val),
-            Self::Ref(val) => write!(f, "&{:?}", val),
+            Self::Ref(mem) => write!(f, "&[{}]", mem),
             Self::Deref(val) => write!(f, "*{:?}", val),
             Self::If(cond, _, _) => write!(f, "IF {:?}", cond),
             Self::Else(_) => write!(f, "ELSE"),

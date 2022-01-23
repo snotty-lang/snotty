@@ -223,7 +223,6 @@ pub fn optimize(code: &Instructions) -> Instructions {
                 Instruction::LXor(a, b) => {
                     super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
-                Instruction::Ref(a) => super::check!(2 a, optimized, vars, assign, instruction),
                 Instruction::Deref(a) => super::check!(2 a, optimized, vars, assign, instruction),
                 Instruction::Call(f, args) => {
                     let mut new = vec![];

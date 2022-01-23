@@ -1,9 +1,5 @@
-let sum = 0
-
-inline ez sub(num1: number, num2: number) sum = num1 - num2
-inline ez add(num1: number, num2: number) sum = num1 + num2
-
-add(1, 2)
-ezout sum
-sub(1, 2)
-ezout sum
+let u = 0
+let y = 0
+let x = &y
+let a = x + 6;
+ezout x

@@ -445,7 +445,25 @@ impl CodeGenerator {
                 Ok(Val::Index(mem + POINTER_SIZE, arr_type))
             }
 
-            Node::IndexAssign(_, _, _) => todo!(),
+            Node::IndexAssign(_, _, _) => {
+                // let val = self.make_instruction(val1, vars, memory)?;
+                // if let ValType::Pointer(t) = val.r#type() {
+                //     let size = t.get_size();
+                //     let mem = memory.allocate(size);
+                //     self.instructions.push(
+                //         Instruction::Deref(val),
+                //         (Some((mem, size)), memory.last_memory_index),
+                //     );
+                //     Ok(Val::Index(mem, *t))
+                // } else {
+                //     Err(Error::new(
+                //         ErrorType::TypeError,
+                //         val1.position(),
+                //         format!("Cannot dereference a {}", val.r#type()),
+                //     ))
+                // }
+                todo!()
+            },
 
             Node::Array(elements, _) => {
                 let mut type_ = None;
@@ -480,17 +498,19 @@ impl CodeGenerator {
 
             Node::Ref(val1, _) => {
                 let val = self.make_instruction(val1, vars, memory)?;
-                if val.is_constant() {
+                let val2 = if let Val::Index(mem, _) = val {
+                    mem
+                } else {
                     return Err(Error::new(
                         ErrorType::TypeError,
                         val1.position(),
                         format!("Cannot reference a {}", val.r#type()),
                     ));
-                }
+                };
                 let t = val.r#type();
                 let mem = memory.allocate(POINTER_SIZE);
                 self.instructions.push(
-                    Instruction::Ref(val),
+                    Instruction::Ref(val2),
                     (Some((mem, POINTER_SIZE)), memory.last_memory_index),
                 );
                 Ok(Val::Index(mem, ValType::Pointer(Box::new(t))))
@@ -524,7 +544,16 @@ impl CodeGenerator {
             }
 
             Node::Lambda(_, _, _, _) => todo!(),
-            Node::DerefAssign(_, _, _) => todo!(),
+
+            Node::DerefAssign(deref, assign, _) => {
+                let deref = self.make_instruction(deref, vars, memory)?;
+                let assign = self.make_instruction(assign, vars, memory)?;
+                self.instructions.push(
+                    Instruction::DerefAssign(deref, assign),
+                    (None, memory.last_memory_index),
+                );
+                Ok(Val::None)
+            }
 
             Node::While(cond1, body1, _) => {
                 let cond = self.make_instruction(cond1, vars, memory)?;

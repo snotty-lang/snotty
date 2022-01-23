@@ -1022,11 +1022,12 @@ pub fn parse(tokens: Vec<Token>) -> ParseResult {
         Some(err) => return Err(err),
         None => ast,
     };
-    let ast = match keyword_checks(&ast) {
+    let mut ast = match keyword_checks(&ast) {
         Some(err) => return Err(err),
         None => ast,
     };
-    Ok(expand_inline(ast))
+    expand_inline(&mut ast, vec![]);
+    Ok(ast)
 }
 
 /// Checks for undefined functions and variables.
@@ -1227,7 +1228,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
 }
 
 /// Expands inline functions
-fn expand_inline(mut ast: Node) -> Node {
+fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
     fn find_functions(node: &Node) -> Option<Vec<Node>> {
         match node {
             Node::FuncDef(_, _, body, _, true, _) => Some(match find_functions(body) {
@@ -1423,11 +1424,14 @@ fn expand_inline(mut ast: Node) -> Node {
         }
     }
 
-    if let Some(ref mut functions) = find_functions(&ast) {
-        remove_inline(&mut ast);
-        insert_function(functions, &mut ast);
-    } else {
-        unreachable!();
+    if let Some(mut functions2) = find_functions(ast) {
+        functions.append(&mut functions2.clone());
+        for f in functions2.iter_mut() {
+            if let Node::FuncDef(_, _, f, _, _, _) = f {
+                expand_inline(f, functions.clone());
+            }
+        }
+        remove_inline(ast);
     }
-    ast
+    insert_function(&mut functions, ast);
 }
