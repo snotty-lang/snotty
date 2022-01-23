@@ -8,7 +8,7 @@ use std::fmt;
 #[derive(Debug, Clone)]
 pub enum Instruction {
     If(Val, usize, bool),
-    DerefAssign(Val, Val),
+    DerefAssign(usize, Val),
     While(Val),
     EndWhile(Val),
     Clear(usize, usize),
@@ -19,7 +19,7 @@ pub enum Instruction {
     TernaryIf(Val, Val, Val),
     Copy(Val),
     Ref(usize),
-    Deref(Val),
+    Deref(usize),
     LXor(Val, Val),
     Input,
     Add(Val, Val),
@@ -94,7 +94,7 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::DerefAssign(val, expr) => write!(f, "{} = {}", val, expr),
+            Self::DerefAssign(mem, expr) => write!(f, "*[{}] = {}", mem, expr),
             Self::Clear(from, to) => write!(f, "clear {} - {}", from, to - 1),
             Self::While(cond) => write!(f, "WHILE {}", cond),
             Self::EndWhile(cond) => write!(f, "END WHILE {}", cond),
@@ -129,7 +129,7 @@ impl fmt::Display for Instruction {
             Self::Inc(val) => write!(f, "++{:?}", val),
             Self::Dec(val) => write!(f, "--{:?}", val),
             Self::Ref(mem) => write!(f, "&[{}]", mem),
-            Self::Deref(val) => write!(f, "*{:?}", val),
+            Self::Deref(mem) => write!(f, "*[{}]", mem),
             Self::If(cond, _, _) => write!(f, "IF {:?}", cond),
             Self::Else(_) => write!(f, "ELSE"),
             Self::EndIf(_, _) => write!(f, "ENDIF"),
@@ -188,7 +188,7 @@ impl Val {
             Val::Pointer(ptr, _) => Some(*ptr),
             Val::Num(num) => Some(*num as usize),
             Val::Index(num, ValType::Number) => Some(*num),
-            Val::Index(ptr, ValType::Pointer(_)) => Some(*ptr),
+            Val::Index(ptr, ValType::Pointer(..)) => Some(*ptr),
             _ => None,
         }
     }
@@ -217,13 +217,13 @@ pub enum ValType {
     Number,
     Char,
     Boolean,
-    Pointer(Box<ValType>),
+    Pointer(usize, Box<ValType>),
     Array(usize, Box<ValType>),
 }
 
 impl ValType {
     pub fn is_ptr(&self) -> bool {
-        matches!(self, ValType::Pointer(_) | ValType::Array(_, _))
+        matches!(self, ValType::Pointer(..) | ValType::Array(_, _))
     }
 
     pub fn get_result_type(&self, rhs: &ValType, op: &Token) -> Option<Self> {
@@ -237,9 +237,11 @@ impl ValType {
                     Some(Self::Number)
                 }
             }
-            (Self::Pointer(t) | Self::Array(_, t), Self::Number) => {
-                if [TokenType::Add, TokenType::Sub].contains(&op.token_type) {
-                    Some(Self::Pointer(t.clone()))
+            (Self::Pointer(a, t), Self::Pointer(b, u)) if t == u => {
+                if TokenType::Add == op.token_type {
+                    Some(Self::Pointer(a + b, t.clone()))
+                } else if TokenType::Sub == op.token_type {
+                    Some(Self::Pointer(a - b, t.clone()))
                 } else {
                     None
                 }
@@ -282,9 +284,11 @@ impl ValType {
                     None
                 }
             }
-            Self::Pointer(t) => {
-                if [TokenType::Inc, TokenType::Dec].contains(&op.token_type) {
-                    Some(Self::Pointer(t.clone()))
+            Self::Pointer(a, t) => {
+                if TokenType::Inc == op.token_type {
+                    Some(Self::Pointer(a + 1, t.clone()))
+                } else if TokenType::Dec == op.token_type {
+                    Some(Self::Pointer(a - 1, t.clone()))
                 } else {
                     None
                 }
@@ -298,7 +302,7 @@ impl ValType {
             Type::Char => Self::Char,
             Type::Number => Self::Number,
             Type::Boolean => Self::Boolean,
-            Type::Ref(t) => Self::Pointer(Box::new(Self::from_parse_type(t))),
+            Type::Ref(t) => Self::Pointer(0, Box::new(Self::from_parse_type(t))),
             Type::None => Self::None,
             Type::Function(_, _) => todo!(),
             Type::Array(t, l) => Self::Array(*l, Box::new(Self::from_parse_type(t))),
@@ -311,7 +315,7 @@ impl ValType {
             Self::Number => std::mem::size_of::<ValNumber>(),
             Self::Char => 1,
             Self::Boolean => 1,
-            Self::Pointer(_) => POINTER_SIZE,
+            Self::Pointer(..) => POINTER_SIZE,
             Self::Array(l, t) => l * t.get_size(),
         }
     }
@@ -322,7 +326,7 @@ impl fmt::Display for ValType {
         match self {
             Self::Array(l, t) => write!(f, "[{}; {}]", t, l),
             Self::Char => write!(f, "char"),
-            Self::Pointer(t) => write!(f, "&{}", **t),
+            Self::Pointer(_, t) => write!(f, "&{}", **t),
             Self::None => write!(f, "()"),
             Self::Number => write!(f, "integer"),
             Self::Boolean => write!(f, "bool"),

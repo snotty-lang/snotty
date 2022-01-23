@@ -429,26 +429,12 @@ pub fn transpile(code: &Instructions) -> String {
                 bf_code.push_str(&s);
             }
             Instruction::Deref(mem) => {
-                let i = match mem {
-                    Val::Pointer(i, _) => *i,
-                    Val::Array(_, _) => todo!(),
-                    Val::Function(_, _, _) => todo!(),
-                    Val::Index(_, _) => todo!(),
-                    _ => unreachable!(),
-                };
-                copy(&mut bf_code, location, i, location, free_idx);
+                copy(&mut bf_code, *mem, location, location, free_idx);
             }
             Instruction::DerefAssign(mem, assign) => {
-                let i = match mem {
-                    Val::Pointer(i, _) => *i,
-                    Val::Array(_, _) => todo!(),
-                    Val::Function(_, _, _) => todo!(),
-                    Val::Index(_, _) => todo!(),
-                    _ => unreachable!(),
-                };
-                goto(&mut bf_code, &mut location, i);
+                goto(&mut bf_code, &mut location, *mem);
                 goto_add!(assign, &mut bf_code, &mut location, {
-                    copy(&mut bf_code, location, i, location, free_idx);
+                    copy(&mut bf_code, location, *mem, location, free_idx);
                 });
             }
             _ => todo!(),

@@ -1,5 +1,7 @@
-let u = 0
-let y = 0
+inline ez turn87(ptr: &number) *ptr = 87
+
+let y = 7
 let x = &y
-let a = x + 6;
-ezout x
+ezout 'x', *x, 'y', y
+turn87(x)
+ezout 'x', *x, 'y', y

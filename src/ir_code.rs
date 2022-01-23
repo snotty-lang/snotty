@@ -423,7 +423,7 @@ impl CodeGenerator {
                 }
                 let arr_type = match arr.r#type() {
                     ValType::Array(_, t) => *t,
-                    ValType::Pointer(t) => *t,
+                    ValType::Pointer(_, t) => *t,
                     _ => {
                         return Err(Error::new(
                             ErrorType::TypeError,
@@ -439,31 +439,41 @@ impl CodeGenerator {
                     (Some((mem, POINTER_SIZE)), memory.last_memory_index),
                 );
                 self.instructions.push(
-                    Instruction::Deref(Val::Index(mem, arr_type.clone())),
+                    Instruction::Deref(mem),
                     (Some((mem + POINTER_SIZE, size)), memory.last_memory_index),
                 );
                 Ok(Val::Index(mem + POINTER_SIZE, arr_type))
             }
 
-            Node::IndexAssign(_, _, _) => {
-                // let val = self.make_instruction(val1, vars, memory)?;
-                // if let ValType::Pointer(t) = val.r#type() {
-                //     let size = t.get_size();
-                //     let mem = memory.allocate(size);
-                //     self.instructions.push(
-                //         Instruction::Deref(val),
-                //         (Some((mem, size)), memory.last_memory_index),
-                //     );
-                //     Ok(Val::Index(mem, *t))
-                // } else {
-                //     Err(Error::new(
-                //         ErrorType::TypeError,
-                //         val1.position(),
-                //         format!("Cannot dereference a {}", val.r#type()),
-                //     ))
-                // }
-                todo!()
-            },
+            Node::IndexAssign(arr1, index1, assign) => {
+                let arr = if let TokenType::Identifier(ref var) = arr1.token_type {
+                    vars.get(var).cloned().unwrap()
+                } else {
+                    unreachable!();
+                };
+                let index = self.make_instruction(index1, vars, memory)?;
+                if index.r#type() != ValType::Number {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        index1.position(),
+                        format!(
+                            "Indexing can only be done with numbers, and not of type {:?}",
+                            index.r#type()
+                        ),
+                    ));
+                }
+                let mem = memory.allocate(POINTER_SIZE);
+                self.instructions.push(
+                    Instruction::Add(arr, index),
+                    (Some((mem, POINTER_SIZE)), memory.last_memory_index),
+                );
+                let assign = self.make_instruction(assign, vars, memory)?;
+                self.instructions.push(
+                    Instruction::DerefAssign(mem, assign),
+                    (None, memory.last_memory_index),
+                );
+                Ok(Val::None)
+            }
 
             Node::Array(elements, _) => {
                 let mut type_ = None;
@@ -513,16 +523,16 @@ impl CodeGenerator {
                     Instruction::Ref(val2),
                     (Some((mem, POINTER_SIZE)), memory.last_memory_index),
                 );
-                Ok(Val::Index(mem, ValType::Pointer(Box::new(t))))
+                Ok(Val::Index(mem, ValType::Pointer(val2, Box::new(t))))
             }
 
             Node::Deref(val1, _) => {
                 let val = self.make_instruction(val1, vars, memory)?;
-                if let ValType::Pointer(t) = val.r#type() {
+                if let ValType::Pointer(ptr, t) = val.r#type() {
                     let size = t.get_size();
                     let mem = memory.allocate(size);
                     self.instructions.push(
-                        Instruction::Deref(val),
+                        Instruction::Deref(ptr),
                         (Some((mem, size)), memory.last_memory_index),
                     );
                     Ok(Val::Index(mem, *t))
@@ -546,7 +556,20 @@ impl CodeGenerator {
             Node::Lambda(_, _, _, _) => todo!(),
 
             Node::DerefAssign(deref, assign, _) => {
-                let deref = self.make_instruction(deref, vars, memory)?;
+                let deref = if let Node::Deref(val1, _) = &**deref {
+                    let val = self.make_instruction(val1, vars, memory)?;
+                    if let  ValType::Pointer(ptr, _) = val.r#type() {
+                        ptr
+                    } else {
+                        return Err(Error::new(
+                            ErrorType::TypeError,
+                            val1.position(),
+                            format!("Cannot dereference a {}", val.r#type()),
+                        ));
+                    }
+                } else {
+                    unreachable!()
+                };
                 let assign = self.make_instruction(assign, vars, memory)?;
                 self.instructions.push(
                     Instruction::DerefAssign(deref, assign),
