@@ -145,7 +145,8 @@ impl CodeGenerator {
                                 Instruction::Copy(Val::Index(index, type_.clone())),
                                 (Some((mem, size)), memory.last_memory_index),
                             );
-                            Ok(Val::Index(mem, type_))
+                            vars.insert(var.clone(), Val::Index(mem, type_));
+                            Ok(Val::None)
                         }
                         val => {
                             let v = val.r#type();
@@ -576,7 +577,7 @@ impl CodeGenerator {
                         ErrorType::TypeError,
                         init1.position(),
                         format!(
-                            "Initialization in a for loop can only be of type (None, memory.last_memory_index), and not of type {:?}",
+                            "Initialization in a for loop can only be of type None, and not of type {:?}",
                             init.r#type()
                         ),
                     ));
@@ -639,6 +640,27 @@ impl CodeGenerator {
                 );
 
                 Ok(Val::None)
+            }
+
+            Node::Expanded(statements, t) => {
+                let mut new = memory.clone();
+                for statement in statements {
+                    self.make_instruction(statement, vars, &mut new)?;
+                }
+                if new.last_memory_index > memory.last_memory_index {
+                    self.instructions.push(
+                        Instruction::Clear(memory.last_memory_index, new.last_memory_index),
+                        (None, memory.last_memory_index),
+                    );
+                }
+                let t = ValType::from_parse_type(t);
+                let size = t.get_size();
+                let mem = memory.allocate(size);
+                self.instructions.push(
+                    Instruction::Copy(Val::Num(6)),
+                    (Some((mem, size)), memory.last_memory_index),
+                );
+                Ok(Val::Index(mem, t))
             }
         }
     }

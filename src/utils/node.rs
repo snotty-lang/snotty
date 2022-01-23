@@ -70,11 +70,14 @@ pub enum Node {
     DerefAssign(Box<Node>, Box<Node>, Position),
     /// Init, Cond, Step, Body
     For(Box<Node>, Box<Node>, Box<Node>, Box<Node>, Position),
+    /// Arguments, body
+    Expanded(Vec<Node>, Type),
 }
 
 impl Node {
     pub fn position(&self) -> Position {
         match self {
+            Node::Expanded(_, _) => unreachable!(),
             Node::Number(token) | Node::Boolean(token) | Node::VarAccess(token) => {
                 token.position.clone()
             }
@@ -133,7 +136,7 @@ impl fmt::Display for Node {
             Node::BinaryOp(token, left, right) => {
                 write!(f, "BinaryOp({} {} {})", left, token, right)
             }
-            Node::UnaryOp(token, expr) => write!(f, "{} {}", token, expr),
+            Node::UnaryOp(token, expr) => write!(f, "UnaryOp({} {})", token, expr),
             Node::VarReassign(token, expr) => write!(f, "Reassign({} = {})", token, expr),
             Node::VarAssign(token, expr, _) => write!(f, "Assign({} = {})", token, expr),
             Node::Statements(statements, _) => {
@@ -150,7 +153,7 @@ impl fmt::Display for Node {
             Node::Call(token, args, _) => {
                 write!(
                     f,
-                    "{}({})",
+                    "Call({}({}))",
                     token,
                     args.iter()
                         .map(|n| n.to_string())
@@ -158,10 +161,10 @@ impl fmt::Display for Node {
                         .join(", ")
                 )
             }
-            Node::FuncDef(token, args, body, ret, _,_) => {
+            Node::FuncDef(token, args, body, ret, _, _) => {
                 write!(
                     f,
-                    "{}({}) -> {:?} {}",
+                    "FuncDef({}({}) -> {:?} {})",
                     token,
                     args.iter()
                         .map(|n| format!("{} : {:?}", n.0, n.1))
@@ -247,6 +250,18 @@ impl fmt::Display for Node {
             }
             Node::For(init, cond, step, body, _) => {
                 write!(f, "For(({} ; {} ; {}) : {})", init, cond, step, body)
+            }
+            Node::Expanded(nodes, t) => {
+                write!(
+                    f,
+                    "Expanded({} -> {:?})",
+                    nodes
+                        .iter()
+                        .map(|n| n.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    t
+                )
             }
         }
     }
