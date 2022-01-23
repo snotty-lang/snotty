@@ -4,7 +4,7 @@ use std::{cmp, fmt};
 /// List of all the keywords identified by the lexer
 pub const KEYWORDS: [&str; 16] = [
     "let", "ez", "return", "ezout", "ezin", "ezascii", "true", "false", "if", "else", "bool",
-    "pointer", "number", "char", "while", "for",
+    "number", "char", "while", "for", "inline",
 ];
 
 pub const BOOLEAN_OPERATORS: [TokenType; 6] = [

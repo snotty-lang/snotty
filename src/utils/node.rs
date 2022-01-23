@@ -36,8 +36,8 @@ pub enum Node {
     Statements(Vec<Node>, Position),
     /// Function, args
     Call(Token, Vec<Node>, Position),
-    /// Function, args, body, return type
-    FuncDef(Token, Vec<(Token, Type)>, Box<Node>, Type, Position),
+    /// Function, args, body, return type, inline
+    FuncDef(Token, Vec<(Token, Type)>, Box<Node>, Type, bool, Position),
     /// Expression
     Return(Box<Node>, Position),
     /// Expressions
@@ -158,7 +158,7 @@ impl fmt::Display for Node {
                         .join(", ")
                 )
             }
-            Node::FuncDef(token, args, body, ret, _) => {
+            Node::FuncDef(token, args, body, ret, _,_) => {
                 write!(
                     f,
                     "{}({}) -> {:?} {}",

@@ -143,6 +143,35 @@ impl Parser {
                     pos.line_end = self.current_token.position.line_end;
                     Ok(Node::Print(nodes, pos))
                 }
+                "ez" => {
+                    self.advance();
+                    let node = self.function_definition(false, scope)?;
+                    scope.register_function(node.clone());
+                    Ok(node)
+                }
+                "inline" => {
+                    self.advance();
+                    if let TokenType::Keyword(ref s) = self.current_token.token_type {
+                        if s == "ez" {
+                            self.advance();
+                            let node = self.function_definition(true, scope)?;
+                            scope.register_function(node.clone());
+                            Ok(node)
+                        } else {
+                            Err(Error::new(
+                                ErrorType::SyntaxError,
+                                self.current_token.position.clone(),
+                                format!("Expected keyword 'ez', found {}", s),
+                            ))
+                        }
+                    } else {
+                        Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            format!("Expected keyword 'ez', found {}", self.current_token.token_type),
+                        ))
+                    }
+                }
                 _ => self.expression(scope),
             },
             TokenType::Identifier(_)
@@ -595,7 +624,7 @@ impl Parser {
             TokenType::Keyword(ref keyword) => match keyword.as_ref() {
                 "ez" => {
                     self.advance();
-                    let node = self.function_definition(scope)?;
+                    let node = self.make_lambda(scope)?;
                     scope.register_function(node.clone());
                     Ok(node)
                 }
@@ -767,11 +796,15 @@ impl Parser {
         }
     }
 
-    fn function_definition(&mut self, scope: &mut Scope) -> ParseResult {
+    fn function_definition(&mut self, inline: bool, scope: &mut Scope) -> ParseResult {
         let name = if let TokenType::Identifier(_) = self.current_token.token_type {
             self.current_token.clone()
         } else {
-            return self.make_lambda(scope);
+            return Err(Error::new(
+                ErrorType::SyntaxError,
+                self.current_token.position.clone(),
+                format!("Expected identifier, found {}", self.current_token),
+            ));
         };
         self.advance();
         if self.current_token.token_type != TokenType::LParen {
@@ -849,7 +882,7 @@ impl Parser {
         let mut pos = name.position.clone();
         pos.end = stmt.position().end;
         pos.line_end = stmt.position().line_end;
-        Ok(Node::FuncDef(name, params, Box::new(stmt), ret, pos))
+        Ok(Node::FuncDef(name, params, Box::new(stmt), ret, inline, pos))
     }
 
     fn make_lambda(&mut self, scope: &mut Scope) -> ParseResult {

@@ -401,7 +401,7 @@ impl CodeGenerator {
                 todo!()
             }
 
-            Node::FuncDef(_, _, _, _, _) => todo!(),
+            Node::FuncDef(_, _, _, _, _, _) => todo!(),
 
             Node::Index(arr1, index1, _) => {
                 let arr = if let TokenType::Identifier(ref var) = arr1.token_type {

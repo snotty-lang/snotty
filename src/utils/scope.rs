@@ -46,7 +46,7 @@ impl Scope {
         if self.error.is_some() {
             return;
         }
-        if let Node::FuncDef(token, args, _, ret, _) = function {
+        if let Node::FuncDef(token, args, _, ret, _, _) = function {
             self.defined.push(VarType::Function(
                 args.iter().map(|a| a.1.clone()).collect(),
                 ret,
