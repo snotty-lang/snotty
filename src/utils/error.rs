@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, rc::Rc};
 
 /// An enum to specify the type of the error.
 #[derive(Debug, Clone)]
@@ -12,6 +12,7 @@ pub enum ErrorType {
     InvalidReturn,
     TypeError,
     IndexOutOfBounds,
+    FileNotFound,
 }
 
 /// An error that can occur during the compilation of the source code.
@@ -55,11 +56,11 @@ pub struct Position {
     pub line_end: usize,
     pub start: usize,
     pub end: usize,
-    pub file: &'static str,
+    pub file: Rc<String>,
 }
 
 impl Position {
-    pub fn new(line: usize, start: usize, end: usize, file: &'static str) -> Position {
+    pub fn new(line: usize, start: usize, end: usize, file: Rc<String>) -> Position {
         Position {
             line_start: line,
             line_end: line,

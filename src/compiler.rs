@@ -428,18 +428,11 @@ pub fn transpile(code: &Instructions) -> String {
                 s.insert_str(0, "[-]");
                 bf_code.push_str(&s);
             }
-            Instruction::Deref(mem) => {
-                copy(&mut bf_code, *mem, location, location, free_idx);
-            }
-            Instruction::DerefAssign(mem, assign) => {
-                goto(&mut bf_code, &mut location, *mem);
-                goto_add!(assign, &mut bf_code, &mut location, {
-                    copy(&mut bf_code, location, *mem, location, free_idx);
-                });
-            }
+            Instruction::Deref(_) => {}
+            Instruction::DerefAssign(_, _) => {}
             _ => todo!(),
         }
-        bf_code.push_str("\n");
+        bf_code.push_str("|\n");
     }
     bf_code
 }
@@ -487,7 +480,6 @@ macro_rules! goto_add {
             Val::None => {
                 $bf_code.push_str("[-]");
             }
-            Val::Array(_, _) => todo!(),
             Val::Function(_, _, _) => todo!(),
         }
     };
@@ -524,7 +516,6 @@ macro_rules! goto_add {
                 $bf_code.push_str("[-]");
                 $block2
             }
-            Val::Array(_, _) => todo!(),
             Val::Function(_, _, _) => todo!(),
         }
     };

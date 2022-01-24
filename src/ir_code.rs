@@ -421,9 +421,9 @@ impl CodeGenerator {
                         ),
                     ));
                 }
-                let arr_type = match arr.r#type() {
-                    ValType::Array(_, t) => *t,
-                    ValType::Pointer(_, t) => *t,
+                let arr_type = match &arr {
+                    Val::Pointer(_, t) => t.clone(),
+                    Val::Index(_, t) => t.clone(),
                     _ => {
                         return Err(Error::new(
                             ErrorType::TypeError,
@@ -432,6 +432,7 @@ impl CodeGenerator {
                         ))
                     }
                 };
+                let t = arr.r#type();
                 let size = arr.get_size();
                 let mem = memory.allocate(POINTER_SIZE + size);
                 self.instructions.push(
@@ -439,7 +440,7 @@ impl CodeGenerator {
                     (Some((mem, POINTER_SIZE)), memory.last_memory_index),
                 );
                 self.instructions.push(
-                    Instruction::Deref(mem),
+                    Instruction::Deref(Val::Index(mem, t)),
                     (Some((mem + POINTER_SIZE, size)), memory.last_memory_index),
                 );
                 Ok(Val::Index(mem + POINTER_SIZE, arr_type))
@@ -462,6 +463,7 @@ impl CodeGenerator {
                         ),
                     ));
                 }
+                let t = arr.r#type();
                 let mem = memory.allocate(POINTER_SIZE);
                 self.instructions.push(
                     Instruction::Add(arr, index),
@@ -469,7 +471,7 @@ impl CodeGenerator {
                 );
                 let assign = self.make_instruction(assign, vars, memory)?;
                 self.instructions.push(
-                    Instruction::DerefAssign(mem, assign),
+                    Instruction::DerefAssign(Val::Index(mem, t), assign),
                     (None, memory.last_memory_index),
                 );
                 Ok(Val::None)
@@ -477,11 +479,11 @@ impl CodeGenerator {
 
             Node::Array(elements, _) => {
                 let mut type_ = None;
-                let mut new = vec![];
+                let mut pointer = vec![];
                 for element1 in elements {
                     let element = self.make_instruction(element1, vars, memory)?;
-                    if let Some(t) = type_ {
-                        if t != element.r#type() {
+                    if let Some(t) = &type_ {
+                        if *t != element.r#type() {
                             return Err(Error::new(
                                 ErrorType::TypeError,
                                 element1.position(),
@@ -492,11 +494,33 @@ impl CodeGenerator {
                                 ),
                             ));
                         }
+                    } else {
+                        type_ = Some(element.r#type());
                     }
-                    type_ = Some(element.r#type());
-                    new.push(element);
+                    let size = element.get_size();
+                    let mem = memory.allocate(size);
+                    self.instructions.push(
+                        Instruction::Copy(element),
+                        (Some((mem, size)), memory.last_memory_index),
+                    );
+                    pointer.push(mem);
                 }
-                Ok(Val::Array(new, type_.unwrap_or(ValType::None)))
+                let type_ = type_.unwrap_or(ValType::None);
+                let mem = memory.allocate(POINTER_SIZE * pointer.len());
+                let mut current_mem = mem;
+                for p in pointer {
+                    self.instructions.push(
+                        Instruction::Copy(Val::Index(p, ValType::Pointer(Box::new(type_.clone())))),
+                        (Some((current_mem, POINTER_SIZE)), memory.last_memory_index),
+                    );
+                    current_mem += POINTER_SIZE;
+                }
+                let new_mem = memory.allocate(POINTER_SIZE);
+                self.instructions.push(
+                    Instruction::Ref(mem),
+                    (Some((new_mem, POINTER_SIZE)), memory.last_memory_index),
+                );
+                Ok(Val::Index(new_mem, ValType::Pointer(Box::new(type_))))
             }
 
             Node::Return(val, _) => {
@@ -523,16 +547,16 @@ impl CodeGenerator {
                     Instruction::Ref(val2),
                     (Some((mem, POINTER_SIZE)), memory.last_memory_index),
                 );
-                Ok(Val::Index(mem, ValType::Pointer(val2, Box::new(t))))
+                Ok(Val::Index(mem, ValType::Pointer(Box::new(t))))
             }
 
             Node::Deref(val1, _) => {
                 let val = self.make_instruction(val1, vars, memory)?;
-                if let ValType::Pointer(ptr, t) = val.r#type() {
+                if let ValType::Pointer(t) = val.r#type() {
                     let size = t.get_size();
                     let mem = memory.allocate(size);
                     self.instructions.push(
-                        Instruction::Deref(ptr),
+                        Instruction::Deref(val),
                         (Some((mem, size)), memory.last_memory_index),
                     );
                     Ok(Val::Index(mem, *t))
@@ -558,8 +582,8 @@ impl CodeGenerator {
             Node::DerefAssign(deref, assign, _) => {
                 let deref = if let Node::Deref(val1, _) = &**deref {
                     let val = self.make_instruction(val1, vars, memory)?;
-                    if let  ValType::Pointer(ptr, _) = val.r#type() {
-                        ptr
+                    if let ValType::Pointer(_) = val.r#type() {
+                        val
                     } else {
                         return Err(Error::new(
                             ErrorType::TypeError,

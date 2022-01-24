@@ -8,7 +8,7 @@ use std::fmt;
 #[derive(Debug, Clone)]
 pub enum Instruction {
     If(Val, usize, bool),
-    DerefAssign(usize, Val),
+    DerefAssign(Val, Val),
     While(Val),
     EndWhile(Val),
     Clear(usize, usize),
@@ -19,7 +19,7 @@ pub enum Instruction {
     TernaryIf(Val, Val, Val),
     Copy(Val),
     Ref(usize),
-    Deref(usize),
+    Deref(Val),
     LXor(Val, Val),
     Input,
     Add(Val, Val),
@@ -94,7 +94,7 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::DerefAssign(mem, expr) => write!(f, "*[{}] = {}", mem, expr),
+            Self::DerefAssign(val, expr) => write!(f, "*[{}] = {}", val, expr),
             Self::Clear(from, to) => write!(f, "clear {} - {}", from, to - 1),
             Self::While(cond) => write!(f, "WHILE {}", cond),
             Self::EndWhile(cond) => write!(f, "END WHILE {}", cond),
@@ -129,7 +129,7 @@ impl fmt::Display for Instruction {
             Self::Inc(val) => write!(f, "++{:?}", val),
             Self::Dec(val) => write!(f, "--{:?}", val),
             Self::Ref(mem) => write!(f, "&[{}]", mem),
-            Self::Deref(mem) => write!(f, "*[{}]", mem),
+            Self::Deref(val) => write!(f, "*{:?}", val),
             Self::If(cond, _, _) => write!(f, "IF {:?}", cond),
             Self::Else(_) => write!(f, "ELSE"),
             Self::EndIf(_, _) => write!(f, "ENDIF"),
@@ -152,8 +152,6 @@ pub enum Val {
     Pointer(usize, ValType),
     /// A Char
     Char(u8),
-    /// Array
-    Array(Vec<Val>, ValType),
     /// Function
     Function(usize, Vec<Val>, ValType),
 }
@@ -173,7 +171,6 @@ impl Val {
     pub fn r#type(&self) -> ValType {
         match self {
             Val::Function(_, _, ty) => ty.clone(),
-            Val::Array(v, t) => ValType::Array(v.len(), Box::new(t.clone())),
             Val::Char(_) => ValType::Char,
             Val::Num(_) => ValType::Number,
             Val::Bool(_) => ValType::Boolean,
@@ -196,7 +193,6 @@ impl Val {
     pub fn is_constant(&self) -> bool {
         match self {
             Val::Function(_, _, _) => true,
-            Val::Array(v, _) => v.iter().any(|v| v.is_constant()) || v.is_empty(),
             Val::Char(_) => true,
             Val::Num(_) => true,
             Val::Bool(_) => true,
@@ -217,13 +213,12 @@ pub enum ValType {
     Number,
     Char,
     Boolean,
-    Pointer(usize, Box<ValType>),
-    Array(usize, Box<ValType>),
+    Pointer(Box<ValType>),
 }
 
 impl ValType {
     pub fn is_ptr(&self) -> bool {
-        matches!(self, ValType::Pointer(..) | ValType::Array(_, _))
+        matches!(self, ValType::Pointer(..))
     }
 
     pub fn get_result_type(&self, rhs: &ValType, op: &Token) -> Option<Self> {
@@ -237,11 +232,9 @@ impl ValType {
                     Some(Self::Number)
                 }
             }
-            (Self::Pointer(a, t), Self::Pointer(b, u)) if t == u => {
-                if TokenType::Add == op.token_type {
-                    Some(Self::Pointer(a + b, t.clone()))
-                } else if TokenType::Sub == op.token_type {
-                    Some(Self::Pointer(a - b, t.clone()))
+            (Self::Pointer(t), Self::Pointer(u)) if t == u => {
+                if let TokenType::Add | TokenType::Sub = op.token_type {
+                    Some(Self::Pointer(t.clone()))
                 } else {
                     None
                 }
@@ -284,11 +277,9 @@ impl ValType {
                     None
                 }
             }
-            Self::Pointer(a, t) => {
-                if TokenType::Inc == op.token_type {
-                    Some(Self::Pointer(a + 1, t.clone()))
-                } else if TokenType::Dec == op.token_type {
-                    Some(Self::Pointer(a - 1, t.clone()))
+            Self::Pointer(t) => {
+                if let TokenType::Inc | TokenType::Dec = op.token_type {
+                    Some(Self::Pointer(t.clone()))
                 } else {
                     None
                 }
@@ -302,10 +293,10 @@ impl ValType {
             Type::Char => Self::Char,
             Type::Number => Self::Number,
             Type::Boolean => Self::Boolean,
-            Type::Ref(t) => Self::Pointer(0, Box::new(Self::from_parse_type(t))),
+            Type::Ref(t) => Self::Pointer(Box::new(Self::from_parse_type(t))),
             Type::None => Self::None,
             Type::Function(_, _) => todo!(),
-            Type::Array(t, l) => Self::Array(*l, Box::new(Self::from_parse_type(t))),
+            Type::Array(t, _) => Self::Pointer(Box::new(Self::from_parse_type(t))),
         }
     }
 
@@ -316,7 +307,6 @@ impl ValType {
             Self::Char => 1,
             Self::Boolean => 1,
             Self::Pointer(..) => POINTER_SIZE,
-            Self::Array(l, t) => l * t.get_size(),
         }
     }
 }
@@ -324,9 +314,8 @@ impl ValType {
 impl fmt::Display for ValType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Array(l, t) => write!(f, "[{}; {}]", t, l),
             Self::Char => write!(f, "char"),
-            Self::Pointer(_, t) => write!(f, "&{}", **t),
+            Self::Pointer(t) => write!(f, "&{}", **t),
             Self::None => write!(f, "()"),
             Self::Number => write!(f, "integer"),
             Self::Boolean => write!(f, "bool"),
@@ -346,14 +335,6 @@ impl fmt::Display for Val {
                     .collect::<Vec<_>>()
                     .join(", "),
                 ret
-            ),
-            Val::Array(v, _) => write!(
-                f,
-                "[{}]",
-                v.iter()
-                    .map(|v| v.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
             ),
             Val::Char(c) => write!(f, "{}", *c as char),
             Val::Pointer(mem, _) => write!(f, "*{}", mem),
@@ -377,14 +358,6 @@ impl fmt::Debug for Val {
                     .collect::<Vec<_>>()
                     .join(", "),
                 ret
-            ),
-            Val::Array(v, _) => write!(
-                f,
-                "[{}]",
-                v.iter()
-                    .map(|v| v.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
             ),
             Val::Char(c) => write!(f, "{:?}", *c as char),
             Val::Pointer(mem, _) => write!(f, "*{}", mem),

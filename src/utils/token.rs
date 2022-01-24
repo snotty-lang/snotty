@@ -1,10 +1,20 @@
 use crate::utils::{LexNumber, Position};
-use std::{cmp, fmt};
+use std::{cmp, fmt, rc::Rc};
 
 /// List of all the keywords identified by the lexer
 pub const KEYWORDS: [&str; 16] = [
     "let", "ez", "return", "ezout", "ezin", "ezascii", "true", "false", "if", "else", "bool",
     "number", "char", "while", "for", "inline",
+];
+
+pub const PREPROCESSOR_STATEMENTS: [&str; 7] = [
+    "use",
+    "replace",
+    "declare",
+    "ifdeclared",
+    "else",
+    "endif",
+    "macro",
 ];
 
 pub const BOOLEAN_OPERATORS: [TokenType; 6] = [
@@ -99,6 +109,7 @@ pub enum TokenType {
     Eol,
     Eof,
     TernaryIf,
+    PreprocessorStatement(String),
 }
 
 /// The token struct
@@ -169,6 +180,7 @@ impl fmt::Display for TokenType {
                 TokenType::LAndAssign => "&&=".to_owned(),
                 TokenType::LOrAssign => "||=".to_owned(),
                 TokenType::LXor => "!&|".to_owned(),
+                TokenType::PreprocessorStatement(ref stmt) => format!("!{}", stmt),
             }
         )
     }
@@ -216,7 +228,7 @@ impl Token {
         line: usize,
         start: usize,
         end: usize,
-        filename: &'static str,
+        filename: Rc<String>,
     ) -> Self {
         Self {
             token_type,

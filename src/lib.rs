@@ -37,12 +37,16 @@ pub mod lexer;
 /// Contains the Parser struct
 pub mod parser;
 
+/// Contains the Preprocessor
+pub mod preprocessor;
+
 /// Optimizes the generated IR code
 pub mod ir_optimizer;
 pub mod utils;
 
 use std::fs;
 use std::process;
+use std::rc::Rc;
 
 use utils::Error;
 
@@ -59,9 +63,10 @@ use utils::Error;
 /// assert!(code.is_ok());
 /// assert_eq!(&code.unwrap(), "[-]+++++++++++++++++++++++++++++++++++++++++++++++++.[-]++++++++++++++++++++++++++++++++++++++++++++++++++.[-]++++++++++.");
 /// ```
-pub fn run(contents: &str, filename: &'static str) -> Result<String, Error> {
-    let tokens = lexer::lex(contents, filename)?;
-    // println!("{:?}", tokens.iter().map(|x| x.to_string()).collect::<Vec<String>>());
+pub fn run(contents: &str, filename: String) -> Result<String, Error> {
+    let tokens = lexer::lex(contents, Rc::new(filename))?;
+    let tokens = preprocessor::preprocess(tokens)?;
+    println!("{:?}", tokens.iter().map(|x| x.to_string()).collect::<Vec<String>>());
     let ast = parser::parse(tokens)?;
     println!("{}\n", ast);
     let code = ir_code::generate_code(ast)?;
@@ -88,9 +93,9 @@ fn optimize(code: &mut String) {
 /// Reads and compiles the content of the passed file and returns it
 /// In case of an error, it exits the program
 #[inline(always)]
-pub fn compile(filename: &'static str) -> String {
+pub fn compile(filename: String) -> String {
     run(
-        &fs::read_to_string(filename).unwrap_or_else(|e| {
+        &fs::read_to_string(&filename).unwrap_or_else(|e| {
             println!("{}", e);
             process::exit(1);
         }),

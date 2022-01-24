@@ -1,7 +1,3 @@
-inline ez turn87(ptr: &number) *ptr = 87
-
-let y = 7
-let x = &y
-ezout 'x', *x, 'y', y
-turn87(x)
-ezout 'x', *x, 'y', y
+!use memo
+let y = [6, 8, 65, 7]
+ezout y[1]
