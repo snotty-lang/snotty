@@ -1,4 +1,4 @@
-use std::{fs, rc::Rc};
+use std::{fs, rc::Rc, collections::HashSet};
 
 use crate::{
     lexer,
@@ -6,6 +6,7 @@ use crate::{
 };
 
 pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
+    let mut declared = HashSet::new();
     let mut i = 0;
     while i < tokens.len() {
         if let TokenType::PreprocessorStatement(ref stmt) = tokens[i].token_type {
@@ -56,7 +57,7 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                             _ => {
                                 return Err(Error::new(
                                     ErrorType::SyntaxError,
-                                    t.position.clone(),
+                                    t.position,
                                     "Expected find element `replace`".to_owned(),
                                 ))
                             }
@@ -75,7 +76,7 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                             _ => {
                                 return Err(Error::new(
                                     ErrorType::SyntaxError,
-                                    t.position.clone(),
+                                    t.position,
                                     "Expected replace element `replace`".to_owned(),
                                 ))
                             }
@@ -90,6 +91,28 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                         }
                     }
                 }
+                "declare" => match tokens.get(i + 1).cloned() {
+                    None => {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            tokens[i].position.clone(),
+                            "Expected an identifier after `declare`".to_owned(),
+                        ))
+                    }
+                    Some(t) => match t.token_type {
+                        TokenType::Identifier(ident) => {
+                            declared.insert(ident);
+                            tokens.drain(i..=i + 1);
+                        },
+                        _ => {
+                            return Err(Error::new(
+                                ErrorType::SyntaxError,
+                                t.position.clone(),
+                                "Expected an identifier after `declare`".to_owned(),
+                            ))
+                        }
+                    },
+                },
                 _ => todo!(),
             }
         }

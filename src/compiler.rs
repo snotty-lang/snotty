@@ -432,7 +432,7 @@ pub fn transpile(code: &Instructions) -> String {
             Instruction::DerefAssign(_, _) => {}
             _ => todo!(),
         }
-        bf_code.push_str("|\n");
+        // bf_code.push_str("|\n");
     }
     bf_code
 }
