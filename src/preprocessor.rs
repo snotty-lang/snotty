@@ -22,7 +22,8 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                         TokenType::Identifier(file) | TokenType::Keyword(file) => {
                             match fs::read_to_string(&file) {
                                 Ok(contents) => {
-                                    let new_tokens = lexer::lex(&contents, Rc::new(file))?;
+                                    let mut new_tokens = lexer::lex(&contents, Rc::new(file))?;
+                                    new_tokens.pop().unwrap();
                                     tokens.splice(i..=i + 1, new_tokens);
                                 }
                                 Err(e) => {

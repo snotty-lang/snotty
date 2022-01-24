@@ -544,9 +544,10 @@ pub fn lex(input: &str, filename: Rc<String>) -> LexResult {
                         ));
                     }
                 }
-                _ => {
+                Some((_, c)) => {
                     if c.is_alphabetic() {
                         let mut word = c.to_string();
+                        chars.next();
                         let start = i;
                         let mut end = j + 2;
                         while let Some((i, c)) = chars.peek() {
@@ -592,6 +593,15 @@ pub fn lex(input: &str, filename: Rc<String>) -> LexResult {
                             Rc::clone(&filename),
                         ));
                     }
+                }
+                None => {
+                    tokens.push(Token::new(
+                        TokenType::LNot,
+                        line,
+                        i,
+                        i + 1,
+                        Rc::clone(&filename),
+                    ));
                 }
             },
             '=' => {
