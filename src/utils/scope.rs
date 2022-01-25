@@ -181,17 +181,13 @@ impl Scope {
         let mut found = false;
         match &node {
             Node::Call(token1, args1, _) => {
-                if self
-                    .defined
-                    .iter()
-                    .any(|a| {
-                        if let VarType::Function(args, _, name) = a {
-                            name == token1 && args1.len() == args.len()
-                        } else {
-                            false
-                        }
-                    })
-                {
+                if self.defined.iter().any(|a| {
+                    if let VarType::Function(args, _, name) = a {
+                        name == token1 && args1.len() == args.len()
+                    } else {
+                        false
+                    }
+                }) {
                     found = true;
                 }
             }
@@ -221,18 +217,14 @@ impl Scope {
         }
         let mut found = false;
         match &node {
-            Node::Call(token1, args1, _) => {
-                if self
-                    .defined
-                    .iter()
-                    .any(|a| {
-                        if let VarType::Struct(fields, name) = a {
-                            name == token1 && args1.len() == fields.len()
-                        } else {
-                            false
-                        }
-                    })
-                {
+            Node::StructConstructor(token1, args1, _) => {
+                if self.defined.iter().any(|a| {
+                    if let VarType::Struct(fields, name) = a {
+                        name == token1 && args1.len() == fields.len()
+                    } else {
+                        false
+                    }
+                }) {
                     found = true;
                 }
             }

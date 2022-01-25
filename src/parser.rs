@@ -665,6 +665,47 @@ impl Parser {
                 let node = Node::Call(atom, args, pos);
                 scope.access_function(&node);
                 return Ok(node);
+            } else if let TokenType::LCurly = self.current_token.token_type {
+                self.advance();
+                let mut fields = vec![];
+                while self.current_token.token_type != TokenType::RCurly {
+                    if let TokenType::Identifier(_) = self.current_token.token_type {
+                        let field = self.current_token.clone();
+                        self.advance();
+                        if self.current_token.token_type != TokenType::Colon {
+                            return Err(Error::new(
+                                ErrorType::SyntaxError,
+                                self.current_token.position.clone(),
+                                format!("Expected ':', found {}", self.current_token),
+                            ));
+                        }
+                        self.advance();
+                        fields.push((field, self.expression(scope)?));
+                        if self.current_token.token_type != TokenType::Comma {
+                            break;
+                        }
+                        self.advance();
+                    } else {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            format!("Expected a field name, found {}", self.current_token),
+                        ));
+                    }
+                }
+                if self.current_token.token_type != TokenType::RCurly {
+                    return Err(Error::new(
+                        ErrorType::SyntaxError,
+                        self.current_token.position.clone(),
+                        format!("Expected '{{', found {}", self.current_token),
+                    ));
+                }
+                self.advance();
+                pos.end = self.current_token.position.end;
+                pos.line_end = self.current_token.position.line_end;
+                let node = Node::StructConstructor(atom, fields, pos);
+                scope.access_struct(&node);
+                return Ok(node);
             } else {
                 self.token_index -= 1;
             }
@@ -1192,6 +1233,17 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
                 }
                 ret
             }
+            Node::StructConstructor(_, nodes, _) => {
+                let mut ret = None;
+                for (_, node) in nodes {
+                    let n = check_return(node);
+                    if n.is_some() {
+                        ret = n;
+                        break;
+                    }
+                }
+                ret
+            }
             Node::Ternary(n1, n2, n3, _) => {
                 let n1 = check_return(n1);
                 if n1.is_some() {
@@ -1293,6 +1345,14 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
                 }
                 Some(new)
             }
+            Node::StructConstructor(_, n, _) => {
+                for (_, n) in n {
+                    if let a @ Some(_) = find_functions(n) {
+                        return a;
+                    }
+                }
+                None
+            }
             Node::Call(_, n, _) | Node::Print(n, _) | Node::Array(n, _) | Node::Ascii(n, _) => {
                 for n in n {
                     if let a @ Some(_) = find_functions(n) {
@@ -1366,6 +1426,11 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
                     remove_inline(n);
                 }
             }
+            Node::StructConstructor(_, n, _) => {
+                for (_, n) in n {
+                    remove_inline(n);
+                }
+            }
             Node::IndexAssign(_, n1, n2)
             | Node::DerefAssign(n1, n2, _)
             | Node::If(n1, n2, None, _)
@@ -1432,6 +1497,11 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
             }
             Node::Statements(n, _) | Node::Print(n, _) | Node::Array(n, _) | Node::Ascii(n, _) => {
                 for n in n {
+                    insert_function(functions, n);
+                }
+            }
+            Node::StructConstructor(_, n, _) => {
+                for (_, n) in n {
                     insert_function(functions, n);
                 }
             }

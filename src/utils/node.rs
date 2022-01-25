@@ -16,6 +16,8 @@ pub enum Type {
 /// A Node in the AST.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
+    /// Struct, fields
+    StructConstructor(Token, Vec<(Token, Node)>, Position),
     /// String
     String(Token),
     /// Condition, Body
@@ -87,6 +89,7 @@ impl Node {
             | Node::Boolean(token)
             | Node::VarAccess(token) => token.position.clone(),
             Node::Ref(.., pos)
+            | Node::StructConstructor(.., pos)
             | Node::Struct(.., pos)
             | Node::For(.., pos)
             | Node::Deref(.., pos)
@@ -136,6 +139,14 @@ impl Node {
 impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Node::StructConstructor(name, fields, _) => {
+                write!(f, "{} {{", name)?;
+                for (i, (field, val)) in fields.iter().enumerate() {
+                    write!(f, "{} {}: ", if i == 0 { "" } else { "," }, field)?;
+                    write!(f, "{}", val)?;
+                }
+                write!(f, "}}")
+            }
             Node::String(token) => write!(f, "String({})", token),
             Node::Struct(name, fields, _) => {
                 write!(f, "struct {} {{", name)?;
