@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::utils::{Position, Token};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum Type {
     Number,
     Boolean,
@@ -18,6 +18,8 @@ pub enum Type {
 pub enum Node {
     /// Condition, Body
     While(Box<Node>, Box<Node>, Position),
+    /// Name, Fields
+    Struct(Token, Vec<(Token, Type)>, Position),
     /// Number
     Number(Token),
     /// Boolean
@@ -27,7 +29,7 @@ pub enum Node {
     /// Operation, expression
     UnaryOp(Token, Box<Node>),
     /// Variable, Expression, Type
-    VarAssign(Token, Box<Node>, Option<Type>),
+    VarAssign(Token, Box<Node>, Type),
     /// Variable
     VarAccess(Token),
     /// Variable, Expression
@@ -82,6 +84,7 @@ impl Node {
                 token.position.clone()
             }
             Node::Ref(.., pos)
+            | Node::Struct(.., pos)
             | Node::For(.., pos)
             | Node::Deref(.., pos)
             | Node::While(.., pos)
@@ -130,6 +133,13 @@ impl Node {
 impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Node::Struct(name, fields, _) => {
+                write!(f, "struct {} {{", name)?;
+                for (name, ty) in fields {
+                    write!(f, " {}: {:?},", name, ty)?;
+                }
+                write!(f, "}}")
+            }
             Node::Number(token) => write!(f, "Number({})", token),
             Node::Boolean(token) => write!(f, "Boolean({})", token),
             Node::VarAccess(token) => write!(f, "Var({})", token),
@@ -212,8 +222,11 @@ impl fmt::Display for Node {
             Node::Ternary(cond, then, else_, _) => {
                 write!(f, "Ternary({} ? {} : {})", cond, then, else_)
             }
-            Node::If(cond, then, else_, _) => {
-                write!(f, "If( if {} then {} else {:?})", cond, then, else_)
+            Node::If(cond, then, Some(else_), _) => {
+                write!(f, "If( if {} then {} else {})", cond, then, else_)
+            }
+            Node::If(cond, then, None, _) => {
+                write!(f, "If( if {} then {})", cond, then)
             }
             Node::None(_) => write!(f, "None"),
             Node::Lambda(args, body, ret, _) => {

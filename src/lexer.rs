@@ -7,6 +7,8 @@ use crate::utils::{
 /// A Result type for Lexing
 type LexResult = Result<Vec<Token>, Error>;
 
+const LITERALS: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_";
+
 /// Lexes the given input string into a vector of tokens
 /// # Arguments
 /// * `input` - The input string to be lexed
@@ -545,13 +547,12 @@ pub fn lex(input: &str, filename: Rc<String>) -> LexResult {
                     }
                 }
                 Some((_, c)) => {
-                    if c.is_alphabetic() {
-                        let mut word = c.to_string();
-                        chars.next();
+                    if LITERALS.contains(*c) {
+                        let mut word = String::new();
                         let start = i;
                         let mut end = j + 2;
                         while let Some((i, c)) = chars.peek() {
-                            if !c.is_alphanumeric() {
+                            if !LITERALS.contains(*c) && !c.is_numeric() {
                                 break;
                             }
                             end = *i + 2;
@@ -604,6 +605,46 @@ pub fn lex(input: &str, filename: Rc<String>) -> LexResult {
                     ));
                 }
             },
+            '"' => {
+                let mut word = String::new();
+                let start = i;
+                let mut end = j + 2;
+                let mut escape = false;
+                while let Some((i, c)) = chars.next() {
+                    if escape {
+                        match c {
+                            'n' => word.push('\n'),
+                            't' => word.push('\t'),
+                            'r' => word.push('\r'),
+                            '\\' => word.push('\\'),
+                            '"' => word.push('"'),
+                            _ => {
+                                return Err(Error::new(
+                                    ErrorType::SyntaxError,
+                                    Position::new(line, i, i + 3, Rc::clone(&filename)),
+                                    "Invalid escape sequence".to_string(),
+                                ))
+                            }
+                        }
+                        escape = false;
+                    } else if c == '"' {
+                        end = i + 2;
+                        break;
+                    } else if c == '\\' {
+                        escape = true;
+                    } else {
+                        word.push(c);
+                    }
+                }
+                end -= last_line;
+                tokens.push(Token::new(
+                    TokenType::String(word),
+                    line,
+                    start,
+                    end,
+                    Rc::clone(&filename),
+                ));
+            }
             '=' => {
                 if let Some((_, '=')) = chars.peek() {
                     chars.next();
@@ -771,12 +812,12 @@ pub fn lex(input: &str, filename: Rc<String>) -> LexResult {
                     Rc::clone(&filename),
                 ));
             }
-            _ if c.is_alphabetic() => {
+            _ if LITERALS.contains(c) => {
                 let mut word = c.to_string();
                 let start = i;
                 let mut end = j + 2;
                 while let Some((i, c)) = chars.peek() {
-                    if !c.is_alphanumeric() {
+                    if !LITERALS.contains(*c) && !c.is_numeric() {
                         break;
                     }
                     end = *i + 2;

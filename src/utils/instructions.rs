@@ -140,7 +140,7 @@ impl fmt::Display for Instruction {
 /// An enum to specify the type of the value.
 #[derive(Clone, PartialEq)]
 pub enum Val {
-    /// A number.
+    /// A int.
     Num(ValNumber),
     /// A boolean.
     Bool(bool),

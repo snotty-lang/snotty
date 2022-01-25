@@ -72,9 +72,8 @@ impl Parser {
                     self.advance();
                     Ok(Node::Return(Box::new(self.expression(scope)?), pos))
                 }
-                "let" => {
-                    self.advance();
-                    let node = self.let_statement(true, scope)?;
+                "int" | "char" | "bool" => {
+                    let node = self.assignment(true, scope)?;
                     scope.register_variable(node.clone());
                     Ok(node)
                 }
@@ -175,13 +174,19 @@ impl Parser {
                         ))
                     }
                 }
+                "struct" => {
+                    self.advance();
+                    let node = self.struct_definition()?;
+                    scope.register_struct(node.clone());
+                    Ok(node)
+                }
                 _ => self.expression(scope),
             },
             TokenType::Identifier(_)
                 if self.peek_type().is_some()
                     && ASSIGNMENT_OPERATORS.contains(&self.peek_type().unwrap()) =>
             {
-                let node = self.let_statement(false, scope)?;
+                let node = self.assignment(false, scope)?;
                 scope.access_variable(&node);
                 Ok(node)
             }
@@ -215,20 +220,6 @@ impl Parser {
                     let op = self.current_token.clone();
                     self.advance();
                     let right = self.expression(scope)?;
-
-                    if [TokenType::DivAssign, TokenType::ModAssign].contains(&op.token_type) {
-                        if let Node::Number(Token {
-                            token_type: TokenType::Number(0),
-                            ..
-                        }) = right
-                        {
-                            return Err(Error::new(
-                                ErrorType::DivisionByZero,
-                                self.current_token.position.clone(),
-                                "Division by zero".to_string(),
-                            ));
-                        }
-                    }
                     Node::IndexAssign(
                         token.clone(),
                         Box::new(index),
@@ -263,20 +254,6 @@ impl Parser {
                     let op = self.current_token.clone();
                     self.advance();
                     let right = self.expression(scope)?;
-
-                    if [TokenType::DivAssign, TokenType::ModAssign].contains(&op.token_type) {
-                        if let Node::Number(Token {
-                            token_type: TokenType::Number(0),
-                            ..
-                        }) = right
-                        {
-                            return Err(Error::new(
-                                ErrorType::DivisionByZero,
-                                self.current_token.position.clone(),
-                                "Division by zero".to_string(),
-                            ));
-                        }
-                    }
                     pos.end = self.current_token.position.end;
                     pos.line_end = self.current_token.position.line_end;
                     let node = Node::DerefAssign(
@@ -313,20 +290,6 @@ impl Parser {
                     let op = self.current_token.clone();
                     self.advance();
                     let right = self.expression(scope)?;
-
-                    if [TokenType::DivAssign, TokenType::ModAssign].contains(&op.token_type) {
-                        if let Node::Number(Token {
-                            token_type: TokenType::Number(0),
-                            ..
-                        }) = right
-                        {
-                            return Err(Error::new(
-                                ErrorType::DivisionByZero,
-                                self.current_token.position.clone(),
-                                "Division by zero".to_string(),
-                            ));
-                        }
-                    }
                     pos.end = self.current_token.position.end;
                     pos.line_end = self.current_token.position.line_end;
                     let node = Node::DerefAssign(
@@ -350,6 +313,96 @@ impl Parser {
         }
     }
 
+    fn struct_definition(&mut self) -> ParseResult {
+        if let TokenType::Identifier(_) = self.current_token.token_type {
+            let name = self.current_token.clone();
+            let mut pos = name.position.clone();
+            self.advance();
+            match self.current_token.token_type {
+                TokenType::Eol => {
+                    self.advance();
+                    pos.end = self.current_token.position.end;
+                    pos.line_end = self.current_token.position.line_end;
+                    Ok(Node::Struct(name, vec![], pos))
+                }
+                TokenType::LCurly => {
+                    self.advance();
+                    let mut fields = vec![];
+                    if let TokenType::Identifier(_) = self.current_token.token_type {
+                        let field = self.current_token.clone();
+                        self.advance();
+                        if self.current_token.token_type != TokenType::Colon {
+                            return Err(Error::new(
+                                ErrorType::SyntaxError,
+                                self.current_token.position.clone(),
+                                "Expected ':' after field name".to_string(),
+                            ));
+                        }
+                        self.advance();
+                        let field_type = self.make_type()?;
+                        fields.push((field, field_type));
+                        while self.current_token.token_type == TokenType::Comma {
+                            self.advance();
+                            if !matches!(self.current_token.token_type, TokenType::Identifier(_)) {
+                                return Err(Error::new(
+                                    ErrorType::SyntaxError,
+                                    self.current_token.position.clone(),
+                                    "Expected field name".to_string(),
+                                ));
+                            }
+                            let field = self.current_token.clone();
+                            self.advance();
+                            if self.current_token.token_type != TokenType::Colon {
+                                return Err(Error::new(
+                                    ErrorType::SyntaxError,
+                                    self.current_token.position.clone(),
+                                    "Expected ':' after field name".to_string(),
+                                ));
+                            }
+                            self.advance();
+                            let field_type = self.make_type()?;
+                            fields.push((field, field_type));
+                        }
+                        if self.current_token.token_type != TokenType::RCurly {
+                            return Err(Error::new(
+                                ErrorType::SyntaxError,
+                                self.current_token.position.clone(),
+                                "Expected '}' after struct definition".to_string(),
+                            ));
+                        }
+                        self.advance();
+                        pos.end = self.current_token.position.end;
+                        pos.line_end = self.current_token.position.line_end;
+                        Ok(Node::Struct(name, fields, pos))
+                    } else {
+                        Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            format!(
+                                "Expected field name, found '{}'",
+                                self.current_token.token_type
+                            ),
+                        ))
+                    }
+                }
+                _ => Err(Error::new(
+                    ErrorType::SyntaxError,
+                    self.current_token.position.clone(),
+                    "Expected Struct Declaration".to_string(),
+                )),
+            }
+        } else {
+            Err(Error::new(
+                ErrorType::SyntaxError,
+                self.current_token.position.clone(),
+                format!(
+                    "Expected identifier, found {}",
+                    self.current_token.token_type
+                ),
+            ))
+        }
+    }
+
     fn expression(&mut self, scope: &mut Scope) -> ParseResult {
         self.binary_op(
             Self::comparison,
@@ -362,7 +415,7 @@ impl Parser {
     fn make_type(&mut self) -> Result<Type, Error> {
         match self.current_token.token_type {
             TokenType::Keyword(ref keyword) => match keyword.as_ref() {
-                "number" => {
+                "int" => {
                     self.advance();
                     Ok(Type::Number)
                 }
@@ -453,65 +506,64 @@ impl Parser {
         }
     }
 
-    fn let_statement(&mut self, init: bool, scope: &mut Scope) -> ParseResult {
-        if let TokenType::Identifier(_) = self.current_token.token_type {
-            let token = self.current_token.clone();
-            self.advance();
-            let t = if self.current_token.token_type == TokenType::Colon {
+    fn assignment(&mut self, init: bool, scope: &mut Scope) -> ParseResult {
+        if !init {
+            if let TokenType::Identifier(_) = self.current_token.token_type {
+                let token = self.current_token.clone();
                 self.advance();
-                Some(self.make_type()?)
-            } else {
-                None
-            };
-            match self.current_token.token_type {
-                TokenType::Assign if init => {
-                    self.advance();
-                    Ok(Node::VarAssign(token, Box::new(self.expression(scope)?), t))
-                }
-                TokenType::Assign => {
-                    self.advance();
-                    Ok(Node::VarReassign(token, Box::new(self.expression(scope)?)))
-                }
-                ref x if ASSIGNMENT_OPERATORS.contains(x) && !init => {
-                    let op = self.current_token.clone();
-                    self.advance();
-                    let right = self.expression(scope)?;
-
-                    if [TokenType::DivAssign, TokenType::ModAssign].contains(&op.token_type) {
-                        if let Node::Number(Token {
-                            token_type: TokenType::Number(0),
-                            ..
-                        }) = right
-                        {
-                            return Err(Error::new(
-                                ErrorType::DivisionByZero,
-                                self.current_token.position.clone(),
-                                "Division by zero".to_string(),
-                            ));
-                        }
+                match self.current_token.token_type {
+                    TokenType::Assign => {
+                        self.advance();
+                        Ok(Node::VarReassign(token, Box::new(self.expression(scope)?)))
                     }
-
-                    Ok(Node::VarReassign(
-                        token.clone(),
-                        Box::new(Node::BinaryOp(
-                            op.un_augmented(),
-                            Box::new(Node::VarAccess(token)),
-                            Box::new(right),
-                        )),
-                    ))
+                    ref x if ASSIGNMENT_OPERATORS.contains(x) => {
+                        let op = self.current_token.clone();
+                        self.advance();
+                        let right = self.expression(scope)?;
+                        Ok(Node::VarReassign(
+                            token.clone(),
+                            Box::new(Node::BinaryOp(
+                                op.un_augmented(),
+                                Box::new(Node::VarAccess(token)),
+                                Box::new(right),
+                            )),
+                        ))
+                    }
+                    _ => Err(Error::new(
+                        ErrorType::SyntaxError,
+                        self.current_token.position.clone(),
+                        format!("Expected '=', found {}", self.current_token),
+                    )),
                 }
-                _ => Err(Error::new(
+            } else {
+                Err(Error::new(
                     ErrorType::SyntaxError,
                     self.current_token.position.clone(),
-                    format!("Expected '=', found {}", self.current_token),
-                )),
+                    format!("Expected an identifier, found {}", self.current_token),
+                ))
             }
         } else {
-            Err(Error::new(
-                ErrorType::SyntaxError,
-                self.current_token.position.clone(),
-                format!("Expected an identifier, found {}", self.current_token),
-            ))
+            let t = self.make_type()?;
+            if let TokenType::Identifier(_) = self.current_token.token_type {
+                let token = self.current_token.clone();
+                self.advance();
+                if self.current_token.token_type == TokenType::Assign {
+                    self.advance();
+                    Ok(Node::VarAssign(token, Box::new(self.expression(scope)?), t))
+                } else {
+                    Err(Error::new(
+                        ErrorType::SyntaxError,
+                        self.current_token.position.clone(),
+                        format!("Expected '=', found {}", self.current_token),
+                    ))
+                }
+            } else {
+                Err(Error::new(
+                    ErrorType::SyntaxError,
+                    self.current_token.position.clone(),
+                    format!("Expected an identifier, found {}", self.current_token),
+                ))
+            }
         }
     }
 
@@ -985,19 +1037,6 @@ impl Parser {
             let op = self.current_token.clone();
             self.advance();
             let right = func2(self, scope)?;
-            if [TokenType::Div, TokenType::Mod].contains(&op.token_type) {
-                if let Node::Number(Token {
-                    token_type: TokenType::Number(0),
-                    ..
-                }) = right
-                {
-                    return Err(Error::new(
-                        ErrorType::DivisionByZero,
-                        self.current_token.position.clone(),
-                        "Division by zero".to_string(),
-                    ));
-                }
-            }
             left = Node::BinaryOp(op, Box::new(left), Box::new(right));
             token_type = self.current_token.token_type.clone();
         }
@@ -1133,6 +1172,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
                 }
                 None
             }
+            Node::Struct(..) => None,
             Node::UnaryOp(_, n1) => check_return(n1),
             Node::VarAssign(_, n1, _) => check_return(n1),
             Node::VarAccess(_) => None,
@@ -1256,6 +1296,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
                 }
                 None
             }
+            Node::Struct(..) => None,
             Node::IndexAssign(_, n1, n2)
             | Node::DerefAssign(n1, n2, _)
             | Node::If(n1, n2, None, _)
@@ -1309,6 +1350,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
     fn remove_inline(node: &mut Node) {
         match node {
             Node::FuncDef(_, _, _, _, true, p) => *node = Node::None(p.clone()),
+            Node::Struct(..) => (),
             Node::Call(_, n, _)
             | Node::Statements(n, _)
             | Node::Print(n, _)
@@ -1375,7 +1417,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
                     expanded.push(Node::VarAssign(
                         arg.clone(),
                         Box::new(param.clone()),
-                        Some(type_.clone()),
+                        type_.clone(),
                     ))
                 }
                 expanded.push(*body);
@@ -1394,6 +1436,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
                 insert_function(functions, n1);
                 insert_function(functions, n2);
             }
+            Node::Struct(..) => (),
             Node::Number(_) => (),
             Node::Boolean(_) => (),
             Node::Index(_, n, _)
@@ -1425,6 +1468,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
     }
 
     if let Some(mut functions2) = find_functions(ast) {
+        let mut old = functions.clone();
         functions.append(&mut functions2.clone());
         for f in functions2.iter_mut() {
             if let Node::FuncDef(_, _, f, _, _, _) = f {
@@ -1432,6 +1476,8 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
             }
         }
         remove_inline(ast);
+        old.append(&mut functions2);
+        functions = old;
     }
     insert_function(&mut functions, ast);
 }

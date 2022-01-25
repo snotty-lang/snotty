@@ -8,11 +8,11 @@ pub enum ErrorType {
     SyntaxError,
     UndefinedFunction,
     UndefinedVariable,
-    DivisionByZero,
     InvalidReturn,
     TypeError,
     IndexOutOfBounds,
     FileNotFound,
+    Redefinition,
 }
 
 /// An error that can occur during the compilation of the source code.

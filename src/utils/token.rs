@@ -3,8 +3,8 @@ use std::{cmp, fmt, rc::Rc};
 
 /// List of all the keywords identified by the lexer
 pub const KEYWORDS: [&str; 16] = [
-    "let", "ez", "return", "ezout", "ezin", "ezascii", "true", "false", "if", "else", "bool",
-    "number", "char", "while", "for", "inline",
+    "ez", "return", "ezout", "ezin", "ezascii", "true", "false", "if", "else", "bool", "int",
+    "char", "while", "for", "inline", "struct",
 ];
 
 pub const PREPROCESSOR_STATEMENTS: [&str; 7] = [
@@ -52,7 +52,7 @@ pub const ASSIGNMENT_OPERATORS: [TokenType; 15] = [
 ];
 
 /// Different types of Tokens converted by the lexer
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TokenType {
     AddAssign,
     SubAssign,
@@ -94,9 +94,6 @@ pub enum TokenType {
     BNot,
     BOr,
     BXor,
-    Char(u8),
-    Identifier(String),
-    Number(LexNumber),
     LSquare,
     RSquare,
     LParen,
@@ -105,10 +102,14 @@ pub enum TokenType {
     RCurly,
     Assign,
     Comma,
-    Keyword(String),
     Eol,
     Eof,
     TernaryIf,
+    Char(u8),
+    Identifier(String),
+    Number(LexNumber),
+    String(String),
+    Keyword(String),
     PreprocessorStatement(String),
 }
 
@@ -117,6 +118,12 @@ pub enum TokenType {
 pub struct Token {
     pub token_type: TokenType,
     pub position: Position,
+}
+
+impl std::hash::Hash for Token {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.token_type.hash(state);
+    }
 }
 
 impl fmt::Display for TokenType {
@@ -180,7 +187,8 @@ impl fmt::Display for TokenType {
                 TokenType::LAndAssign => "&&=".to_owned(),
                 TokenType::LOrAssign => "||=".to_owned(),
                 TokenType::LXor => "!&|".to_owned(),
-                TokenType::PreprocessorStatement(ref stmt) => format!("!{}", stmt),
+                TokenType::PreprocessorStatement(ref stmt) => format!("!{stmt}"),
+                TokenType::String(ref s) => format!("\"{s}\""),
             }
         )
     }
@@ -272,3 +280,5 @@ impl fmt::Display for Token {
         write!(f, "'{}'", self.token_type)
     }
 }
+
+impl std::cmp::Eq for Token {}

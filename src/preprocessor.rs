@@ -1,4 +1,4 @@
-use std::{fs, rc::Rc, collections::HashSet};
+use std::{collections::HashSet, fs, rc::Rc};
 
 use crate::{
     lexer,
@@ -103,7 +103,7 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                         TokenType::Identifier(ident) => {
                             declared.insert(ident);
                             tokens.drain(i..=i + 1);
-                        },
+                        }
                         _ => {
                             return Err(Error::new(
                                 ErrorType::SyntaxError,
@@ -115,8 +115,9 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                 },
                 _ => todo!(),
             }
+        } else {
+            i += 1;
         }
-        i += 1;
     }
     Ok(tokens)
 }

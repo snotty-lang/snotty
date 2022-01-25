@@ -1,12 +1,9 @@
-!declare tomato
-!declare potato
-!declare onion
-!declare carrot
+!use meme
 
 inline ez main() {
-    let a = 12
-    ezout a
-    if ezin < 50 ezout 6 else ezout 7
+    int a = "String!! yea"
+    ezout meme(ezin);
 }
+
 
 ezout main()

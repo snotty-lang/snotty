@@ -125,18 +125,16 @@ impl CodeGenerator {
                 if let TokenType::Identifier(ref var) = var1.token_type {
                     match self.make_instruction(expr, vars, memory)? {
                         Val::Index(index, type_) => {
-                            if let Some(t) = dec_type {
-                                if ValType::from_parse_type(t) != type_ {
-                                    return Err(Error::new(
-                                        ErrorType::TypeError,
-                                        var1.position.clone(),
-                                        format!(
-                                            "Cannot assign `{}` to `{}`",
-                                            type_,
-                                            ValType::from_parse_type(t)
-                                        ),
-                                    ));
-                                }
+                            if ValType::from_parse_type(dec_type) != type_ {
+                                return Err(Error::new(
+                                    ErrorType::TypeError,
+                                    var1.position.clone(),
+                                    format!(
+                                        "Cannot assign `{}` to `{}`",
+                                        type_,
+                                        ValType::from_parse_type(dec_type)
+                                    ),
+                                ));
                             }
                             let size = type_.get_size();
                             let mem = memory.allocate(size);
@@ -151,18 +149,16 @@ impl CodeGenerator {
                         val => {
                             let v = val.r#type();
                             let size = val.get_size();
-                            if let Some(t) = dec_type {
-                                if ValType::from_parse_type(t) != v {
-                                    return Err(Error::new(
-                                        ErrorType::TypeError,
-                                        var1.position.clone(),
-                                        format!(
-                                            "Cannot assign `{}` to `{}`",
-                                            val.r#type(),
-                                            ValType::from_parse_type(t)
-                                        ),
-                                    ));
-                                }
+                            if ValType::from_parse_type(dec_type) != v {
+                                return Err(Error::new(
+                                    ErrorType::TypeError,
+                                    var1.position.clone(),
+                                    format!(
+                                        "Cannot assign `{}` to `{}`",
+                                        val.r#type(),
+                                        ValType::from_parse_type(dec_type)
+                                    ),
+                                ));
                             }
                             let mem = memory.allocate(v.get_size());
                             self.instructions.push(
@@ -270,15 +266,7 @@ impl CodeGenerator {
                         self.instructions
                             .push(Instruction::Print(expr), (None, memory.last_memory_index));
                     }
-                    self.instructions.push(
-                        Instruction::Ascii(Val::Char(32)),
-                        (None, memory.last_memory_index),
-                    );
                 }
-                self.instructions.push(
-                    Instruction::Ascii(Val::Char(10)),
-                    (None, memory.last_memory_index),
-                );
                 Ok(Val::None)
             }
 
@@ -738,6 +726,8 @@ impl CodeGenerator {
                 );
                 Ok(Val::Index(mem, t))
             }
+
+            Node::Struct(_, _, _) => todo!(),
         }
     }
 }
