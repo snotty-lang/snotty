@@ -16,6 +16,8 @@ pub enum Type {
 /// A Node in the AST.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
+    /// String
+    String(Token),
     /// Condition, Body
     While(Box<Node>, Box<Node>, Position),
     /// Name, Fields
@@ -80,9 +82,10 @@ impl Node {
     pub fn position(&self) -> Position {
         match self {
             Node::Expanded(_, _) => unreachable!(),
-            Node::Number(token) | Node::Boolean(token) | Node::VarAccess(token) => {
-                token.position.clone()
-            }
+            Node::String(token)
+            | Node::Number(token)
+            | Node::Boolean(token)
+            | Node::VarAccess(token) => token.position.clone(),
             Node::Ref(.., pos)
             | Node::Struct(.., pos)
             | Node::For(.., pos)
@@ -133,6 +136,7 @@ impl Node {
 impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Node::String(token) => write!(f, "String({})", token),
             Node::Struct(name, fields, _) => {
                 write!(f, "struct {} {{", name)?;
                 for (name, ty) in fields {

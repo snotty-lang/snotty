@@ -728,6 +728,8 @@ impl CodeGenerator {
             }
 
             Node::Struct(_, _, _) => todo!(),
+
+            Node::String(_) => todo!(),
         }
     }
 }

@@ -184,14 +184,13 @@ impl Scope {
                 if self
                     .defined
                     .iter()
-                    .find(|a| {
+                    .any(|a| {
                         if let VarType::Function(args, _, name) = a {
-                            return name == token1 && args1.len() == args.len();
+                            name == token1 && args1.len() == args.len()
                         } else {
                             false
                         }
                     })
-                    .is_some()
                 {
                     found = true;
                 }
@@ -226,14 +225,13 @@ impl Scope {
                 if self
                     .defined
                     .iter()
-                    .find(|a| {
+                    .any(|a| {
                         if let VarType::Struct(fields, name) = a {
-                            return name == token1 && args1.len() == fields.len();
+                            name == token1 && args1.len() == fields.len()
                         } else {
                             false
                         }
                     })
-                    .is_some()
                 {
                     found = true;
                 }

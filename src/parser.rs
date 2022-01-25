@@ -701,6 +701,10 @@ impl Parser {
                     format!("Unexpected keyword: {}", self.current_token),
                 )),
             },
+            TokenType::String(_) => {
+                self.advance();
+                Ok(Node::String(token))
+            }
             TokenType::Eol => {
                 self.advance();
                 Ok(Node::None(token.position))
@@ -1240,6 +1244,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
                 }
                 None
             }
+            Node::String(_) => None,
             Node::Number(_) => None,
             Node::Boolean(_) => None,
             Node::Input(_) => None,
@@ -1319,6 +1324,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
             | Node::VarAssign(_, n, _)
             | Node::VarReassign(_, n) => find_functions(n),
             Node::VarAccess(_) => None,
+            Node::String(_) => None,
             Node::Input(_) => None,
             Node::Ternary(n1, n2, n3, _) | Node::If(n1, n2, Some(n3), _) => {
                 if let a @ Some(_) = find_functions(n1) {
@@ -1368,6 +1374,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
                 remove_inline(n1);
                 remove_inline(n2);
             }
+            Node::String(_) => (),
             Node::Number(_) => (),
             Node::Boolean(_) => (),
             Node::Index(_, n, _)
@@ -1437,6 +1444,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
                 insert_function(functions, n2);
             }
             Node::Struct(..) => (),
+            Node::String(_) => (),
             Node::Number(_) => (),
             Node::Boolean(_) => (),
             Node::Index(_, n, _)

@@ -66,13 +66,13 @@ use utils::Error;
 pub fn run(contents: &str, filename: String) -> Result<String, Error> {
     let tokens = lexer::lex(contents, Rc::new(filename))?;
     let tokens = preprocessor::preprocess(tokens)?;
-    println!(
-        "{:?}",
-        tokens
-            .iter()
-            .map(|x| x.to_string())
-            .collect::<Vec<String>>()
-    );
+    // println!(
+    //     "{:?}",
+    //     tokens
+    //         .iter()
+    //         .map(|x| x.to_string())
+    //         .collect::<Vec<String>>()
+    // );
     let ast = parser::parse(tokens)?;
     println!("{}\n", ast);
     let code = ir_code::generate_code(ast)?;

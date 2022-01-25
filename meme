@@ -1,7 +1,7 @@
 inline ez meme(meme_number: int) {
     if meme_number < 50 {
-        ezascii 'm', 'e', 'm', 'e', 32, 'n', 'u', 'm', 'b', 'e', 'r', 32, meme_number, 10
+        ezout 'm', 'e', 'm', 'e', ' ', 'n', 'u', 'm', 'b', 'e', 'r', ' ', meme_number, '\n'
     } else {
-        ezascii 'g', 'o', 'o', 'd', 'b', 'y', 'e', 10
+        ezout 'g', 'o', 'o', 'd', 'b', 'y', 'e', '\n'
     }
 }

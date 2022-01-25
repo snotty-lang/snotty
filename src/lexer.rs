@@ -610,7 +610,7 @@ pub fn lex(input: &str, filename: Rc<String>) -> LexResult {
                 let start = i;
                 let mut end = j + 2;
                 let mut escape = false;
-                while let Some((i, c)) = chars.next() {
+                for (i, c) in chars.by_ref() {
                     if escape {
                         match c {
                             'n' => word.push('\n'),

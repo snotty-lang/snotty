@@ -1,9 +1,8 @@
 !use meme
 
 inline ez main() {
-    int a = "String!! yea"
-    ezout meme(ezin);
+    "go"
+    meme(ezin);
 }
 
-
-ezout main()
+main()
