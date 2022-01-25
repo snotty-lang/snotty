@@ -1,6 +1,12 @@
 !use meme
 
+struct PPi {
+     p : int,
+     q : bool
+}
+
 inline ez main() {
+    int cock = PP { p : 1, q : true };
     "go"
     meme(ezin);
 }

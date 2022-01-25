@@ -1152,6 +1152,9 @@ fn check_undefined(global: &mut Scope) -> Option<Error> {
         if !scope.unresolved_functions.is_empty() {
             return Some(scope.unresolved_functions.pop().unwrap());
         }
+        if !scope.unresolved_structs.is_empty() {
+            return Some(scope.unresolved_structs.pop().unwrap());
+        }
         for child in &mut scope.scopes {
             if let Some(err) = check_functions(child) {
                 return Some(err);
@@ -1171,6 +1174,13 @@ fn check_undefined(global: &mut Scope) -> Option<Error> {
                     ErrorType::UndefinedFunction,
                     token.position.clone(),
                     format!("Function {} is not defined", token),
+                ));
+            }
+            Node::StructConstructor(token, _, _) => {
+                return Some(Error::new(
+                    ErrorType::UndefinedFunction,
+                    token.position.clone(),
+                    format!("Struct {} is not defined", token),
                 ));
             }
             _ => unreachable!(),
