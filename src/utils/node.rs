@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::utils::{Position, Token};
+use crate::utils::{Position, Token, TokenType};
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum Type {
@@ -29,21 +29,21 @@ pub enum Node {
     /// Boolean
     Boolean(Token),
     /// Operation, left, right
-    BinaryOp(Token, Box<Node>, Box<Node>),
+    BinaryOp(Token, Box<Node>, Box<Node>, Type),
     /// Operation, expression
-    UnaryOp(Token, Box<Node>),
+    UnaryOp(Token, Box<Node>, Type),
     /// Variable, Expression, Type
     VarAssign(Token, Box<Node>, Type),
     /// Variable
-    VarAccess(Token),
+    VarAccess(Token, Type),
     /// Variable, Expression
     VarReassign(Token, Box<Node>),
     /// Statements
     Statements(Vec<Node>, Position),
     /// Function, args
-    Call(Token, Vec<Node>, Position),
+    Call(Token, Vec<Node>, Type, Position),
     /// Function, args, body, return type, inline
-    FuncDef(Token, Vec<(Token, Type)>, Box<Node>, Type, bool, Position),
+    FuncDef(Token, Vec<(Token, Type)>, Box<Node>, Type, Position),
     /// Expression
     Return(Box<Node>, Position),
     /// Expressions
@@ -51,25 +51,25 @@ pub enum Node {
     /// Expressions
     Ascii(Vec<Node>, Position),
     /// Input
-    Input(Position),
+    Input(Type, Position),
     /// Expression
-    Ref(Box<Node>, Position),
+    Ref(Box<Node>, Type, Position),
     /// Expression
-    Deref(Box<Node>, Position),
+    Deref(Box<Node>, Type, Position),
     /// Condition, then, else
-    Ternary(Box<Node>, Box<Node>, Box<Node>, Position),
+    Ternary(Box<Node>, Box<Node>, Box<Node>, Type, Position),
     /// Condition, then, else
     If(Box<Node>, Box<Node>, Option<Box<Node>>, Position),
     /// None
     None(Position),
     /// args, body, return type
-    Lambda(Vec<(Token, Type)>, Box<Node>, Type, Position),
+    Lambda(Vec<(Token, Type)>, Box<Node>, Position),
     /// Char
     Char(Token, Position),
     /// Elements
-    Array(Vec<Node>, Position),
+    Array(Vec<Node>, Type, Position),
     /// Array, index
-    Index(Token, Box<Node>, Position),
+    Index(Token, Box<Node>, Type, Position),
     /// Array, index, expression
     IndexAssign(Token, Box<Node>, Box<Node>),
     // Pointer, expression
@@ -87,7 +87,7 @@ impl Node {
             Node::String(token)
             | Node::Number(token)
             | Node::Boolean(token)
-            | Node::VarAccess(token) => token.position.clone(),
+            | Node::VarAccess(token, _) => token.position.clone(),
             Node::Ref(.., pos)
             | Node::StructConstructor(.., pos)
             | Node::Struct(.., pos)
@@ -107,8 +107,8 @@ impl Node {
             | Node::DerefAssign(.., pos)
             | Node::Array(.., pos)
             | Node::Index(.., pos)
-            | Node::Input(pos) => pos.clone(),
-            Node::BinaryOp(_, left, right) => {
+            | Node::Input(.., pos) => pos.clone(),
+            Node::BinaryOp(_, left, right, _) => {
                 let mut pos = left.position();
                 let end_pos = right.position();
                 pos.end = end_pos.end;
@@ -118,7 +118,7 @@ impl Node {
             Node::VarReassign(token, expr)
             | Node::VarAssign(token, expr, _)
             | Node::IndexAssign(token, _, expr)
-            | Node::UnaryOp(token, expr) => {
+            | Node::UnaryOp(token, expr, _) => {
                 let mut pos = token.position.clone();
                 let end_pos = expr.position();
                 pos.end = end_pos.end;
@@ -132,6 +132,42 @@ impl Node {
                 pos.line_end = end_pos.line_end;
                 pos
             }
+        }
+    }
+
+    pub fn get_type(&self) -> Type {
+        match self {
+            Node::StructConstructor(_, _, _) => todo!(),
+            Node::Struct(_, _, _) => todo!(),
+            Node::Lambda(_, _, _) => Type::Function(vec![], Box::new(Type::None)),
+            Node::Array(v, ty, _) => Type::Array(Box::new(ty.clone()), v.len()),
+            Node::Return(a, _) => a.get_type(),
+            Node::String(s) => {
+                if let TokenType::String(ref s) = s.token_type {
+                    Type::Array(Box::new(Type::Char), s.len())
+                } else {
+                    unreachable!()
+                }
+            }
+            Node::Ref(_, ty, _) => Type::Ref(Box::new(ty.clone())),
+            Node::Deref(_, ty, _) => {
+                if let Type::Ref(a) = ty {
+                    **a
+                } else {
+                    unreachable!()
+                }
+            }
+            Node::Number(_) => Type::Number,
+            Node::Boolean(_) => Type::Boolean,
+            Node::Char(_, _) => Type::Char,
+            Node::VarAccess(_, ty)
+            | Node::UnaryOp(_, _, ty)
+            | Node::BinaryOp(_, _, _, ty)
+            | Node::Call(_, _, ty, _)
+            | Node::Ternary(_, _, _, ty, _)
+            | Node::Expanded(_, ty)
+            | Node::Index(_, _, ty, _) => ty.clone(),
+            _ => Type::None,
         }
     }
 }
@@ -157,11 +193,11 @@ impl fmt::Display for Node {
             }
             Node::Number(token) => write!(f, "Number({})", token),
             Node::Boolean(token) => write!(f, "Boolean({})", token),
-            Node::VarAccess(token) => write!(f, "Var({})", token),
-            Node::BinaryOp(token, left, right) => {
+            Node::VarAccess(token, _) => write!(f, "Var({})", token),
+            Node::BinaryOp(token, left, right, _) => {
                 write!(f, "BinaryOp({} {} {})", left, token, right)
             }
-            Node::UnaryOp(token, expr) => write!(f, "UnaryOp({} {})", token, expr),
+            Node::UnaryOp(token, expr, _) => write!(f, "UnaryOp({} {})", token, expr),
             Node::VarReassign(token, expr) => write!(f, "Reassign({} = {})", token, expr),
             Node::VarAssign(token, expr, _) => write!(f, "Assign({} = {})", token, expr),
             Node::Statements(statements, _) => {
@@ -175,7 +211,7 @@ impl fmt::Display for Node {
                         .join("\n")
                 )
             }
-            Node::Call(token, args, _) => {
+            Node::Call(token, args, _, _) => {
                 write!(
                     f,
                     "Call({}({}))",
@@ -186,7 +222,7 @@ impl fmt::Display for Node {
                         .join(", ")
                 )
             }
-            Node::FuncDef(token, args, body, ret, _, _) => {
+            Node::FuncDef(token, args, body, ret, _) => {
                 write!(
                     f,
                     "FuncDef({}({}) -> {:?} {})",
@@ -225,26 +261,26 @@ impl fmt::Display for Node {
                         .join(", ")
                 )
             }
-            Node::Input(_) => {
+            Node::Input(..) => {
                 write!(f, "input")
             }
-            Node::Ref(expr, _) => {
+            Node::Ref(expr, ..) => {
                 write!(f, "Ref({})", expr)
             }
-            Node::Deref(expr, _) => {
+            Node::Deref(expr, ..) => {
                 write!(f, "Deref({})", expr)
             }
-            Node::Ternary(cond, then, else_, _) => {
+            Node::Ternary(cond, then, else_, ..) => {
                 write!(f, "Ternary({} ? {} : {})", cond, then, else_)
             }
-            Node::If(cond, then, Some(else_), _) => {
+            Node::If(cond, then, Some(else_), ..) => {
                 write!(f, "If( if {} then {} else {})", cond, then, else_)
             }
             Node::If(cond, then, None, _) => {
                 write!(f, "If( if {} then {})", cond, then)
             }
             Node::None(_) => write!(f, "None"),
-            Node::Lambda(args, body, ret, _) => {
+            Node::Lambda(args, body, ret, ..) => {
                 write!(
                     f,
                     "Lambda({} -> {:?} {})",
@@ -257,7 +293,7 @@ impl fmt::Display for Node {
                 )
             }
             Node::Char(c, _) => write!(f, "Char({})", c),
-            Node::Array(arr, _) => {
+            Node::Array(arr, ..) => {
                 write!(
                     f,
                     "Array({})",
@@ -267,7 +303,7 @@ impl fmt::Display for Node {
                         .join(", ")
                 )
             }
-            Node::Index(arr, idx, _) => {
+            Node::Index(arr, idx, ..) => {
                 write!(f, "Index({}[{}])", arr, idx)
             }
             Node::IndexAssign(arr, idx, expr) => {

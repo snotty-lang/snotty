@@ -38,7 +38,7 @@ impl CodeGenerator {
                 }
             }
 
-            Node::BinaryOp(op, left, right) => {
+            Node::BinaryOp(op, left, right, _) => {
                 let left = self.make_instruction(left, vars, memory)?;
                 let right = self.make_instruction(right, vars, memory)?;
                 let left_type = left.r#type();
@@ -95,7 +95,7 @@ impl CodeGenerator {
                 Ok(Val::Index(mem, t))
             }
 
-            Node::UnaryOp(op, expr) => {
+            Node::UnaryOp(op, expr, _) => {
                 let expr = self.make_instruction(expr, vars, memory)?;
                 let expr_type = expr.r#type();
                 let t = match expr_type.get_result_type_unary(op) {
@@ -174,7 +174,7 @@ impl CodeGenerator {
                 }
             }
 
-            Node::VarAccess(var) => {
+            Node::VarAccess(var, _) => {
                 if let TokenType::Identifier(ref var) = var.token_type {
                     Ok(vars.get(var).cloned().unwrap())
                 } else {
@@ -279,7 +279,7 @@ impl CodeGenerator {
                 Ok(Val::None)
             }
 
-            Node::Input(_) => {
+            Node::Input(..) => {
                 let t = ValType::Number;
                 let size = t.get_size();
                 let mem = memory.allocate(size);
@@ -341,7 +341,7 @@ impl CodeGenerator {
                 Ok(Val::None)
             }
 
-            Node::Ternary(cond1, then1, else_1, _) => {
+            Node::Ternary(cond1, then1, else_1, ..) => {
                 let cond = self.make_instruction(cond1, vars, memory)?;
                 if cond.r#type() != ValType::Boolean {
                     return Err(Error::new(
@@ -376,23 +376,9 @@ impl CodeGenerator {
 
             Node::None(_) => Ok(Val::None),
 
-            Node::Call(_, _, _) => {
-                // let mut new = vec![];
-                // for arg in args {
-                //     let arg = self.make_instruction(arg, vars, memory)?;
-                //     new.push(arg);
-                // }
-                // let size = f.get_size();
-                // let type_ = f.get_type();
-                // let mem = memory.allocate(size);
-                // self.instructions.push(Instruction::Call(0, new), (Some((mem, size)), memory.last_memory_index));
-                // Ok(Val::Index(mem, ValType::(None, memory.last_memory_index)))
-                todo!()
-            }
+            Node::Call(..) | Node::FuncDef(..) => unreachable!(),
 
-            Node::FuncDef(_, _, _, _, _, _) => todo!(),
-
-            Node::Index(arr1, index1, _) => {
+            Node::Index(arr1, index1, ..) => {
                 let arr = if let TokenType::Identifier(ref var) = arr1.token_type {
                     vars.get(var).cloned().unwrap()
                 } else {
@@ -465,7 +451,7 @@ impl CodeGenerator {
                 Ok(Val::None)
             }
 
-            Node::Array(elements, _) => {
+            Node::Array(elements, ..) => {
                 let mut type_ = None;
                 let mut pointer = vec![];
                 for element1 in elements {
@@ -511,14 +497,14 @@ impl CodeGenerator {
                 Ok(Val::Index(new_mem, ValType::Pointer(Box::new(type_))))
             }
 
-            Node::Return(val, _) => {
+            Node::Return(val, ..) => {
                 let val = self.make_instruction(val, vars, memory)?;
                 self.instructions
                     .push(Instruction::Return(val), (None, memory.last_memory_index));
                 Ok(Val::None)
             }
 
-            Node::Ref(val1, _) => {
+            Node::Ref(val1, ..) => {
                 let val = self.make_instruction(val1, vars, memory)?;
                 let val2 = if let Val::Index(mem, _) = val {
                     mem
@@ -538,7 +524,7 @@ impl CodeGenerator {
                 Ok(Val::Index(mem, ValType::Pointer(Box::new(t))))
             }
 
-            Node::Deref(val1, _) => {
+            Node::Deref(val1, ..) => {
                 let val = self.make_instruction(val1, vars, memory)?;
                 if let ValType::Pointer(t) = val.r#type() {
                     let size = t.get_size();
@@ -557,7 +543,7 @@ impl CodeGenerator {
                 }
             }
 
-            Node::Char(c, _) => {
+            Node::Char(c, ..) => {
                 if let TokenType::Char(c) = c.token_type {
                     Ok(Val::Char(c))
                 } else {
@@ -565,10 +551,10 @@ impl CodeGenerator {
                 }
             }
 
-            Node::Lambda(_, _, _, _) => todo!(),
+            Node::Lambda(..) => todo!(),
 
             Node::DerefAssign(deref, assign, _) => {
-                let deref = if let Node::Deref(val1, _) = &**deref {
+                let deref = if let Node::Deref(val1, ..) = &**deref {
                     let val = self.make_instruction(val1, vars, memory)?;
                     if let ValType::Pointer(_) = val.r#type() {
                         val

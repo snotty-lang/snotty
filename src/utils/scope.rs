@@ -70,7 +70,7 @@ impl Scope {
             return;
         }
         let pos = function.position();
-        if let Node::FuncDef(token, args, _, ret, _, _) = function {
+        if let Node::FuncDef(token, args, _, ret, _) = function {
             let func = VarType::Function(
                 args.iter().map(|a| a.1.clone()).collect(),
                 ret,
@@ -104,7 +104,9 @@ impl Scope {
             return;
         }
         match &node {
-            Node::VarAccess(token) | Node::VarReassign(token, ..) | Node::VarAssign(token, ..) => {
+            Node::VarAccess(token, _)
+            | Node::VarReassign(token, ..)
+            | Node::VarAssign(token, ..) => {
                 if !self.defined.iter().any(|a| a.get_name() == token) {
                     if self.args.is_some() && self.args.as_ref().unwrap().contains(token) {
                         return;
@@ -180,7 +182,7 @@ impl Scope {
         }
         let mut found = false;
         match &node {
-            Node::Call(token1, args1, _) => {
+            Node::Call(token1, args1, ..) => {
                 if self.defined.iter().any(|a| {
                     if let VarType::Function(args, _, name) = a {
                         name == token1 && args1.len() == args.len()

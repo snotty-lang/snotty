@@ -1194,7 +1194,7 @@ fn check_undefined(global: &mut Scope) -> Option<Error> {
 fn keyword_checks(ast: &Node) -> Option<Error> {
     fn check_return(node: &Node) -> Option<Position> {
         match node {
-            Node::BinaryOp(_, n1, n2)
+            Node::BinaryOp(_, n1, n2, _)
             | Node::IndexAssign(_, n1, n2)
             | Node::While(n1, n2, _)
             | Node::DerefAssign(n1, n2, _) => {
@@ -1228,9 +1228,9 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
                 None
             }
             Node::Struct(..) => None,
-            Node::UnaryOp(_, n1) => check_return(n1),
+            Node::UnaryOp(_, n1, _) => check_return(n1),
             Node::VarAssign(_, n1, _) => check_return(n1),
-            Node::VarAccess(_) => None,
+            Node::VarAccess(..) => None,
             Node::VarReassign(_, n1) => check_return(n1),
             Node::Statements(nodes, _) => {
                 let mut ret = None;
@@ -1254,7 +1254,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
                 }
                 ret
             }
-            Node::Ternary(n1, n2, n3, _) => {
+            Node::Ternary(n1, n2, n3, ..) => {
                 let n1 = check_return(n1);
                 if n1.is_some() {
                     return n1;
@@ -1286,7 +1286,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
                 }
                 None
             }
-            Node::Call(_, n1, _) => {
+            Node::Call(_, n1, ..) => {
                 for i in n1.iter().map(check_return) {
                     if i.is_some() {
                         return i;
@@ -1294,10 +1294,10 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
                 }
                 None
             }
-            Node::Index(_, n1, _) => check_return(n1),
+            Node::Index(_, n1, ..) => check_return(n1),
             Node::FuncDef(..) | Node::Lambda(..) => None,
             Node::Return(_, pos) => Some(pos.clone()),
-            Node::Ref(n1, _) | Node::Deref(n1, _) => check_return(n1),
+            Node::Ref(n1, ..) | Node::Deref(n1, ..) => check_return(n1),
             Node::Print(n1, _) | Node::Ascii(n1, _) => {
                 for n in n1 {
                     if let Some(t) = check_return(n) {
@@ -1309,11 +1309,11 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
             Node::String(_) => None,
             Node::Number(_) => None,
             Node::Boolean(_) => None,
-            Node::Input(_) => None,
+            Node::Input(..) => None,
             Node::None(_) => None,
-            Node::Char(_, _) => None,
-            Node::Array(_, _) => None,
-            Node::Expanded(_, _) => unreachable!(),
+            Node::Char(..) => None,
+            Node::Array(..) => None,
+            Node::Expanded(..) => unreachable!(),
             // _ => None,
         }
     }
@@ -1363,7 +1363,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
                 }
                 None
             }
-            Node::Call(_, n, _) | Node::Print(n, _) | Node::Array(n, _) | Node::Ascii(n, _) => {
+            Node::Call(_, n, ..) | Node::Print(n, _) | Node::Array(n, ..) | Node::Ascii(n, _) => {
                 for n in n {
                     if let a @ Some(_) = find_functions(n) {
                         return a;
@@ -1376,7 +1376,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
             | Node::DerefAssign(n1, n2, _)
             | Node::If(n1, n2, None, _)
             | Node::While(n1, n2, _)
-            | Node::BinaryOp(_, n1, n2) => {
+            | Node::BinaryOp(_, n1, n2, _) => {
                 if let a @ Some(_) = find_functions(n1) {
                     return a;
                 }
@@ -1384,19 +1384,19 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
             }
             Node::Number(_) => None,
             Node::Boolean(_) => None,
-            Node::Index(_, n, _)
-            | Node::Lambda(_, n, _, _)
-            | Node::Ref(n, _)
-            | Node::Deref(n, _)
-            | Node::Return(n, _)
-            | Node::FuncDef(_, _, n, _, _, _)
-            | Node::UnaryOp(_, n)
+            Node::Index(_, n, ..)
+            | Node::Lambda(_, n, ..)
+            | Node::Ref(n, ..)
+            | Node::Deref(n, ..)
+            | Node::Return(n, ..)
+            | Node::FuncDef(_, _, n, ..)
+            | Node::UnaryOp(_, n, _)
             | Node::VarAssign(_, n, _)
             | Node::VarReassign(_, n) => find_functions(n),
-            Node::VarAccess(_) => None,
+            Node::VarAccess(..) => None,
             Node::String(_) => None,
-            Node::Input(_) => None,
-            Node::Ternary(n1, n2, n3, _) | Node::If(n1, n2, Some(n3), _) => {
+            Node::Input(..) => None,
+            Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
                 if let a @ Some(_) = find_functions(n1) {
                     return a;
                 }
@@ -1427,10 +1427,10 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
         match node {
             Node::FuncDef(_, _, _, _, true, p) => *node = Node::None(p.clone()),
             Node::Struct(..) => (),
-            Node::Call(_, n, _)
+            Node::Call(_, n, ..)
             | Node::Statements(n, _)
             | Node::Print(n, _)
-            | Node::Array(n, _)
+            | Node::Array(n, ..)
             | Node::Ascii(n, _) => {
                 for n in n {
                     remove_inline(n);
@@ -1445,25 +1445,25 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
             | Node::DerefAssign(n1, n2, _)
             | Node::If(n1, n2, None, _)
             | Node::While(n1, n2, _)
-            | Node::BinaryOp(_, n1, n2) => {
+            | Node::BinaryOp(_, n1, n2, _) => {
                 remove_inline(n1);
                 remove_inline(n2);
             }
             Node::String(_) => (),
             Node::Number(_) => (),
             Node::Boolean(_) => (),
-            Node::Index(_, n, _)
-            | Node::Lambda(_, n, _, _)
-            | Node::Ref(n, _)
-            | Node::Deref(n, _)
-            | Node::Return(n, _)
-            | Node::FuncDef(_, _, n, _, _, _)
-            | Node::UnaryOp(_, n)
+            Node::Index(_, n, ..)
+            | Node::Lambda(_, n, ..)
+            | Node::Ref(n, ..)
+            | Node::Deref(n, ..)
+            | Node::Return(n, ..)
+            | Node::FuncDef(_, _, n, ..)
+            | Node::UnaryOp(_, n, _)
             | Node::VarAssign(_, n, _)
             | Node::VarReassign(_, n) => remove_inline(n),
-            Node::VarAccess(_) => (),
-            Node::Input(_) => (),
-            Node::Ternary(n1, n2, n3, _) | Node::If(n1, n2, Some(n3), _) => {
+            Node::VarAccess(..) => (),
+            Node::Input(..) => (),
+            Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
                 remove_inline(n1);
                 remove_inline(n2);
                 remove_inline(n3);
@@ -1482,7 +1482,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
 
     fn insert_function(functions: &mut Vec<Node>, node: &mut Node) {
         match node {
-            Node::Call(name, args, _) => {
+            Node::Call(name, args, ..) => {
                 let func = match functions.iter().find(|f| match f {
                     Node::FuncDef(n, _, _, _, _, _) => n == name,
                     _ => false,
@@ -1505,7 +1505,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
                 expanded.push(*body);
                 *node = Node::Expanded(expanded, ret.clone());
             }
-            Node::Statements(n, _) | Node::Print(n, _) | Node::Array(n, _) | Node::Ascii(n, _) => {
+            Node::Statements(n, _) | Node::Print(n, _) | Node::Array(n, ..) | Node::Ascii(n, _) => {
                 for n in n {
                     insert_function(functions, n);
                 }
@@ -1519,7 +1519,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
             | Node::DerefAssign(n1, n2, _)
             | Node::If(n1, n2, None, _)
             | Node::While(n1, n2, _)
-            | Node::BinaryOp(_, n1, n2) => {
+            | Node::BinaryOp(_, n1, n2, _) => {
                 insert_function(functions, n1);
                 insert_function(functions, n2);
             }
@@ -1527,18 +1527,18 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
             Node::String(_) => (),
             Node::Number(_) => (),
             Node::Boolean(_) => (),
-            Node::Index(_, n, _)
-            | Node::Lambda(_, n, _, _)
-            | Node::Ref(n, _)
-            | Node::Deref(n, _)
-            | Node::Return(n, _)
-            | Node::FuncDef(_, _, n, _, _, _)
-            | Node::UnaryOp(_, n)
+            Node::Index(_, n, ..)
+            | Node::Lambda(_, n, ..)
+            | Node::Ref(n, ..)
+            | Node::Deref(n, ..)
+            | Node::Return(n, ..)
+            | Node::FuncDef(_, _, n, ..)
+            | Node::UnaryOp(_, n, _)
             | Node::VarAssign(_, n, _)
             | Node::VarReassign(_, n) => insert_function(functions, n),
-            Node::VarAccess(_) => (),
-            Node::Input(_) => (),
-            Node::Ternary(n1, n2, n3, _) | Node::If(n1, n2, Some(n3), _) => {
+            Node::VarAccess(..) => (),
+            Node::Input(..) => (),
+            Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
                 insert_function(functions, n1);
                 insert_function(functions, n2);
                 insert_function(functions, n3);
