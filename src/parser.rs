@@ -144,35 +144,9 @@ impl Parser {
                 }
                 "ez" => {
                     self.advance();
-                    let node = self.function_definition(false, scope)?;
+                    let node = self.function_definition(scope)?;
                     scope.register_function(node.clone());
                     Ok(node)
-                }
-                "inline" => {
-                    self.advance();
-                    if let TokenType::Keyword(ref s) = self.current_token.token_type {
-                        if s == "ez" {
-                            self.advance();
-                            let node = self.function_definition(true, scope)?;
-                            scope.register_function(node.clone());
-                            Ok(node)
-                        } else {
-                            Err(Error::new(
-                                ErrorType::SyntaxError,
-                                self.current_token.position.clone(),
-                                format!("Expected keyword 'ez', found {}", s),
-                            ))
-                        }
-                    } else {
-                        Err(Error::new(
-                            ErrorType::SyntaxError,
-                            self.current_token.position.clone(),
-                            format!(
-                                "Expected keyword 'ez', found {}",
-                                self.current_token.token_type
-                            ),
-                        ))
-                    }
                 }
                 "struct" => {
                     self.advance();
@@ -187,7 +161,7 @@ impl Parser {
                     && ASSIGNMENT_OPERATORS.contains(&self.peek_type().unwrap()) =>
             {
                 let node = self.assignment(false, scope)?;
-                scope.access_variable(&node);
+                scope.access_variable(&node)?;
                 Ok(node)
             }
             TokenType::LCurly => {
@@ -220,17 +194,33 @@ impl Parser {
                     let op = self.current_token.clone();
                     self.advance();
                     let right = self.expression(scope)?;
+                    let t = scope.access_variable_by_token(&token)?;
+                    let rt = match right.get_type().get_result_type(&t, &op) {
+                        Some(t) => t,
+                        None => {
+                            return Err(Error::new(
+                                ErrorType::TypeError,
+                                self.current_token.position.clone(),
+                                format!(
+                                    "Cannot apply operator {} to {} and {}",
+                                    op,
+                                    t,
+                                    right.get_type()
+                                ),
+                            ))
+                        }
+                    };
                     Node::IndexAssign(
                         token.clone(),
                         Box::new(index),
                         Box::new(Node::BinaryOp(
                             op.un_augmented(),
-                            Box::new(Node::VarAccess(token)),
+                            Box::new(Node::VarAccess(token, t)),
                             Box::new(right),
+                            rt,
                         )),
                     )
                 };
-                scope.access_variable(&node);
                 Ok(node)
             }
             TokenType::Mul => {
@@ -251,21 +241,38 @@ impl Parser {
                         pos,
                     ))
                 } else {
-                    let op = self.current_token.clone();
+                    let op = self.current_token.clone().un_augmented();
                     self.advance();
                     let right = self.expression(scope)?;
                     pos.end = self.current_token.position.end;
                     pos.line_end = self.current_token.position.line_end;
+                    let t = node.get_type();
+                    let rt = match t.get_result_type(&right.get_type(), &op) {
+                        Some(t) => t,
+                        None => {
+                            return Err(Error::new(
+                                ErrorType::TypeError,
+                                self.current_token.position.clone(),
+                                format!(
+                                    "Cannot apply operator {} to types {} and {}",
+                                    op,
+                                    t,
+                                    right.get_type()
+                                ),
+                            ))
+                        }
+                    };
                     let node = Node::DerefAssign(
                         Box::new(node.clone()),
                         Box::new(Node::BinaryOp(
-                            op.un_augmented(),
-                            Box::new(Node::Deref(Box::new(node), pos.clone())),
+                            op,
+                            Box::new(Node::Deref(Box::new(node), t, pos.clone())),
                             Box::new(right),
+                            rt,
                         )),
                         pos,
                     );
-                    scope.access_variable(&node);
+                    scope.access_variable(&node)?;
                     Ok(node)
                 }
             }
@@ -287,27 +294,40 @@ impl Parser {
                         pos,
                     ))
                 } else {
-                    let op = self.current_token.clone();
+                    let op = self.current_token.clone().un_augmented();
                     self.advance();
                     let right = self.expression(scope)?;
                     pos.end = self.current_token.position.end;
                     pos.line_end = self.current_token.position.line_end;
+                    let t = node.get_type();
+                    let rt = match t.get_result_type(&right.get_type(), &op) {
+                        Some(t) => t,
+                        None => {
+                            return Err(Error::new(
+                                ErrorType::TypeError,
+                                self.current_token.position.clone(),
+                                format!(
+                                    "Cannot apply operator {} to types {} and {}",
+                                    op,
+                                    t,
+                                    right.get_type()
+                                ),
+                            ))
+                        }
+                    };
                     let node = Node::DerefAssign(
                         Box::new(node.clone()),
                         Box::new(Node::BinaryOp(
-                            op.un_augmented(),
-                            Box::new(Node::Deref(Box::new(node), pos.clone())),
+                            op,
+                            Box::new(Node::Deref(Box::new(node), t, pos.clone())),
                             Box::new(right),
+                            rt,
                         )),
                         pos,
                     );
-                    scope.access_variable(&node);
+                    scope.access_variable(&node)?;
                     Ok(node)
                 }
-            }
-            TokenType::Eol => {
-                self.advance();
-                self.statement(scope)
             }
             _ => self.expression(scope),
         }
@@ -443,30 +463,9 @@ impl Parser {
                     Type::Ref(Box::new(self.make_type()?))
                 })))
             }
-            TokenType::LParen => {
+            TokenType::Eol => {
                 self.advance();
-                let mut types = vec![];
-                if self.current_token.token_type != TokenType::RParen {
-                    types.push(self.make_type()?);
-                    while self.current_token.token_type == TokenType::Comma {
-                        self.advance();
-                        types.push(self.make_type()?);
-                    }
-                    if self.current_token.token_type != TokenType::RParen {
-                        return Err(Error::new(
-                            ErrorType::SyntaxError,
-                            self.current_token.position.clone(),
-                            "Expected ')'".to_string(),
-                        ));
-                    }
-                }
-                self.advance();
-                if self.current_token.token_type == TokenType::Arrow {
-                    self.advance();
-                    Ok(Type::Function(types, Box::new(self.make_type()?)))
-                } else {
-                    Ok(Type::None)
-                }
+                Ok(Type::None)
             }
             TokenType::LSquare => {
                 self.advance();
@@ -517,15 +516,27 @@ impl Parser {
                         Ok(Node::VarReassign(token, Box::new(self.expression(scope)?)))
                     }
                     ref x if ASSIGNMENT_OPERATORS.contains(x) => {
-                        let op = self.current_token.clone();
+                        let op = self.current_token.clone().un_augmented();
                         self.advance();
                         let right = self.expression(scope)?;
+                        let t = scope.access_variable_by_token(&token)?;
+                        let rt = match t.get_result_type(&right.get_type(), &op) {
+                            Some(t) => t,
+                            None => {
+                                return Err(Error::new(
+                                    ErrorType::TypeError,
+                                    self.current_token.position.clone(),
+                                    format!("Cannot assign {} to {}", right.get_type(), t),
+                                ))
+                            }
+                        };
                         Ok(Node::VarReassign(
                             token.clone(),
                             Box::new(Node::BinaryOp(
-                                op.un_augmented(),
-                                Box::new(Node::VarAccess(token)),
+                                op,
+                                Box::new(Node::VarAccess(token, t)),
                                 Box::new(right),
+                                rt,
                             )),
                         ))
                     }
@@ -571,7 +582,18 @@ impl Parser {
         if let TokenType::LNot = self.current_token.token_type {
             let token = self.current_token.clone();
             self.advance();
-            Ok(Node::UnaryOp(token, Box::new(self.comparison(scope)?)))
+            let node = self.comparison(scope)?;
+            let t = match node.get_type().get_result_type_unary(&token) {
+                Some(t) => t,
+                None => {
+                    return Err(Error::new(
+                        ErrorType::SyntaxError,
+                        self.current_token.position.clone(),
+                        format!("Expected a boolean, found {}", node.get_type()),
+                    ))
+                }
+            };
+            Ok(Node::UnaryOp(token, Box::new(node), t))
         } else {
             self.binary_op(
                 Self::bitwise,
@@ -627,7 +649,18 @@ impl Parser {
         match token.token_type {
             TokenType::Sub | TokenType::BNot | TokenType::Inc | TokenType::Dec => {
                 self.advance();
-                Ok(Node::UnaryOp(token, Box::new(self.factor(scope)?)))
+                let node = self.factor(scope)?;
+                let t = match node.get_type().get_result_type_unary(&token) {
+                    Some(t) => t,
+                    None => {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            format!("Expected a number, found {}", node.get_type()),
+                        ))
+                    }
+                };
+                Ok(Node::UnaryOp(token, Box::new(node), t))
             }
             _ => self.power(scope),
         }
@@ -662,7 +695,7 @@ impl Parser {
                 self.advance();
                 pos.end = self.current_token.position.end;
                 pos.line_end = self.current_token.position.line_end;
-                let node = Node::Call(atom, args, pos);
+                let node = Node::Call(atom, args, Type::None, pos);
                 scope.access_function(&node);
                 return Ok(node);
             } else if let TokenType::LCurly = self.current_token.token_type {
@@ -763,6 +796,17 @@ impl Parser {
                 }
                 self.advance();
                 let else_branch = self.expression(scope)?;
+                let t = then_branch.get_type();
+                if t != else_branch.get_type() {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        else_branch.position(),
+                        format!(
+                            "The types of the branches of the ternary if expression must be the same, found {} and {}",
+                            t, else_branch.get_type()
+                        ),
+                    ));
+                }
                 let mut pos = token.position;
                 let end_pos = else_branch.position();
                 pos.end = end_pos.end;
@@ -771,6 +815,7 @@ impl Parser {
                     Box::new(condition),
                     Box::new(then_branch),
                     Box::new(else_branch),
+                    t,
                     pos,
                 ))
             }
@@ -795,13 +840,11 @@ impl Parser {
                     let mut pos = token.position.clone();
                     pos.end = self.current_token.position.end;
                     pos.line_end = self.current_token.position.line_end;
-                    let node = Node::Index(token, Box::new(index), pos);
-                    scope.access_variable(&node);
-                    Ok(node)
+                    let t = scope.access_array_by_token(&token, &index)?;
+                    Ok(Node::Index(token, Box::new(index), t, pos))
                 } else {
-                    let node = Node::VarAccess(token);
-                    scope.access_variable(&node);
-                    Ok(node)
+                    let t = scope.access_variable_by_token(&token)?;
+                    Ok(Node::VarAccess(token, t))
                 }
             }
             TokenType::LParen => {
@@ -832,12 +875,25 @@ impl Parser {
                     pos.end = self.current_token.position.end;
                     pos.line_end = self.current_token.position.line_end;
                     self.advance();
-                    return Ok(Node::Array(elements, pos));
+                    return Ok(Node::Array(elements, Type::None, pos));
                 }
-                elements.push(self.expression(scope)?);
+                let e = self.expression(scope)?;
+                let t = e.get_type();
+                elements.push(e);
                 while self.current_token.token_type == TokenType::Comma {
                     self.advance();
-                    elements.push(self.expression(scope)?);
+                    let e = self.expression(scope)?;
+                    if e.get_type() != t {
+                        return Err(Error::new(
+                            ErrorType::TypeError,
+                            e.position(),
+                            format!(
+                                "The types of the elements of the array must be the same, found {} and {}",
+                                t, e.get_type()
+                            ),
+                        ));
+                    }
+                    elements.push(e);
                 }
                 if self.current_token.token_type != TokenType::RSquare {
                     return Err(Error::new(
@@ -850,7 +906,7 @@ impl Parser {
                 pos.end = self.current_token.position.end;
                 pos.line_end = self.current_token.position.line_end;
                 self.advance();
-                Ok(Node::Array(elements, pos))
+                Ok(Node::Array(elements, t, pos))
             }
             TokenType::Number(_) => {
                 self.advance();
@@ -861,32 +917,68 @@ impl Parser {
                 let mut pos = token.position;
                 pos.end = self.current_token.position.end;
                 pos.line_end = self.current_token.position.line_end;
-                Ok(Node::Deref(Box::new(self.atom(scope)?), pos))
+                let e = self.atom(scope)?;
+                let t = if let Type::Ref(t) = e.get_type() {
+                    *t
+                } else {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        e.position(),
+                        format!("Expected a reference type, found {}", e.get_type()),
+                    ));
+                };
+                Ok(Node::Deref(Box::new(e), t, pos))
             }
             TokenType::Pow => {
                 self.advance();
                 let mut pos = token.position;
                 pos.end = self.current_token.position.end - 1;
                 pos.line_end = self.current_token.position.line_end;
-                let node = Node::Deref(Box::new(self.atom(scope)?), pos.clone());
+                let e = self.atom(scope)?;
+                let (a, b) = if let Type::Ref(a) = e.get_type() {
+                    (
+                        if let Type::Ref(b) = *a.clone() {
+                            *b
+                        } else {
+                            return Err(Error::new(
+                                ErrorType::TypeError,
+                                e.position(),
+                                format!("Expected a reference type, found {}", e.get_type()),
+                            ));
+                        },
+                        *a,
+                    )
+                } else {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        e.position(),
+                        format!("Expected a reference type, found {}", e.get_type()),
+                    ));
+                };
+                let node = Node::Deref(Box::new(e), a, pos.clone());
                 pos.start += 1;
-                Ok(Node::Deref(Box::new(node), pos))
+                Ok(Node::Deref(Box::new(node), b, pos))
             }
             TokenType::BAnd => {
                 self.advance();
                 let mut pos = token.position;
                 pos.end = self.current_token.position.end;
                 pos.line_end = self.current_token.position.line_end;
-                Ok(Node::Ref(Box::new(self.atom(scope)?), pos))
+                let e = self.atom(scope)?;
+                let t = e.get_type();
+                Ok(Node::Ref(Box::new(e), t, pos))
             }
             TokenType::LAnd => {
                 self.advance();
                 let mut pos = token.position;
                 pos.end = self.current_token.position.end - 1;
                 pos.line_end = self.current_token.position.line_end;
-                let node = Node::Ref(Box::new(self.atom(scope)?), pos.clone());
+                let e = self.atom(scope)?;
+                let t = e.get_type();
+                let node = Node::Ref(Box::new(e), t, pos.clone());
+                let t = node.get_type();
                 pos.start += 1;
-                Ok(Node::Ref(Box::new(node), pos))
+                Ok(Node::Ref(Box::new(node), t, pos))
             }
             _ => Err(Error::new(
                 ErrorType::SyntaxError,
@@ -896,7 +988,7 @@ impl Parser {
         }
     }
 
-    fn function_definition(&mut self, inline: bool, scope: &mut Scope) -> ParseResult {
+    fn function_definition(&mut self, scope: &mut Scope) -> ParseResult {
         let name = if let TokenType::Identifier(_) = self.current_token.token_type {
             self.current_token.clone()
         } else {
@@ -976,20 +1068,13 @@ impl Parser {
         };
 
         let mut new_scope = Scope::new(Some(scope));
-        new_scope.args = Some(params.iter().map(|x| x.0.clone()).collect());
+        new_scope.args = Some(params.clone());
         let stmt = self.statement(&mut new_scope)?;
         scope.scopes.push(new_scope);
         let mut pos = name.position.clone();
         pos.end = stmt.position().end;
         pos.line_end = stmt.position().line_end;
-        Ok(Node::FuncDef(
-            name,
-            params,
-            Box::new(stmt),
-            ret,
-            inline,
-            pos,
-        ))
+        Ok(Node::FuncDef(name, params, Box::new(stmt), ret, pos))
     }
 
     fn make_lambda(&mut self, scope: &mut Scope) -> ParseResult {
@@ -1061,7 +1146,7 @@ impl Parser {
             Type::None
         };
         let mut new_scope = Scope::new(Some(scope));
-        new_scope.args = Some(params.iter().map(|x| x.0.clone()).collect());
+        new_scope.args = Some(params.clone());
         let stmt = self.statement(&mut new_scope)?;
         scope.scopes.push(new_scope);
         pos.end = stmt.position().end;
@@ -1082,7 +1167,22 @@ impl Parser {
             let op = self.current_token.clone();
             self.advance();
             let right = func2(self, scope)?;
-            left = Node::BinaryOp(op, Box::new(left), Box::new(right));
+            let t = match left.get_type().get_result_type(&right.get_type(), &op) {
+                Some(t) => t,
+                None => {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        op.position.clone(),
+                        format!(
+                            "Cannot apply operator {} to types {} and {}",
+                            op,
+                            left.get_type(),
+                            right.get_type()
+                        ),
+                    ))
+                }
+            };
+            left = Node::BinaryOp(op, Box::new(left), Box::new(right), t);
             token_type = self.current_token.token_type.clone();
         }
         Ok(left)
@@ -1116,24 +1216,6 @@ pub fn parse(tokens: Vec<Token>) -> ParseResult {
 
 /// Checks for undefined functions and variables.
 fn check_undefined(global: &mut Scope) -> Option<Error> {
-    fn check_error(scope: &Scope) -> Option<&Error> {
-        if scope.error.is_some() {
-            return scope.error.as_ref();
-        }
-        if scope.func_error.is_some() {
-            return scope.func_error.as_ref();
-        }
-        for child in &scope.scopes {
-            if let Some(err) = check_error(child) {
-                return Some(err);
-            }
-        }
-        None
-    }
-    if let Some(err) = check_error(global) {
-        return Some(err.clone());
-    }
-
     fn refresh(scope: &mut Scope, parent: Scope) {
         scope.parent = Some(Box::new(parent));
         scope.refresh();
@@ -1163,13 +1245,9 @@ fn check_undefined(global: &mut Scope) -> Option<Error> {
         None
     }
 
-    if let Some(err) = check_error(global) {
-        return Some(err.clone());
-    }
-
     if let Some(node) = check_functions(global) {
         match &node {
-            Node::Call(token, _, _) => {
+            Node::Call(token, ..) => {
                 return Some(Error::new(
                     ErrorType::UndefinedFunction,
                     token.position.clone(),
@@ -1338,7 +1416,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
 fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
     fn find_functions(node: &Node) -> Option<Vec<Node>> {
         match node {
-            Node::FuncDef(_, _, body, _, true, _) => Some(match find_functions(body) {
+            Node::FuncDef(_, _, body, ..) => Some(match find_functions(body) {
                 Some(mut nodes) => {
                     nodes.push(node.clone());
                     nodes
@@ -1389,7 +1467,6 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
             | Node::Ref(n, ..)
             | Node::Deref(n, ..)
             | Node::Return(n, ..)
-            | Node::FuncDef(_, _, n, ..)
             | Node::UnaryOp(_, n, _)
             | Node::VarAssign(_, n, _)
             | Node::VarReassign(_, n) => find_functions(n),
@@ -1425,7 +1502,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
 
     fn remove_inline(node: &mut Node) {
         match node {
-            Node::FuncDef(_, _, _, _, true, p) => *node = Node::None(p.clone()),
+            Node::FuncDef(.., p) => *node = Node::None(p.clone()),
             Node::Struct(..) => (),
             Node::Call(_, n, ..)
             | Node::Statements(n, _)
@@ -1457,7 +1534,6 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
             | Node::Ref(n, ..)
             | Node::Deref(n, ..)
             | Node::Return(n, ..)
-            | Node::FuncDef(_, _, n, ..)
             | Node::UnaryOp(_, n, _)
             | Node::VarAssign(_, n, _)
             | Node::VarReassign(_, n) => remove_inline(n),
@@ -1484,14 +1560,14 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
         match node {
             Node::Call(name, args, ..) => {
                 let func = match functions.iter().find(|f| match f {
-                    Node::FuncDef(n, _, _, _, _, _) => n == name,
+                    Node::FuncDef(n, ..) => n == name,
                     _ => false,
                 }) {
                     Some(f) => f,
                     None => return,
                 };
                 let (params, body, ret) = match func {
-                    Node::FuncDef(_, p, b, ret, _, _) => (p, b.clone(), ret),
+                    Node::FuncDef(_, p, b, ret, ..) => (p, b.clone(), ret),
                     _ => unreachable!(),
                 };
                 let mut expanded = vec![];
@@ -1559,7 +1635,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
         let mut old = functions.clone();
         functions.append(&mut functions2.clone());
         for f in functions2.iter_mut() {
-            if let Node::FuncDef(_, _, f, _, _, _) = f {
+            if let Node::FuncDef(_, _, f, ..) = f {
                 expand_inline(f, functions.clone());
             }
         }

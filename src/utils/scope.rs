@@ -1,4 +1,4 @@
-use crate::utils::{Error, ErrorType, Node, Token, TokenType, Type};
+use super::{Error, ErrorType, Node, Token, TokenType, Type};
 use std::{collections::HashSet, fmt};
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -8,16 +8,6 @@ pub enum VarType {
     Struct(Vec<Type>, Token),
 }
 
-impl VarType {
-    fn get_name(&self) -> &Token {
-        match self {
-            VarType::Variable(_, name) => name,
-            VarType::Function(_, _, name) => name,
-            VarType::Struct(_, name) => name,
-        }
-    }
-}
-
 /// Scope struct
 /// It is used to find undefined variables and functions
 #[derive(Debug, Clone)]
@@ -25,11 +15,9 @@ pub struct Scope {
     pub unresolved_functions: Vec<Node>,
     pub unresolved_structs: Vec<Node>,
     pub defined: HashSet<VarType>,
-    pub args: Option<Vec<Token>>,
+    pub args: Option<Vec<(Token, Type)>>,
     pub scopes: Vec<Scope>,
     pub parent: Option<Box<Scope>>,
-    pub error: Option<Error>,
-    pub func_error: Option<Error>,
 }
 
 impl Scope {
@@ -41,20 +29,15 @@ impl Scope {
             scopes: vec![],
             args: None,
             parent: parent.map(|p| Box::new(p.clone())),
-            error: None,
-            func_error: None,
         }
     }
 
-    pub fn register_struct(&mut self, struct_: Node) {
-        if self.error.is_some() {
-            return;
-        }
+    pub fn register_struct(&mut self, struct_: Node) -> Option<Error> {
         let pos = struct_.position();
         if let Node::Struct(token, fields, _) = struct_ {
             let s = VarType::Struct(fields.iter().map(|a| a.1.clone()).collect(), token.clone());
             if self.defined.contains(&s) {
-                self.error = Some(Error::new(
+                return Some(Error::new(
                     ErrorType::Redefinition,
                     pos,
                     format!("Struct {} already defined", token),
@@ -62,13 +45,13 @@ impl Scope {
             } else {
                 self.defined.insert(s);
             }
+        } else {
+            unreachable!();
         }
+        None
     }
 
-    pub fn register_function(&mut self, function: Node) {
-        if self.error.is_some() {
-            return;
-        }
+    pub fn register_function(&mut self, function: Node) -> Option<Error> {
         let pos = function.position();
         if let Node::FuncDef(token, args, _, ret, _) = function {
             let func = VarType::Function(
@@ -77,21 +60,21 @@ impl Scope {
                 token.clone(),
             );
             if self.defined.contains(&func) {
-                self.error = Some(Error::new(
+                Some(Error::new(
                     ErrorType::Redefinition,
                     pos,
                     format!("Function {} already defined", token),
-                ));
+                ))
             } else {
                 self.defined.insert(func);
+                None
             }
+        } else {
+            unreachable!();
         }
     }
 
     pub fn register_variable(&mut self, assign_node: Node) {
-        if self.error.is_some() {
-            return;
-        }
         if let Node::VarAssign(token, _, t) = assign_node {
             self.defined.insert(VarType::Variable(t, token));
         } else {
@@ -99,26 +82,34 @@ impl Scope {
         }
     }
 
-    pub fn access_variable(&mut self, node: &Node) {
-        if self.error.is_some() {
-            return;
-        }
+    pub fn access_variable(&mut self, node: &Node) -> Result<Type, Error> {
         match &node {
             Node::VarAccess(token, _)
             | Node::VarReassign(token, ..)
             | Node::VarAssign(token, ..) => {
-                if !self.defined.iter().any(|a| a.get_name() == token) {
-                    if self.args.is_some() && self.args.as_ref().unwrap().contains(token) {
-                        return;
+                if let Some(a) = self
+                    .defined
+                    .iter()
+                    .find(|a| matches!(a, VarType::Variable(_, n) if n == token))
+                {
+                    if let VarType::Variable(t, _) = a {
+                        Ok(t.clone())
+                    } else {
+                        unreachable!();
+                    }
+                } else {
+                    if self.args.is_some() {
+                        if let Some(arg) =
+                            self.args.as_ref().unwrap().iter().find(|t| t.0 == *token)
+                        {
+                            return Ok(arg.1.clone());
+                        }
                     }
                     if self.parent.is_some() {
                         let parent = self.parent.as_mut().unwrap();
-                        parent.access_variable(node);
-                        if parent.error.is_none() {
-                            return;
-                        }
+                        return parent.access_variable(node);
                     }
-                    self.error = Some(Error::new(
+                    return Err(Error::new(
                         ErrorType::UndefinedVariable,
                         token.position.clone(),
                         format!("Variable {} is not defined", token),
@@ -126,7 +117,11 @@ impl Scope {
                 }
             }
             Node::IndexAssign(token, index, ..) | Node::Index(token, index, ..) => {
-                if let Some(t) = self.defined.iter().find(|a| a.get_name() == token) {
+                if let Some(t) = self
+                    .defined
+                    .iter()
+                    .find(|a| matches!(a, VarType::Variable(_, n) if n == token))
+                {
                     if let VarType::Variable(t, _) = t {
                         if let Type::Array(_, l) = t {
                             if let Node::Number(n) = &**index {
@@ -136,7 +131,7 @@ impl Scope {
                                     unreachable!();
                                 };
                                 if n as usize >= *l {
-                                    self.error = Some(Error::new(
+                                    return Err(Error::new(
                                         ErrorType::IndexOutOfBounds,
                                         token.position.clone(),
                                         format!(
@@ -146,26 +141,30 @@ impl Scope {
                                     ));
                                 }
                             }
+                            Ok(t.clone())
                         } else {
-                            self.error = Some(Error::new(
+                            Err(Error::new(
                                 ErrorType::SyntaxError,
                                 token.position.clone(),
                                 format!("Variable {} is not an array", token),
-                            ));
+                            ))
                         }
+                    } else {
+                        unreachable!();
                     }
                 } else {
                     if self.parent.is_some() {
                         let parent = self.parent.as_mut().unwrap();
-                        parent.access_variable(node);
-                        if parent.error.is_none() {
-                            return;
+                        return parent.access_variable(node);
+                    }
+                    if self.args.is_some() {
+                        if let Some(arg) =
+                            self.args.as_ref().unwrap().iter().find(|t| t.0 == *token)
+                        {
+                            return Ok(arg.1.clone());
                         }
                     }
-                    if self.args.is_some() && self.args.as_ref().unwrap().contains(token) {
-                        return;
-                    }
-                    self.error = Some(Error::new(
+                    return Err(Error::new(
                         ErrorType::UndefinedVariable,
                         token.position.clone(),
                         format!("Variable {} is not defined", token),
@@ -176,10 +175,87 @@ impl Scope {
         }
     }
 
-    pub fn access_function(&mut self, node: &Node) {
-        if self.func_error.is_some() {
-            return;
+    pub fn access_variable_by_token(&mut self, token: &Token) -> Result<Type, Error> {
+        if let Some(a) = self
+            .defined
+            .iter()
+            .find(|a| matches!(a, VarType::Variable(_, n) if n == token))
+        {
+            if let VarType::Variable(t, _) = a {
+                Ok(t.clone())
+            } else {
+                unreachable!();
+            }
+        } else {
+            if self.args.is_some() {
+                if let Some(arg) = self.args.as_ref().unwrap().iter().find(|t| t.0 == *token) {
+                    return Ok(arg.1.clone());
+                }
+            }
+            if self.parent.is_some() {
+                let parent = self.parent.as_mut().unwrap();
+                return parent.access_variable_by_token(token);
+            }
+            return Err(Error::new(
+                ErrorType::UndefinedVariable,
+                token.position.clone(),
+                format!("Variable {} is not defined", token),
+            ));
         }
+    }
+
+    pub fn access_array_by_token(&mut self, token: &Token, index: &Node) -> Result<Type, Error> {
+        if let Some(t) = self
+            .defined
+            .iter()
+            .find(|a| matches!(a, VarType::Variable(_, n) if n == token))
+        {
+            if let VarType::Variable(t, _) = t {
+                if let Type::Array(t, l) = t {
+                    if let Node::Number(n) = index {
+                        let n = if let TokenType::Number(n) = n.token_type {
+                            n
+                        } else {
+                            unreachable!();
+                        };
+                        if n as usize >= *l {
+                            return Err(Error::new(
+                                ErrorType::IndexOutOfBounds,
+                                token.position.clone(),
+                                format!("Length of the array is {}, but the index is {}", l, n),
+                            ));
+                        }
+                    }
+                    Ok(*t.clone())
+                } else {
+                    Err(Error::new(
+                        ErrorType::SyntaxError,
+                        token.position.clone(),
+                        format!("Variable {} is not an array", token),
+                    ))
+                }
+            } else {
+                unreachable!();
+            }
+        } else {
+            if self.parent.is_some() {
+                let parent = self.parent.as_mut().unwrap();
+                return parent.access_array_by_token(token, index);
+            }
+            if self.args.is_some() {
+                if let Some(arg) = self.args.as_ref().unwrap().iter().find(|t| t.0 == *token) {
+                    return Ok(arg.1.clone());
+                }
+            }
+            return Err(Error::new(
+                ErrorType::UndefinedVariable,
+                token.position.clone(),
+                format!("Variable {} is not defined", token),
+            ));
+        }
+    }
+
+    pub fn access_function(&mut self, node: &Node) {
         let mut found = false;
         match &node {
             Node::Call(token1, args1, ..) => {
@@ -200,9 +276,8 @@ impl Scope {
                 let parent = self.parent.as_mut().unwrap();
                 let old = parent.unresolved_functions.len();
                 parent.access_function(node);
-                self.func_error = parent.func_error.clone();
                 if parent.unresolved_functions.len() <= old {
-                    return self.unresolved_functions.retain(|n| n != node);
+                    self.unresolved_functions.retain(|n| n != node);
                 }
             }
             if !self.unresolved_functions.contains(node) {
@@ -214,9 +289,6 @@ impl Scope {
     }
 
     pub fn access_struct(&mut self, node: &Node) {
-        if self.func_error.is_some() {
-            return;
-        }
         let mut found = false;
         match &node {
             Node::StructConstructor(token1, args1, _) => {
@@ -237,7 +309,6 @@ impl Scope {
                 let parent = self.parent.as_mut().unwrap();
                 let old = parent.unresolved_structs.len();
                 parent.access_struct(node);
-                self.func_error = parent.func_error.clone();
                 if parent.unresolved_structs.len() <= old {
                     return self.unresolved_structs.retain(|n| n != node);
                 }

@@ -480,7 +480,6 @@ macro_rules! goto_add {
             Val::None => {
                 $bf_code.push_str("[-]");
             }
-            Val::Function(_, _, _) => todo!(),
         }
     };
     ($val: expr, $bf_code: expr, $current: expr, $block:block, $block2: block) => {
@@ -516,7 +515,6 @@ macro_rules! goto_add {
                 $bf_code.push_str("[-]");
                 $block2
             }
-            Val::Function(_, _, _) => todo!(),
         }
     };
 }

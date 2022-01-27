@@ -1,4 +1,4 @@
-use crate::utils::{LexNumber, Position};
+use super::{LexNumber, Position};
 use std::{cmp, fmt, rc::Rc};
 
 /// List of all the keywords identified by the lexer

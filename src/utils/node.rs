@@ -1,6 +1,6 @@
-use std::fmt;
+use std::fmt::{self, Display};
 
-use crate::utils::{Position, Token, TokenType};
+use super::{Position, Token, TokenType, BOOLEAN_EXCLUSIVE, BOOLEAN_OPERATORS};
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum Type {
@@ -10,7 +10,88 @@ pub enum Type {
     Char,
     Array(Box<Type>, usize),
     Ref(Box<Type>),
-    Function(Vec<Type>, Box<Type>),
+}
+
+impl Type {
+    pub fn get_result_type(&self, rhs: &Self, op: &Token) -> Option<Self> {
+        match (self, rhs) {
+            (Self::Number, Self::Number) => {
+                if BOOLEAN_OPERATORS.contains(&op.token_type) {
+                    Some(Self::Boolean)
+                } else if BOOLEAN_EXCLUSIVE.contains(&op.token_type) {
+                    None
+                } else {
+                    Some(Self::Number)
+                }
+            }
+            (Self::Ref(t), Self::Number) | (Self::Number, Self::Ref(t)) => {
+                if let TokenType::Add | TokenType::Sub = op.token_type {
+                    Some(Self::Ref(t.clone()))
+                } else {
+                    None
+                }
+            }
+            (Self::Boolean, Self::Boolean) => {
+                if BOOLEAN_OPERATORS.contains(&op.token_type)
+                    || BOOLEAN_EXCLUSIVE.contains(&op.token_type)
+                {
+                    Some(Self::Boolean)
+                } else {
+                    None
+                }
+            }
+            (Self::Char, Self::Char) => {
+                if BOOLEAN_OPERATORS.contains(&op.token_type) {
+                    Some(Self::Boolean)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    pub fn get_result_type_unary(&self, op: &Token) -> Option<Self> {
+        match self {
+            Self::Number => {
+                if op.token_type == TokenType::LNot {
+                    None
+                } else if [TokenType::Inc, TokenType::Dec].contains(&op.token_type) {
+                    Some(Self::None)
+                } else {
+                    Some(Self::Number)
+                }
+            }
+            Self::Boolean => {
+                if op.token_type == TokenType::LNot {
+                    Some(Self::Boolean)
+                } else {
+                    None
+                }
+            }
+            Self::Ref(t) => {
+                if let TokenType::Inc | TokenType::Dec = op.token_type {
+                    Some(Self::Ref(t.clone()))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+}
+
+impl Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Type::Number => write!(f, "int"),
+            Type::Boolean => write!(f, "bool"),
+            Type::None => write!(f, "()"),
+            Type::Char => write!(f, "char"),
+            Type::Array(t, l) => write!(f, "[{}; {}]", t, l),
+            Type::Ref(t) => write!(f, "&{}", t),
+        }
+    }
 }
 
 /// A Node in the AST.
@@ -51,7 +132,7 @@ pub enum Node {
     /// Expressions
     Ascii(Vec<Node>, Position),
     /// Input
-    Input(Type, Position),
+    Input(Position),
     /// Expression
     Ref(Box<Node>, Type, Position),
     /// Expression
@@ -63,7 +144,7 @@ pub enum Node {
     /// None
     None(Position),
     /// args, body, return type
-    Lambda(Vec<(Token, Type)>, Box<Node>, Position),
+    Lambda(Vec<(Token, Type)>, Box<Node>, Type, Position),
     /// Char
     Char(Token, Position),
     /// Elements
@@ -137,9 +218,9 @@ impl Node {
 
     pub fn get_type(&self) -> Type {
         match self {
-            Node::StructConstructor(_, _, _) => todo!(),
-            Node::Struct(_, _, _) => todo!(),
-            Node::Lambda(_, _, _) => Type::Function(vec![], Box::new(Type::None)),
+            Node::StructConstructor(..) => todo!(),
+            Node::Struct(..) => todo!(),
+            Node::Lambda(..) => todo!(),
             Node::Array(v, ty, _) => Type::Array(Box::new(ty.clone()), v.len()),
             Node::Return(a, _) => a.get_type(),
             Node::String(s) => {
@@ -152,7 +233,7 @@ impl Node {
             Node::Ref(_, ty, _) => Type::Ref(Box::new(ty.clone())),
             Node::Deref(_, ty, _) => {
                 if let Type::Ref(a) = ty {
-                    **a
+                    *a.clone()
                 } else {
                     unreachable!()
                 }
@@ -160,6 +241,7 @@ impl Node {
             Node::Number(_) => Type::Number,
             Node::Boolean(_) => Type::Boolean,
             Node::Char(_, _) => Type::Char,
+            Node::Input(_) => Type::Char,
             Node::VarAccess(_, ty)
             | Node::UnaryOp(_, _, ty)
             | Node::BinaryOp(_, _, _, ty)
@@ -167,7 +249,18 @@ impl Node {
             | Node::Ternary(_, _, _, ty, _)
             | Node::Expanded(_, ty)
             | Node::Index(_, _, ty, _) => ty.clone(),
-            _ => Type::None,
+            Node::While(_, _, _)
+            | Node::VarAssign(_, _, _)
+            | Node::VarReassign(_, _)
+            | Node::Statements(_, _)
+            | Node::FuncDef(_, _, _, _, _)
+            | Node::Print(_, _)
+            | Node::Ascii(_, _)
+            | Node::If(_, _, _, _)
+            | Node::None(_)
+            | Node::IndexAssign(_, _, _)
+            | Node::DerefAssign(_, _, _)
+            | Node::For(_, _, _, _, _) => Type::None,
         }
     }
 }

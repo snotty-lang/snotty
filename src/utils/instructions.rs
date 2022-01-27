@@ -1,4 +1,4 @@
-use crate::utils::{
+use super::{
     Token, TokenType, Type, ValNumber, BOOLEAN_EXCLUSIVE, BOOLEAN_OPERATORS, NONE_SIZE,
     POINTER_SIZE,
 };
@@ -152,8 +152,6 @@ pub enum Val {
     Pointer(usize, ValType),
     /// A Char
     Char(u8),
-    /// Function
-    Function(usize, Vec<Val>, ValType),
 }
 
 impl Val {
@@ -170,7 +168,6 @@ impl Val {
 
     pub fn r#type(&self) -> ValType {
         match self {
-            Val::Function(_, _, ty) => ty.clone(),
             Val::Char(_) => ValType::Char,
             Val::Num(_) => ValType::Number,
             Val::Bool(_) => ValType::Boolean,
@@ -192,7 +189,6 @@ impl Val {
 
     pub fn is_constant(&self) -> bool {
         match self {
-            Val::Function(_, _, _) => true,
             Val::Char(_) => true,
             Val::Num(_) => true,
             Val::Bool(_) => true,
@@ -232,7 +228,7 @@ impl ValType {
                     Some(Self::Number)
                 }
             }
-            (Self::Pointer(t), Self::Pointer(u)) if t == u => {
+            (Self::Pointer(t), Self::Number) | (Self::Number, Self::Pointer(t)) => {
                 if let TokenType::Add | TokenType::Sub = op.token_type {
                     Some(Self::Pointer(t.clone()))
                 } else {
@@ -295,7 +291,6 @@ impl ValType {
             Type::Boolean => Self::Boolean,
             Type::Ref(t) => Self::Pointer(Box::new(Self::from_parse_type(t))),
             Type::None => Self::None,
-            Type::Function(_, _) => todo!(),
             Type::Array(t, _) => Self::Pointer(Box::new(Self::from_parse_type(t))),
         }
     }
@@ -326,16 +321,6 @@ impl fmt::Display for ValType {
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Val::Function(name, args, ret) => write!(
-                f,
-                "func {} : {} -> {}",
-                name,
-                args.iter()
-                    .map(|v| v.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                ret
-            ),
             Val::Char(c) => write!(f, "{}", *c as char),
             Val::Pointer(mem, _) => write!(f, "*{}", mem),
             Val::None => write!(f, "()"),
@@ -349,16 +334,6 @@ impl fmt::Display for Val {
 impl fmt::Debug for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Val::Function(name, args, ret) => write!(
-                f,
-                "func {} : {} -> {}",
-                name,
-                args.iter()
-                    .map(|v| v.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                ret
-            ),
             Val::Char(c) => write!(f, "{:?}", *c as char),
             Val::Pointer(mem, _) => write!(f, "*{}", mem),
             Val::None => write!(f, "()"),
