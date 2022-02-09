@@ -1,12 +1,12 @@
 ez fizzbuzz(start: int, end: int) {
     end += 1
-    for (int i = start i < end ++i) {
+    for (int i = start : i < end : ++i) {
         bool none = false
-        if i % 3 == 0 {
+        if (i % 3 == 0) {
             ezout 'f', 'i', 'z', 'z'
             none = true
         }
-        if i % 5 == 0 {
+        if (i % 5 == 0) {
             ezout 'b', 'u', 'z', 'z'
             none = true
         }

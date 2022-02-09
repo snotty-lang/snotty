@@ -8,6 +8,7 @@ use crate::utils::{
 /// Generates the Intermediate 3-address code from the AST
 pub struct CodeGenerator {
     instructions: Instructions,
+    ret: Option<(usize, usize)>,
 }
 
 impl CodeGenerator {
@@ -499,8 +500,11 @@ impl CodeGenerator {
 
             Node::Return(val, ..) => {
                 let val = self.make_instruction(val, vars, memory)?;
-                self.instructions
-                    .push(Instruction::Return(val), (None, memory.last_memory_index));
+                let (mem, size) = self.ret.unwrap();
+                self.instructions.push(
+                    Instruction::Copy(val),
+                    (Some((mem, size)), memory.last_memory_index),
+                );
                 Ok(Val::None)
             }
 
@@ -691,6 +695,11 @@ impl CodeGenerator {
             }
 
             Node::Expanded(statements, t) => {
+                let t = ValType::from_parse_type(t);
+                let size = t.get_size();
+                let mem = memory.allocate(size);
+                self.ret = Some((mem, size));
+
                 let mut new = memory.clone();
                 for statement in statements {
                     self.make_instruction(statement, vars, &mut new)?;
@@ -701,13 +710,6 @@ impl CodeGenerator {
                         (None, memory.last_memory_index),
                     );
                 }
-                let t = ValType::from_parse_type(t);
-                let size = t.get_size();
-                let mem = memory.allocate(size);
-                self.instructions.push(
-                    Instruction::Copy(Val::Num(6)),
-                    (Some((mem, size)), memory.last_memory_index),
-                );
                 Ok(Val::Index(mem, t))
             }
 
@@ -724,6 +726,7 @@ impl CodeGenerator {
 pub fn generate_code(ast: Node) -> Result<Instructions, Error> {
     let mut obj = CodeGenerator {
         instructions: Instructions::new(),
+        ret: None,
     };
     let mut vars = HashMap::new();
     let mut memory = Memory::new();

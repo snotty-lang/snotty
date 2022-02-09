@@ -61,7 +61,23 @@ impl Parser {
                 "while" => {
                     let mut pos = self.current_token.position.clone();
                     self.advance();
+                    if self.current_token.token_type != TokenType::LParen {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            "Expected '(' after 'if'".to_string(),
+                        ));
+                    }
+                    self.advance();
                     let condition = self.expression(scope)?;
+                    if self.current_token.token_type != TokenType::RParen {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            format!("Expected ')' found '{}'", self.current_token.token_type),
+                        ));
+                    }
+                    self.advance();
                     let body = self.statement(scope)?;
                     pos.end = body.position().end;
                     pos.line_end = body.position().line_end;
@@ -89,7 +105,23 @@ impl Parser {
                     }
                     self.advance();
                     let init = self.statement(scope)?;
+                    if self.current_token.token_type != TokenType::Colon {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            format!("Expected ':' found '{}'", self.current_token.token_type),
+                        ));
+                    }
+                    self.advance();
                     let condition = self.expression(scope)?;
+                    if self.current_token.token_type != TokenType::Colon {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            format!("Expected ':' found '{}'", self.current_token.token_type),
+                        ));
+                    }
+                    self.advance();
                     let step = self.statement(scope)?;
                     if self.current_token.token_type != TokenType::RParen {
                         return Err(Error::new(
@@ -113,7 +145,23 @@ impl Parser {
                 "if" => {
                     let mut pos = self.current_token.position.clone();
                     self.advance();
+                    if self.current_token.token_type != TokenType::LParen {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            "Expected '(' after 'if'".to_string(),
+                        ));
+                    }
+                    self.advance();
                     let condition = self.expression(scope)?;
+                    if self.current_token.token_type != TokenType::RParen {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            format!("Expected ')' found '{}'", self.current_token.token_type),
+                        ));
+                    }
+                    self.advance();
                     let then_branch = self.statement(scope)?;
                     let (else_, end_pos) = if self.current_token.token_type
                         == TokenType::Keyword("else".to_string())
