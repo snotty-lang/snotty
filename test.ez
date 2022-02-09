@@ -1,14 +1,8 @@
-!use meme
+!use fizzbuzz
 
-inline ez main() {
-    int a = input()
-    meme(a)
+ez main() {
+    fizzbuzz(1, 100)
 }
 
+main()
 
-inline ez input() {
-    int a = ezin
-    return a
-}
-
-ezout main()

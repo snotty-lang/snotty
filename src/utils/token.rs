@@ -2,9 +2,9 @@ use super::{LexNumber, Position};
 use std::{cmp, fmt, rc::Rc};
 
 /// List of all the keywords identified by the lexer
-pub const KEYWORDS: [&str; 16] = [
+pub const KEYWORDS: [&str; 15] = [
     "ez", "return", "ezout", "ezin", "ezascii", "true", "false", "if", "else", "bool", "int",
-    "char", "while", "for", "inline", "struct",
+    "char", "while", "for", "struct",
 ];
 
 pub const PREPROCESSOR_STATEMENTS: [&str; 7] = [
@@ -52,7 +52,7 @@ pub const ASSIGNMENT_OPERATORS: [TokenType; 15] = [
 ];
 
 /// Different types of Tokens converted by the lexer
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     AddAssign,
     SubAssign,
@@ -118,12 +118,6 @@ pub enum TokenType {
 pub struct Token {
     pub token_type: TokenType,
     pub position: Position,
-}
-
-impl std::hash::Hash for Token {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.token_type.hash(state);
-    }
 }
 
 impl fmt::Display for TokenType {
@@ -280,5 +274,3 @@ impl fmt::Display for Token {
         write!(f, "'{}'", self.token_type)
     }
 }
-
-impl std::cmp::Eq for Token {}

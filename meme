@@ -1,7 +1,0 @@
-inline ez meme(meme_number: int) {
-    if meme_number < 50 {
-        ezout 'm', 'e', 'm', 'e', ' ', 'n', 'u', 'm', 'b', 'e', 'r', ' ', meme_number, '\n'
-    } else {
-        ezout 'g', 'o', 'o', 'd', 'b', 'y', 'e', '\n'
-    }
-}

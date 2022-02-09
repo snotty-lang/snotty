@@ -2,7 +2,7 @@ use std::fmt::{self, Display};
 
 use super::{Position, Token, TokenType, BOOLEAN_EXCLUSIVE, BOOLEAN_OPERATORS};
 
-#[derive(Debug, Clone, PartialEq, Hash, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Number,
     Boolean,
@@ -143,8 +143,6 @@ pub enum Node {
     If(Box<Node>, Box<Node>, Option<Box<Node>>, Position),
     /// None
     None(Position),
-    /// args, body, return type
-    Lambda(Vec<(Token, Type)>, Box<Node>, Type, Position),
     /// Char
     Char(Token, Position),
     /// Elements
@@ -176,7 +174,6 @@ impl Node {
             | Node::Deref(.., pos)
             | Node::While(.., pos)
             | Node::Statements(.., pos)
-            | Node::Lambda(.., pos)
             | Node::Call(.., pos)
             | Node::FuncDef(.., pos)
             | Node::Print(.., pos)
@@ -220,7 +217,6 @@ impl Node {
         match self {
             Node::StructConstructor(..) => todo!(),
             Node::Struct(..) => todo!(),
-            Node::Lambda(..) => todo!(),
             Node::Array(v, ty, _) => Type::Array(Box::new(ty.clone()), v.len()),
             Node::Return(a, _) => a.get_type(),
             Node::String(s) => {
@@ -373,18 +369,6 @@ impl fmt::Display for Node {
                 write!(f, "If( if {} then {})", cond, then)
             }
             Node::None(_) => write!(f, "None"),
-            Node::Lambda(args, body, ret, ..) => {
-                write!(
-                    f,
-                    "Lambda({} -> {:?} {})",
-                    args.iter()
-                        .map(|n| format!("{} : {:?}", n.0, n.1))
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                    ret,
-                    body
-                )
-            }
             Node::Char(c, _) => write!(f, "Char({})", c),
             Node::Array(arr, ..) => {
                 write!(

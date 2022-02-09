@@ -80,9 +80,25 @@ impl Parser {
                 "for" => {
                     let mut pos = self.current_token.position.clone();
                     self.advance();
+                    if self.current_token.token_type != TokenType::LParen {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            "Expected '(' after 'for'".to_string(),
+                        ));
+                    }
+                    self.advance();
                     let init = self.statement(scope)?;
                     let condition = self.expression(scope)?;
                     let step = self.statement(scope)?;
+                    if self.current_token.token_type != TokenType::RParen {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            format!("Expected ')' found '{}'", self.current_token.token_type),
+                        ));
+                    }
+                    self.advance();
                     let body = self.statement(scope)?;
                     pos.end = body.position().end;
                     pos.line_end = body.position().end;
@@ -751,12 +767,6 @@ impl Parser {
         let token = self.current_token.clone();
         match token.token_type {
             TokenType::Keyword(ref keyword) => match keyword.as_ref() {
-                "ez" => {
-                    self.advance();
-                    let node = self.make_lambda(scope)?;
-                    scope.register_function(node.clone());
-                    Ok(node)
-                }
                 "ezin" => {
                     self.advance();
                     Ok(Node::Input(token.position))
@@ -1077,83 +1087,6 @@ impl Parser {
         Ok(Node::FuncDef(name, params, Box::new(stmt), ret, pos))
     }
 
-    fn make_lambda(&mut self, scope: &mut Scope) -> ParseResult {
-        if self.current_token.token_type != TokenType::LParen {
-            return Err(Error::new(
-                ErrorType::SyntaxError,
-                self.current_token.position.clone(),
-                format!("Expected '(', found {}", self.current_token),
-            ));
-        }
-        let mut pos = self.current_token.position.clone();
-        self.advance();
-        let mut params = vec![];
-        if let TokenType::Identifier(_) = self.current_token.token_type {
-            let p = self.current_token.clone();
-            self.advance();
-            if self.current_token.token_type != TokenType::Colon {
-                return Err(Error::new(
-                    ErrorType::SyntaxError,
-                    self.current_token.position.clone(),
-                    format!("Expected ':', found {}", self.current_token),
-                ));
-            }
-            self.advance();
-            let t = self.make_type()?;
-            params.push((p, t));
-            while self.current_token.token_type == TokenType::Comma {
-                self.advance();
-                if let TokenType::Identifier(_) = self.current_token.token_type {
-                    let p = self.current_token.clone();
-                    self.advance();
-                    if self.current_token.token_type != TokenType::Colon {
-                        return Err(Error::new(
-                            ErrorType::SyntaxError,
-                            self.current_token.position.clone(),
-                            format!("Expected ':', found {}", self.current_token),
-                        ));
-                    }
-                    self.advance();
-                    let t = self.make_type()?;
-                    params.push((p, t));
-                } else {
-                    return Err(Error::new(
-                        ErrorType::SyntaxError,
-                        self.current_token.position.clone(),
-                        format!("Expected identifier, found {}", self.current_token),
-                    ));
-                }
-            }
-            if self.current_token.token_type != TokenType::RParen {
-                return Err(Error::new(
-                    ErrorType::SyntaxError,
-                    self.current_token.position.clone(),
-                    format!("Expected ')' or ',', found {}", self.current_token),
-                ));
-            }
-        } else if self.current_token.token_type != TokenType::RParen {
-            return Err(Error::new(
-                ErrorType::SyntaxError,
-                self.current_token.position.clone(),
-                format!("Expected identifier or ')', found {}", self.current_token),
-            ));
-        }
-        self.advance();
-        let ret = if self.current_token.token_type == TokenType::Arrow {
-            self.advance();
-            self.make_type()?
-        } else {
-            Type::None
-        };
-        let mut new_scope = Scope::new(Some(scope));
-        new_scope.args = Some(params.clone());
-        let stmt = self.statement(&mut new_scope)?;
-        scope.scopes.push(new_scope);
-        pos.end = stmt.position().end;
-        pos.line_end = stmt.position().line_end;
-        Ok(Node::Lambda(params, Box::new(stmt), ret, pos))
-    }
-
     fn binary_op(
         &mut self,
         func1: fn(&mut Self, &mut Scope) -> ParseResult,
@@ -1210,8 +1143,10 @@ pub fn parse(tokens: Vec<Token>) -> ParseResult {
         Some(err) => return Err(err),
         None => ast,
     };
-    expand_inline(&mut ast, vec![]);
-    Ok(ast)
+    match expand_inline(&mut ast, vec![]) {
+        Some(err) => Err(err),
+        None => Ok(ast),
+    }
 }
 
 /// Checks for undefined functions and variables.
@@ -1373,7 +1308,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
                 None
             }
             Node::Index(_, n1, ..) => check_return(n1),
-            Node::FuncDef(..) | Node::Lambda(..) => None,
+            Node::FuncDef(..) => None,
             Node::Return(_, pos) => Some(pos.clone()),
             Node::Ref(n1, ..) | Node::Deref(n1, ..) => check_return(n1),
             Node::Print(n1, _) | Node::Ascii(n1, _) => {
@@ -1413,7 +1348,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
 }
 
 /// Expands inline functions
-fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
+fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) -> Option<Error> {
     fn find_functions(node: &Node) -> Option<Vec<Node>> {
         match node {
             Node::FuncDef(_, _, body, ..) => Some(match find_functions(body) {
@@ -1426,7 +1361,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
 
             Node::Statements(nodes, _) => {
                 let mut new = vec![];
-                for node in nodes {
+                for node in nodes.iter().rev() {
                     if let Some(ref mut i) = find_functions(node) {
                         new.append(i);
                     }
@@ -1463,7 +1398,6 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
             Node::Number(_) => None,
             Node::Boolean(_) => None,
             Node::Index(_, n, ..)
-            | Node::Lambda(_, n, ..)
             | Node::Ref(n, ..)
             | Node::Deref(n, ..)
             | Node::Return(n, ..)
@@ -1509,7 +1443,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
             | Node::Print(n, _)
             | Node::Array(n, ..)
             | Node::Ascii(n, _) => {
-                for n in n {
+                for n in n.iter_mut().rev() {
                     remove_inline(n);
                 }
             }
@@ -1530,7 +1464,6 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
             Node::Number(_) => (),
             Node::Boolean(_) => (),
             Node::Index(_, n, ..)
-            | Node::Lambda(_, n, ..)
             | Node::Ref(n, ..)
             | Node::Deref(n, ..)
             | Node::Return(n, ..)
@@ -1560,7 +1493,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
         match node {
             Node::Call(name, args, ..) => {
                 let func = match functions.iter().find(|f| match f {
-                    Node::FuncDef(n, ..) => n == name,
+                    Node::FuncDef(n, a, ..) => n == name && a.len() == args.len(),
                     _ => false,
                 }) {
                     Some(f) => f,
@@ -1582,7 +1515,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
                 *node = Node::Expanded(expanded, ret.clone());
             }
             Node::Statements(n, _) | Node::Print(n, _) | Node::Array(n, ..) | Node::Ascii(n, _) => {
-                for n in n {
+                for n in n.iter_mut().rev() {
                     insert_function(functions, n);
                 }
             }
@@ -1604,7 +1537,6 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
             Node::Number(_) => (),
             Node::Boolean(_) => (),
             Node::Index(_, n, ..)
-            | Node::Lambda(_, n, ..)
             | Node::Ref(n, ..)
             | Node::Deref(n, ..)
             | Node::Return(n, ..)
@@ -1644,4 +1576,5 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
         functions = old;
     }
     insert_function(&mut functions, ast);
+    None
 }

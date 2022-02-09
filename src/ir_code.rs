@@ -551,8 +551,6 @@ impl CodeGenerator {
                 }
             }
 
-            Node::Lambda(..) => todo!(),
-
             Node::DerefAssign(deref, assign, _) => {
                 let deref = if let Node::Deref(val1, ..) = &**deref {
                     let val = self.make_instruction(val1, vars, memory)?;

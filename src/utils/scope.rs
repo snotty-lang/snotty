@@ -1,7 +1,7 @@
 use super::{Error, ErrorType, Node, Token, TokenType, Type};
-use std::{collections::HashSet, fmt};
+use std::fmt;
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum VarType {
     Variable(Type, Token),
     Function(Vec<Type>, Type, Token),
@@ -14,7 +14,7 @@ pub enum VarType {
 pub struct Scope {
     pub unresolved_functions: Vec<Node>,
     pub unresolved_structs: Vec<Node>,
-    pub defined: HashSet<VarType>,
+    pub defined: Vec<VarType>,
     pub args: Option<Vec<(Token, Type)>>,
     pub scopes: Vec<Scope>,
     pub parent: Option<Box<Scope>>,
@@ -25,7 +25,7 @@ impl Scope {
         Self {
             unresolved_structs: vec![],
             unresolved_functions: vec![],
-            defined: HashSet::new(),
+            defined: vec![],
             scopes: vec![],
             args: None,
             parent: parent.map(|p| Box::new(p.clone())),
@@ -43,7 +43,7 @@ impl Scope {
                     format!("Struct {} already defined", token),
                 ));
             } else {
-                self.defined.insert(s);
+                self.defined.push(s);
             }
         } else {
             unreachable!();
@@ -66,7 +66,13 @@ impl Scope {
                     format!("Function {} already defined", token),
                 ))
             } else {
-                self.defined.insert(func);
+                self.defined.push(func);
+                self.unresolved_functions.retain(|n| {
+                    if let Node::Call(t, ..) = n {
+                        return *t != token;
+                    }
+                    unreachable!()
+                });
                 None
             }
         } else {
@@ -76,7 +82,7 @@ impl Scope {
 
     pub fn register_variable(&mut self, assign_node: Node) {
         if let Node::VarAssign(token, _, t) = assign_node {
-            self.defined.insert(VarType::Variable(t, token));
+            self.defined.push(VarType::Variable(t, token));
         } else {
             unreachable!();
         }
@@ -272,12 +278,11 @@ impl Scope {
             _ => unreachable!(),
         }
         if !found {
-            if self.parent.is_some() {
-                let parent = self.parent.as_mut().unwrap();
+            if let Some(ref mut parent) = self.parent {
                 let old = parent.unresolved_functions.len();
                 parent.access_function(node);
                 if parent.unresolved_functions.len() <= old {
-                    self.unresolved_functions.retain(|n| n != node);
+                    return self.unresolved_functions.retain(|n| n != node);
                 }
             }
             if !self.unresolved_functions.contains(node) {
