@@ -2,20 +2,13 @@ use super::{LexNumber, Position};
 use std::{cmp, fmt, rc::Rc};
 
 /// List of all the keywords identified by the lexer
-pub const KEYWORDS: [&str; 15] = [
+pub const KEYWORDS: [&str; 16] = [
     "ez", "return", "ezout", "ezin", "ezascii", "true", "false", "if", "else", "bool", "int",
-    "char", "while", "for", "struct",
+    "char", "while", "for", "struct", "let",
 ];
 
-pub const PREPROCESSOR_STATEMENTS: [&str; 7] = [
-    "use",
-    "replace",
-    "declare",
-    "ifdeclared",
-    "else",
-    "endif",
-    "macro",
-];
+pub const PREPROCESSOR_STATEMENTS: [&str; 6] =
+    ["use", "replace", "declare", "ifdeclared", "else", "endif"];
 
 pub const BOOLEAN_OPERATORS: [TokenType; 6] = [
     TokenType::Neq,

@@ -8,6 +8,7 @@ use crate::{
 pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
     let mut declared = HashSet::new();
     let mut i = 0;
+    let mut ifs = Vec::new();
     while i < tokens.len() {
         if let TokenType::PreprocessorStatement(ref stmt) = tokens[i].token_type {
             match stmt.as_ref() {
@@ -113,11 +114,85 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                         }
                     },
                 },
+                "ifdeclared" => match tokens.get(i + 1).cloned() {
+                    None => {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            tokens[i].position.clone(),
+                            "Expected an identifier after `declare`".to_owned(),
+                        ))
+                    }
+                    Some(t) => match t.token_type {
+                        TokenType::Identifier(ref ident) => {
+                            if declared.contains(ident) {
+                                ifs.push(None);
+                            } else {
+                                ifs.push(Some(i));
+                            }
+                            tokens.drain(i..=i + 1);
+                        }
+                        _ => {
+                            return Err(Error::new(
+                                ErrorType::SyntaxError,
+                                t.position.clone(),
+                                "Expected an identifier after `declare`".to_owned(),
+                            ))
+                        }
+                    },
+                },
+                "else" => {
+                    if let Some(idx) = ifs.last_mut() {
+                        match idx {
+                            Some(n) => {
+                                tokens.drain(*n..=i);
+                                *idx = None;
+                            }
+                            None => {
+                                *idx = Some(i);
+                                tokens.remove(i);
+                            }
+                        }
+                    } else {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            tokens[i].position.clone(),
+                            "`else` without `ifdeclared`".to_owned(),
+                        ));
+                    }
+                }
+                "endif" => {
+                    if let Some(idx) = ifs.pop() {
+                        match idx {
+                            Some(n) => {
+                                tokens.drain(n..=i);
+                            }
+
+                            None => {
+                                tokens.remove(i);
+                            }
+                        }
+                    } else {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            tokens[i].position.clone(),
+                            "`endif` without `ifdeclared`".to_owned(),
+                        ));
+                    }
+                }
                 _ => todo!(),
             }
         } else {
             i += 1;
         }
     }
+
+    if ifs.pop().is_some() {
+        return Err(Error::new(
+            ErrorType::SyntaxError,
+            tokens[i].position.clone(),
+            "No `endif` after `ifdeclared`".to_owned(),
+        ));
+    }
+
     Ok(tokens)
 }

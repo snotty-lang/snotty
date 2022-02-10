@@ -88,7 +88,8 @@ impl Parser {
                     self.advance();
                     Ok(Node::Return(Box::new(self.expression(scope)?), pos))
                 }
-                "int" | "char" | "bool" => {
+                "let" => {
+                    self.advance();
                     let node = self.assignment(true, scope)?;
                     scope.register_variable(node.clone());
                     Ok(node)
@@ -570,75 +571,57 @@ impl Parser {
     }
 
     fn assignment(&mut self, init: bool, scope: &mut Scope) -> ParseResult {
-        if !init {
-            if let TokenType::Identifier(_) = self.current_token.token_type {
-                let token = self.current_token.clone();
-                self.advance();
-                match self.current_token.token_type {
-                    TokenType::Assign => {
-                        self.advance();
-                        Ok(Node::VarReassign(token, Box::new(self.expression(scope)?)))
-                    }
-                    ref x if ASSIGNMENT_OPERATORS.contains(x) => {
-                        let op = self.current_token.clone().un_augmented();
-                        self.advance();
-                        let right = self.expression(scope)?;
-                        let t = scope.access_variable_by_token(&token)?;
-                        let rt = match t.get_result_type(&right.get_type(), &op) {
-                            Some(t) => t,
-                            None => {
-                                return Err(Error::new(
-                                    ErrorType::TypeError,
-                                    self.current_token.position.clone(),
-                                    format!("Cannot assign {} to {}", right.get_type(), t),
-                                ))
-                            }
-                        };
-                        Ok(Node::VarReassign(
-                            token.clone(),
-                            Box::new(Node::BinaryOp(
-                                op,
-                                Box::new(Node::VarAccess(token, t)),
-                                Box::new(right),
-                                rt,
-                            )),
-                        ))
-                    }
-                    _ => Err(Error::new(
-                        ErrorType::SyntaxError,
-                        self.current_token.position.clone(),
-                        format!("Expected '=', found {}", self.current_token),
-                    )),
-                }
-            } else {
-                Err(Error::new(
-                    ErrorType::SyntaxError,
-                    self.current_token.position.clone(),
-                    format!("Expected an identifier, found {}", self.current_token),
-                ))
-            }
-        } else {
-            let t = self.make_type()?;
-            if let TokenType::Identifier(_) = self.current_token.token_type {
-                let token = self.current_token.clone();
-                self.advance();
-                if self.current_token.token_type == TokenType::Assign {
+        if let TokenType::Identifier(_) = self.current_token.token_type {
+            let token = self.current_token.clone();
+            self.advance();
+            match self.current_token.token_type {
+                TokenType::Assign if init => {
                     self.advance();
-                    Ok(Node::VarAssign(token, Box::new(self.expression(scope)?), t))
-                } else {
-                    Err(Error::new(
-                        ErrorType::SyntaxError,
-                        self.current_token.position.clone(),
-                        format!("Expected '=', found {}", self.current_token),
+                    let expr = self.expression(scope)?;
+                    let t = expr.get_type();
+                    Ok(Node::VarAssign(token, Box::new(expr), t))
+                }
+                TokenType::Assign => {
+                    self.advance();
+                    Ok(Node::VarReassign(token, Box::new(self.expression(scope)?)))
+                }
+                ref x if ASSIGNMENT_OPERATORS.contains(x) && !init => {
+                    let op = self.current_token.clone().un_augmented();
+                    self.advance();
+                    let right = self.expression(scope)?;
+                    let t = scope.access_variable_by_token(&token)?;
+                    let rt = match t.get_result_type(&right.get_type(), &op) {
+                        Some(t) => t,
+                        None => {
+                            return Err(Error::new(
+                                ErrorType::TypeError,
+                                self.current_token.position.clone(),
+                                format!("Cannot assign {} to {}", right.get_type(), t),
+                            ))
+                        }
+                    };
+                    Ok(Node::VarReassign(
+                        token.clone(),
+                        Box::new(Node::BinaryOp(
+                            op,
+                            Box::new(Node::VarAccess(token, t)),
+                            Box::new(right),
+                            rt,
+                        )),
                     ))
                 }
-            } else {
-                Err(Error::new(
+                _ => Err(Error::new(
                     ErrorType::SyntaxError,
                     self.current_token.position.clone(),
-                    format!("Expected an identifier, found {}", self.current_token),
-                ))
+                    format!("Expected '=', found {}", self.current_token),
+                )),
             }
+        } else {
+            Err(Error::new(
+                ErrorType::SyntaxError,
+                self.current_token.position.clone(),
+                format!("Expected an identifier, found {}", self.current_token),
+            ))
         }
     }
 

@@ -9,10 +9,7 @@ ezout x
 ```
 
 # TODO
-* fixes
-* functions
 * classes
 ```
-let x = ez () {}
-x()
+
 ```

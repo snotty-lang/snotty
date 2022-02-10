@@ -546,56 +546,46 @@ pub fn lex(input: &str, filename: Rc<String>) -> LexResult {
                         ));
                     }
                 }
-                Some((_, c)) => {
-                    if LITERALS.contains(*c) {
-                        let mut word = String::new();
-                        let start = i;
-                        let mut end = j + 2;
-                        while let Some((i, c)) = chars.peek() {
-                            if !LITERALS.contains(*c) && !c.is_numeric() {
-                                break;
-                            }
-                            end = *i + 2;
-                            word.push(*c);
-                            chars.next();
+                Some((_, c)) if LITERALS.contains(*c) => {
+                    let mut word = String::new();
+                    let start = i;
+                    let mut end = j + 2;
+                    while let Some((i, c)) = chars.peek() {
+                        if !LITERALS.contains(*c) && !c.is_numeric() {
+                            break;
                         }
-                        end -= last_line;
-                        if KEYWORDS.contains(&word.as_ref()) {
-                            tokens.push(Token::new(
-                                TokenType::Keyword(word),
-                                line,
-                                start,
-                                end,
-                                Rc::clone(&filename),
-                            ));
-                        } else if PREPROCESSOR_STATEMENTS.contains(&word.as_ref()) {
-                            tokens.push(Token::new(
-                                TokenType::PreprocessorStatement(word),
-                                line,
-                                start,
-                                end,
-                                Rc::clone(&filename),
-                            ));
-                        } else {
-                            tokens.push(Token::new(
-                                TokenType::Identifier(word),
-                                line,
-                                start,
-                                end,
-                                Rc::clone(&filename),
-                            ));
-                        }
+                        end = *i + 2;
+                        word.push(*c);
+                        chars.next();
+                    }
+                    end -= last_line;
+                    if PREPROCESSOR_STATEMENTS.contains(&word.as_ref()) {
+                        tokens.push(Token::new(
+                            TokenType::PreprocessorStatement(word),
+                            line,
+                            start,
+                            end,
+                            Rc::clone(&filename),
+                        ));
+                    } else if KEYWORDS.contains(&word.as_ref()) {
+                        tokens.push(Token::new(
+                            TokenType::Keyword(word),
+                            line,
+                            start,
+                            end,
+                            Rc::clone(&filename),
+                        ));
                     } else {
                         tokens.push(Token::new(
-                            TokenType::LNot,
+                            TokenType::Identifier(word),
                             line,
-                            i,
-                            i + 1,
+                            start,
+                            end,
                             Rc::clone(&filename),
                         ));
                     }
                 }
-                None => {
+                _ => {
                     tokens.push(Token::new(
                         TokenType::LNot,
                         line,
