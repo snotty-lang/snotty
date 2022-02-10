@@ -428,8 +428,6 @@ pub fn transpile(code: &Instructions) -> String {
                 s.insert_str(0, "[-]");
                 bf_code.push_str(&s);
             }
-            Instruction::Deref(_) => {}
-            Instruction::DerefAssign(_, _) => {}
             _ => todo!(),
         }
         // bf_code.push_str("|\n");

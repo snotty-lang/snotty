@@ -1,7 +1,4 @@
-!use fizzbuzz
-
-ez main() {
-    fizzbuzz(1, 100)
-}
-
+ez main() {goo()}
+ez goo() {poo()}
+ez poo() {ezout "hello"}
 main()

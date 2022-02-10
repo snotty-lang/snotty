@@ -717,7 +717,35 @@ impl CodeGenerator {
 
             Node::StructConstructor(_, _, _) => todo!(),
 
-            Node::String(_) => todo!(),
+            Node::String(t) => {
+                let s = if let TokenType::String(ref s) = t.token_type {
+                    s
+                } else {
+                    unreachable!()
+                };
+                let mem = memory.allocate(s.len() + 1);
+                let mut current_mem = mem;
+                for p in s.chars() {
+                    self.instructions.push(
+                        Instruction::Copy(Val::Char(p as u8)),
+                        (Some((current_mem, POINTER_SIZE)), memory.last_memory_index),
+                    );
+                    current_mem += 1;
+                }
+                self.instructions.push(
+                    Instruction::Copy(Val::Char(0)),
+                    (Some((current_mem, POINTER_SIZE)), memory.last_memory_index),
+                );
+                let new_mem = memory.allocate(POINTER_SIZE);
+                self.instructions.push(
+                    Instruction::Ref(mem),
+                    (Some((new_mem, POINTER_SIZE)), memory.last_memory_index),
+                );
+                Ok(Val::Index(
+                    new_mem,
+                    ValType::Pointer(Box::new(ValType::Char)),
+                ))
+            }
         }
     }
 }

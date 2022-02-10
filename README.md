@@ -10,3 +10,4 @@ ezout x
 
 # TODO
 * classes
+* FIX Last line position errors

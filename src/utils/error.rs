@@ -13,6 +13,7 @@ pub enum ErrorType {
     IndexOutOfBounds,
     FileNotFound,
     Redefinition,
+    RecursionError,
 }
 
 /// An error that can occur during the compilation of the source code.

@@ -221,7 +221,7 @@ impl Node {
             Node::Return(a, _) => a.get_type(),
             Node::String(s) => {
                 if let TokenType::String(ref s) = s.token_type {
-                    Type::Array(Box::new(Type::Char), s.len())
+                    Type::Array(Box::new(Type::Char), s.len() + 1)
                 } else {
                     unreachable!()
                 }

@@ -80,7 +80,14 @@ pub fn lex(input: &str, filename: Rc<String>) -> LexResult {
                                 }
                             } as u8)
                         }
-                        _ => c as u8,
+                        c if c.is_ascii() => c as u8,
+                        _ => {
+                            return Err(Error::new(
+                                ErrorType::SyntaxError,
+                                Position::new(line, i, i + 3, Rc::clone(&filename)),
+                                "Invalid char literal, chars can only be ascii values".to_string(),
+                            ))
+                        }
                     },
                     None => {
                         return Err(Error::new(
@@ -622,8 +629,14 @@ pub fn lex(input: &str, filename: Rc<String>) -> LexResult {
                         break;
                     } else if c == '\\' {
                         escape = true;
-                    } else {
+                    } else if c.is_ascii() {
                         word.push(c);
+                    } else {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            Position::new(line, i, i + 3, Rc::clone(&filename)),
+                            "Invalid character in string literal, String can only be of ascii characters".to_string(),
+                        ));
                     }
                 }
                 end -= last_line;
