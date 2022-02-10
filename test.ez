@@ -1,9 +1,5 @@
 !use fizzbuzz
 
-!ifdeclared foo
-kill me
-!else
-
 ez main() {
     fizzbuzz(1, 100)
 }

@@ -189,7 +189,7 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
     if ifs.pop().is_some() {
         return Err(Error::new(
             ErrorType::SyntaxError,
-            tokens[i].position.clone(),
+            tokens[i - 1].position.clone(),
             "No `endif` after `ifdeclared`".to_owned(),
         ));
     }
