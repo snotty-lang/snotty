@@ -134,7 +134,7 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                         _ => {
                             return Err(Error::new(
                                 ErrorType::SyntaxError,
-                                t.position.clone(),
+                                t.position,
                                 "Expected an identifier after `declare`".to_owned(),
                             ))
                         }

@@ -226,7 +226,7 @@ impl Node {
                     unreachable!()
                 }
             }
-            Node::Ref(_, ty, _) => ty.clone(),
+            Node::Ref(_, ty, _) => Type::Ref(Box::new(ty.clone())),
             Node::Deref(_, ty, _) => {
                 if let Type::Ref(a) = ty {
                     *a.clone()
@@ -288,7 +288,7 @@ impl fmt::Display for Node {
             }
             Node::UnaryOp(token, expr, _) => write!(f, "UnaryOp({} {})", token, expr),
             Node::VarReassign(token, expr) => write!(f, "Reassign({} = {})", token, expr),
-            Node::VarAssign(token, expr, _) => write!(f, "Assign({} = {})", token, expr),
+            Node::VarAssign(token, expr, t) => write!(f, "Assign({} : {} = {})", token, t, expr),
             Node::Statements(statements, _) => {
                 write!(
                     f,

@@ -9,6 +9,8 @@ use std::fmt;
 pub enum Instruction {
     If(Val, usize, bool),
     DerefAssign(Val, Val),
+    DerefRef(Val),
+    DerefAssignRef(Val, Val),
     While(Val),
     EndWhile(Val),
     Clear(usize, usize),
@@ -94,7 +96,9 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::DerefAssign(val, expr) => write!(f, "*[{}] = {}", val, expr),
+            Self::DerefAssign(val, expr) | Self::DerefAssignRef(val, expr) => {
+                write!(f, "*[{}] = {}", val, expr)
+            }
             Self::Clear(from, to) => write!(f, "clear {} - {}", from, to - 1),
             Self::While(cond) => write!(f, "WHILE {}", cond),
             Self::EndWhile(cond) => write!(f, "END WHILE {}", cond),
@@ -129,7 +133,7 @@ impl fmt::Display for Instruction {
             Self::Inc(val) => write!(f, "++{:?}", val),
             Self::Dec(val) => write!(f, "--{:?}", val),
             Self::Ref(mem) => write!(f, "&[{}]", mem),
-            Self::Deref(val) => write!(f, "*{:?}", val),
+            Self::Deref(val) | Self::DerefRef(val) => write!(f, "*{:?}", val),
             Self::If(cond, _, _) => write!(f, "IF {:?}", cond),
             Self::Else(_) => write!(f, "ELSE"),
             Self::EndIf(_, _) => write!(f, "ENDIF"),
@@ -174,7 +178,7 @@ impl Val {
             Val::Num(_) => ValType::Number,
             Val::Bool(_) => ValType::Boolean,
             Val::Index(_, t) => t.clone(),
-            Val::Pointer(_, t) => t.clone(),
+            Val::Pointer(_, t) => ValType::Pointer(Box::new(t.clone())),
             Val::None => ValType::None,
             Val::Ref(_, t) => t.clone(),
         }
@@ -213,6 +217,7 @@ pub enum ValType {
     Number,
     Char,
     Boolean,
+    Ref(Box<ValType>),
     Pointer(Box<ValType>),
 }
 
@@ -293,7 +298,7 @@ impl ValType {
             Type::Char => Self::Char,
             Type::Number => Self::Number,
             Type::Boolean => Self::Boolean,
-            Type::Ref(t) => Self::Pointer(Box::new(Self::from_parse_type(t))),
+            Type::Ref(t) => Self::Ref(Box::new(Self::from_parse_type(t))),
             Type::None => Self::None,
             Type::Array(t, _) => Self::Pointer(Box::new(Self::from_parse_type(t))),
         }
@@ -306,6 +311,7 @@ impl ValType {
             Self::Char => 1,
             Self::Boolean => 1,
             Self::Pointer(..) => POINTER_SIZE,
+            Self::Ref(t) => t.get_size(),
         }
     }
 }
@@ -313,6 +319,7 @@ impl ValType {
 impl fmt::Display for ValType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::Ref(t) => write!(f, "&{}", t),
             Self::Char => write!(f, "char"),
             Self::Pointer(t) => write!(f, "&{}", **t),
             Self::None => write!(f, "()"),

@@ -1,6 +1,8 @@
 let b = 45
-let c = &b
-c = 80
-let b = c + 7
+ezout b, '\n'
+modify_to_80(&b)
+ezout b, '\n'
 
-ezout c, ' ', b, '\n'
+ez modify_to_80(number: &int) -> ; {
+    *number = 80
+}

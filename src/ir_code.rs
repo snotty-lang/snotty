@@ -147,18 +147,22 @@ impl CodeGenerator {
                             Ok(Val::None)
                         }
                         Val::Ref(index, type_) => {
-                            if ValType::from_parse_type(dec_type) != type_ {
+                            if !matches!(ValType::from_parse_type(dec_type), ValType::Ref(t) if *t == type_)
+                            {
                                 return Err(Error::new(
                                     ErrorType::TypeError,
                                     var1.position.clone(),
                                     format!(
-                                        "Cannot assign `{}` to `{}`",
+                                        "Cannot assign `&{}` to `{}`",
                                         type_,
                                         ValType::from_parse_type(dec_type)
                                     ),
                                 ));
                             }
-                            vars.insert(var.clone(), Val::Index(index, type_));
+                            vars.insert(
+                                var.clone(),
+                                Val::Index(index, ValType::Ref(Box::new(type_))),
+                            );
                             Ok(Val::None)
                         }
                         val => {
@@ -207,7 +211,7 @@ impl CodeGenerator {
                                     ErrorType::TypeError,
                                     var1.position.clone(),
                                     format!(
-                                        "Variable {} is of type {:?} but is being assigned to type {:?}",
+                                        "Variable {} is of type {} but is being assigned to type {}",
                                         var1,
                                         var.r#type(),
                                         type_
@@ -227,19 +231,19 @@ impl CodeGenerator {
                         }
                         Val::Ref(index, type_) => {
                             let var = vars.get_mut(var2).unwrap();
-                            if var.r#type() != type_ {
+                            if !matches!(var.r#type(), ValType::Ref(t) if *t == type_) {
                                 return Err(Error::new(
                                     ErrorType::TypeError,
                                     var1.position.clone(),
                                     format!(
-                                        "Variable {} is of type {:?} but is being assigned to type {:?}",
+                                        "Variable {} is of type {} but is being assigned to type {}",
                                         var1,
                                         var.r#type(),
                                         type_
                                     ),
                                 ));
                             }
-                            let size =  type_.get_size();
+                            let size = type_.get_size();
                             self.instructions.push(
                                 Instruction::Copy(Val::Index(index, type_)),
                                 (Some((index, size)), memory.last_memory_index),
@@ -255,7 +259,7 @@ impl CodeGenerator {
                                     ErrorType::TypeError,
                                     var1.position.clone(),
                                     format!(
-                                        "Variable {} is of type {:?} but is being assigned to type {:?}",
+                                        "Variable {} is of type {} but is being assigned to type {}",
                                         val_type,
                                         var.r#type(),
                                         val_type
@@ -568,6 +572,14 @@ impl CodeGenerator {
                         (Some((mem, size)), memory.last_memory_index),
                     );
                     Ok(Val::Index(mem, *t))
+                } else if let ValType::Ref(t) = val.r#type() {
+                    let size = t.get_size();
+                    let mem = memory.allocate(size);
+                    self.instructions.push(
+                        Instruction::DerefRef(val),
+                        (Some((mem, size)), memory.last_memory_index),
+                    );
+                    Ok(Val::Index(mem, *t))
                 } else {
                     Err(Error::new(
                         ErrorType::TypeError,
@@ -586,10 +598,19 @@ impl CodeGenerator {
             }
 
             Node::DerefAssign(deref, assign, _) => {
-                let deref = if let Node::Deref(val1, ..) = &**deref {
+                let assign = self.make_instruction(assign, vars, memory)?;
+                if let Node::Deref(val1, ..) = &**deref {
                     let val = self.make_instruction(val1, vars, memory)?;
                     if let ValType::Pointer(_) = val.r#type() {
-                        val
+                        self.instructions.push(
+                            Instruction::DerefAssign(val, assign),
+                            (None, memory.last_memory_index),
+                        );
+                    } else if let ValType::Ref(_) = val.r#type() {
+                        self.instructions.push(
+                            Instruction::DerefAssignRef(val, assign),
+                            (None, memory.last_memory_index),
+                        );
                     } else {
                         return Err(Error::new(
                             ErrorType::TypeError,
@@ -600,11 +621,6 @@ impl CodeGenerator {
                 } else {
                     unreachable!()
                 };
-                let assign = self.make_instruction(assign, vars, memory)?;
-                self.instructions.push(
-                    Instruction::DerefAssign(deref, assign),
-                    (None, memory.last_memory_index),
-                );
                 Ok(Val::None)
             }
 
