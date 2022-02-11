@@ -1,4 +1,6 @@
-ez main() {goo()}
-ez goo() {poo()}
-ez poo() {ezout "hello"}
-main()
+let b = 45
+let c = &b
+c = 80
+let b = c + 7
+
+ezout c, ' ', b, '\n'

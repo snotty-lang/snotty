@@ -1165,50 +1165,51 @@ pub fn parse(tokens: Vec<Token>) -> ParseResult {
         token_index: 0,
         current_token: token,
     };
-    let ast = obj.statements(TokenType::Eof, true, &mut global)?;
-    let ast = match check_undefined(&mut global) {
-        Some(err) => return Err(err),
-        None => ast,
-    };
-    let mut ast = match keyword_checks(&ast) {
-        Some(err) => return Err(err),
-        None => ast,
-    };
-    match expand_inline(&mut ast, vec![]) {
-        Some(err) => Err(err),
-        None => Ok(ast),
+    let mut ast = obj.statements(TokenType::Eof, true, &mut global)?;
+    if let Some(err) = check_undefined(&mut global) {
+        return Err(err);
+    }
+    if let Some(err) = keyword_checks(&ast) {
+        return Err(err);
+    }
+    if let Some(err) = check_recursive(&ast, &mut vec![]) {
+        return Err(err);
+    }
+    if let Some(err) = expand_inline(&mut ast, vec![]) {
+        return Err(err);
+    }
+    Ok(ast)
+}
+
+fn check_functions(scope: &mut Scope) -> Option<Node> {
+    if !scope.unresolved_functions.is_empty() {
+        return Some(scope.unresolved_functions.pop().unwrap());
+    }
+    if !scope.unresolved_structs.is_empty() {
+        return Some(scope.unresolved_structs.pop().unwrap());
+    }
+    for child in &mut scope.scopes {
+        if let Some(err) = check_functions(child) {
+            return Some(err);
+        }
+    }
+    None
+}
+
+fn refresh(scope: &mut Scope, parent: Scope) {
+    scope.parent = Some(Box::new(parent));
+    scope.refresh();
+    let clone = scope.clone();
+    for child in scope.scopes.iter_mut() {
+        refresh(child, clone.clone());
     }
 }
 
 /// Checks for undefined functions and variables.
 fn check_undefined(global: &mut Scope) -> Option<Error> {
-    fn refresh(scope: &mut Scope, parent: Scope) {
-        scope.parent = Some(Box::new(parent));
-        scope.refresh();
-        let clone = scope.clone();
-        for child in scope.scopes.iter_mut() {
-            refresh(child, clone.clone());
-        }
-    }
-
     let clone = global.clone();
     for child in global.scopes.iter_mut() {
         refresh(child, clone.clone());
-    }
-
-    fn check_functions(scope: &mut Scope) -> Option<Node> {
-        if !scope.unresolved_functions.is_empty() {
-            return Some(scope.unresolved_functions.pop().unwrap());
-        }
-        if !scope.unresolved_structs.is_empty() {
-            return Some(scope.unresolved_structs.pop().unwrap());
-        }
-        for child in &mut scope.scopes {
-            if let Some(err) = check_functions(child) {
-                return Some(err);
-            }
-        }
-        None
     }
 
     if let Some(node) = check_functions(global) {
@@ -1378,187 +1379,158 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
     }
 }
 
-fn check_recursive(ast: &Node, stack: &mut Vec<Token>) -> Option<Error> {
-    if let Some(functions) = find_functions(ast) {
-        for function in functions {
-            if let Node::FuncDef(token, _, body, _, _) = function {
-                if stack.iter().any(|t| t == &token) {
-                    return Some(Error::new(
-                        ErrorType::RecursionError,
-                        token.position.clone(),
-                        format!("Recursive function {} is calling itself", stack.last().unwrap()),
-                    ));
-                }
-                stack.push(token);
-                if let a @ Some(_) = check_recursive(&*body, stack) {
-                    return a
-                }
-            }
-        }
-    }
-    None
-}
-
 /// Expands inline functions
 fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) -> Option<Error> {
-    fn remove_inline(node: &mut Node) {
-        match node {
-            Node::FuncDef(.., p) => *node = Node::None(p.clone()),
-            Node::Struct(..) => (),
-            Node::Call(_, n, ..)
-            | Node::Statements(n, _)
-            | Node::Print(n, _)
-            | Node::Array(n, ..)
-            | Node::Ascii(n, _) => {
-                for n in n.iter_mut().rev() {
-                    remove_inline(n);
-                }
-            }
-            Node::StructConstructor(_, n, _) => {
-                for (_, n) in n {
-                    remove_inline(n);
-                }
-            }
-            Node::IndexAssign(_, n1, n2)
-            | Node::DerefAssign(n1, n2, _)
-            | Node::If(n1, n2, None, _)
-            | Node::While(n1, n2, _)
-            | Node::BinaryOp(_, n1, n2, _) => {
-                remove_inline(n1);
-                remove_inline(n2);
-            }
-            Node::String(_) => (),
-            Node::Number(_) => (),
-            Node::Boolean(_) => (),
-            Node::Index(_, n, ..)
-            | Node::Ref(n, ..)
-            | Node::Deref(n, ..)
-            | Node::Return(n, ..)
-            | Node::UnaryOp(_, n, _)
-            | Node::VarAssign(_, n, _)
-            | Node::VarReassign(_, n) => remove_inline(n),
-            Node::VarAccess(..) => (),
-            Node::Input(..) => (),
-            Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
-                remove_inline(n1);
-                remove_inline(n2);
-                remove_inline(n3);
-            }
-            Node::None(_) => (),
-            Node::Char(_, _) => (),
-            Node::For(n1, n2, n3, n4, _) => {
-                remove_inline(n1);
-                remove_inline(n2);
-                remove_inline(n3);
-                remove_inline(n4);
-            }
-            Node::Expanded(_, _) => unreachable!(),
-        }
-    }
-
-    fn insert_function(functions: &mut Vec<Node>, node: &mut Node) {
-        match node {
-            Node::Call(name, args, ..) => {
-                let func = match functions.iter().find(|f| match f {
-                    Node::FuncDef(n, a, ..) => n == name && a.len() == args.len(),
-                    _ => false,
-                }) {
-                    Some(f) => f,
-                    None => return,
-                };
-                let (params, body, ret) = match func {
-                    Node::FuncDef(_, p, b, ret, ..) => (p, b.clone(), ret),
-                    _ => unreachable!(),
-                };
-                let mut expanded = vec![];
-                for ((arg, type_), param) in params.iter().zip(args) {
-                    expanded.push(Node::VarAssign(
-                        arg.clone(),
-                        Box::new(param.clone()),
-                        type_.clone(),
-                    ))
-                }
-                expanded.push(*body);
-                *node = Node::Expanded(expanded, ret.clone());
-            }
-            Node::Statements(n, _) | Node::Print(n, _) | Node::Array(n, ..) | Node::Ascii(n, _) => {
-                for n in n.iter_mut().rev() {
-                    insert_function(functions, n);
-                }
-            }
-            Node::StructConstructor(_, n, _) => {
-                for (_, n) in n {
-                    insert_function(functions, n);
-                }
-            }
-            Node::IndexAssign(_, n1, n2)
-            | Node::DerefAssign(n1, n2, _)
-            | Node::If(n1, n2, None, _)
-            | Node::While(n1, n2, _)
-            | Node::BinaryOp(_, n1, n2, _) => {
-                insert_function(functions, n1);
-                insert_function(functions, n2);
-            }
-            Node::Struct(..) => (),
-            Node::String(_) => (),
-            Node::Number(_) => (),
-            Node::Boolean(_) => (),
-            Node::Index(_, n, ..)
-            | Node::Ref(n, ..)
-            | Node::Deref(n, ..)
-            | Node::Return(n, ..)
-            | Node::FuncDef(_, _, n, ..)
-            | Node::UnaryOp(_, n, _)
-            | Node::VarAssign(_, n, _)
-            | Node::VarReassign(_, n) => insert_function(functions, n),
-            Node::VarAccess(..) => (),
-            Node::Input(..) => (),
-            Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
-                insert_function(functions, n1);
-                insert_function(functions, n2);
-                insert_function(functions, n3);
-            }
-            Node::None(_) => (),
-            Node::Char(_, _) => (),
-            Node::For(n1, n2, n3, n4, _) => {
-                insert_function(functions, n1);
-                insert_function(functions, n2);
-                insert_function(functions, n3);
-                insert_function(functions, n4);
-            }
-            Node::Expanded(_, _) => unreachable!(),
-        }
-    }
-
     if let Some(mut functions2) = find_functions(ast) {
-        let mut old = functions.clone();
-        functions.append(&mut functions2.clone());
+        functions.extend(functions2.iter().map(|n| (**n).clone()));
         for f in functions2.iter_mut() {
             if let Node::FuncDef(_, _, f, ..) = f {
                 expand_inline(f, functions.clone());
             }
         }
         remove_inline(ast);
-        old.append(&mut functions2);
-        functions = old;
     }
-    insert_function(&mut functions, ast);
+    insert_function(&functions, ast);
+    // println!("{ast}\n");
     None
 }
 
-fn find_functions(node: &Node) -> Option<Vec<Node>> {
+fn remove_inline(node: &mut Node) {
     match node {
-        Node::FuncDef(_, _, body, ..) => Some(match find_functions(body) {
-            Some(mut nodes) => {
-                nodes.push(node.clone());
-                nodes
+        Node::FuncDef(.., p) => *node = Node::None(p.clone()),
+        Node::Struct(..) => (),
+        Node::Call(_, n, ..)
+        | Node::Statements(n, _)
+        | Node::Print(n, _)
+        | Node::Array(n, ..)
+        | Node::Ascii(n, _) => {
+            for n in n.iter_mut().rev() {
+                remove_inline(n);
             }
-            None => vec![node.clone()],
-        }),
+        }
+        Node::StructConstructor(_, n, _) => {
+            for (_, n) in n {
+                remove_inline(n);
+            }
+        }
+        Node::IndexAssign(_, n1, n2)
+        | Node::DerefAssign(n1, n2, _)
+        | Node::If(n1, n2, None, _)
+        | Node::While(n1, n2, _)
+        | Node::BinaryOp(_, n1, n2, _) => {
+            remove_inline(n1);
+            remove_inline(n2);
+        }
+        Node::String(_) => (),
+        Node::Number(_) => (),
+        Node::Boolean(_) => (),
+        Node::Index(_, n, ..)
+        | Node::Ref(n, ..)
+        | Node::Deref(n, ..)
+        | Node::Return(n, ..)
+        | Node::UnaryOp(_, n, _)
+        | Node::VarAssign(_, n, _)
+        | Node::VarReassign(_, n) => remove_inline(n),
+        Node::VarAccess(..) => (),
+        Node::Input(..) => (),
+        Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
+            remove_inline(n1);
+            remove_inline(n2);
+            remove_inline(n3);
+        }
+        Node::None(_) => (),
+        Node::Char(_, _) => (),
+        Node::For(n1, n2, n3, n4, _) => {
+            remove_inline(n1);
+            remove_inline(n2);
+            remove_inline(n3);
+            remove_inline(n4);
+        }
+        Node::Expanded(_, _) => unreachable!(),
+    }
+}
+
+fn insert_function(functions: &[Node], node: &mut Node) {
+    match node {
+        Node::Call(name, args, ..) => {
+            let func = match functions.iter().find(|f| match f {
+                Node::FuncDef(n, a, ..) => n == name && a.len() == args.len(),
+                _ => false,
+            }) {
+                Some(f) => f,
+                None => return,
+            };
+            let (params, body, ret) = match func {
+                Node::FuncDef(_, p, b, ret, ..) => (p, b.clone(), ret),
+                _ => unreachable!(),
+            };
+            let mut expanded = vec![];
+            for ((arg, type_), param) in params.iter().zip(args) {
+                expanded.push(Node::VarAssign(
+                    arg.clone(),
+                    Box::new(param.clone()),
+                    type_.clone(),
+                ))
+            }
+            expanded.push(*body);
+            *node = Node::Expanded(expanded, ret.clone());
+        }
+        Node::Statements(n, _) | Node::Print(n, _) | Node::Array(n, ..) | Node::Ascii(n, _) => {
+            for n in n.iter_mut().rev() {
+                insert_function(functions, n);
+            }
+        }
+        Node::StructConstructor(_, n, _) => {
+            for (_, n) in n {
+                insert_function(functions, n);
+            }
+        }
+        Node::IndexAssign(_, n1, n2)
+        | Node::DerefAssign(n1, n2, _)
+        | Node::If(n1, n2, None, _)
+        | Node::While(n1, n2, _)
+        | Node::BinaryOp(_, n1, n2, _) => {
+            insert_function(functions, n1);
+            insert_function(functions, n2);
+        }
+        Node::Struct(..) => (),
+        Node::String(_) => (),
+        Node::Number(_) => (),
+        Node::Boolean(_) => (),
+        Node::Index(_, n, ..)
+        | Node::Ref(n, ..)
+        | Node::Deref(n, ..)
+        | Node::Return(n, ..)
+        | Node::FuncDef(_, _, n, ..)
+        | Node::UnaryOp(_, n, _)
+        | Node::VarAssign(_, n, _)
+        | Node::VarReassign(_, n) => insert_function(functions, n),
+        Node::VarAccess(..) => (),
+        Node::Input(..) => (),
+        Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
+            insert_function(functions, n1);
+            insert_function(functions, n2);
+            insert_function(functions, n3);
+        }
+        Node::None(_) => (),
+        Node::Char(_, _) => (),
+        Node::For(n1, n2, n3, n4, _) => {
+            insert_function(functions, n1);
+            insert_function(functions, n2);
+            insert_function(functions, n3);
+            insert_function(functions, n4);
+        }
+        Node::Expanded(_, _) => unreachable!(),
+    }
+}
+
+fn find_functions(node: &mut Node) -> Option<Vec<&mut Node>> {
+    match node {
+        Node::FuncDef(..) => Some(vec![node]),
 
         Node::Statements(nodes, _) => {
             let mut new = vec![];
-            for node in nodes.iter().rev() {
+            for node in nodes.iter_mut().rev() {
                 if let Some(ref mut i) = find_functions(node) {
                     new.append(i);
                 }
@@ -1626,6 +1598,107 @@ fn find_functions(node: &Node) -> Option<Vec<Node>> {
                 return a;
             }
             find_functions(n4)
+        }
+        Node::Expanded(_, _) => unreachable!(),
+    }
+}
+
+/// Checks for Recursive Functions
+fn check_recursive(node: &Node, stack: &mut Vec<Token>) -> Option<Error> {
+    match node {
+        Node::FuncDef(t, _, body, ..) => {
+            stack.push(t.clone());
+            let s = check_recursive(body, stack);
+            stack.pop();
+            s
+        }
+        Node::Statements(nodes, _) => {
+            for node in nodes.iter().rev() {
+                if let a @ Some(_) = check_recursive(node, stack) {
+                    return a;
+                }
+            }
+            None
+        }
+        Node::StructConstructor(_, n, _) => {
+            for (_, n) in n {
+                if let a @ Some(_) = check_recursive(n, stack) {
+                    return a;
+                }
+            }
+            None
+        }
+        Node::Print(n, _) | Node::Array(n, ..) | Node::Ascii(n, _) => {
+            for n in n {
+                if let a @ Some(_) = check_recursive(n, stack) {
+                    return a;
+                }
+            }
+            None
+        }
+        Node::Call(token, n, ..) => {
+            if stack.iter().any(|t| t == token) {
+                return Some(Error::new(
+                    ErrorType::RecursionError,
+                    token.position.clone(),
+                    format!(
+                        "Recursive function {} is calling itself",
+                        stack.last().unwrap()
+                    ),
+                ));
+            }
+            for n in n {
+                if let a @ Some(_) = check_recursive(n, stack) {
+                    return a;
+                }
+            }
+            None
+        }
+        Node::Struct(..) => None,
+        Node::IndexAssign(_, n1, n2)
+        | Node::DerefAssign(n1, n2, _)
+        | Node::If(n1, n2, None, _)
+        | Node::While(n1, n2, _)
+        | Node::BinaryOp(_, n1, n2, _) => {
+            if let a @ Some(_) = check_recursive(n1, stack) {
+                return a;
+            }
+            check_recursive(n2, stack)
+        }
+        Node::Number(_) => None,
+        Node::Boolean(_) => None,
+        Node::Index(_, n, ..)
+        | Node::Ref(n, ..)
+        | Node::Deref(n, ..)
+        | Node::Return(n, ..)
+        | Node::UnaryOp(_, n, _)
+        | Node::VarAssign(_, n, _)
+        | Node::VarReassign(_, n) => check_recursive(n, stack),
+        Node::VarAccess(..) => None,
+        Node::String(_) => None,
+        Node::Input(..) => None,
+        Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
+            if let a @ Some(_) = check_recursive(n1, stack) {
+                return a;
+            }
+            if let a @ Some(_) = check_recursive(n2, stack) {
+                return a;
+            }
+            check_recursive(n3, stack)
+        }
+        Node::None(_) => None,
+        Node::Char(_, _) => None,
+        Node::For(n1, n2, n3, n4, _) => {
+            if let a @ Some(_) = check_recursive(n1, stack) {
+                return a;
+            }
+            if let a @ Some(_) = check_recursive(n2, stack) {
+                return a;
+            }
+            if let a @ Some(_) = check_recursive(n3, stack) {
+                return a;
+            }
+            check_recursive(n4, stack)
         }
         Node::Expanded(_, _) => unreachable!(),
     }

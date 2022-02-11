@@ -226,7 +226,7 @@ impl Node {
                     unreachable!()
                 }
             }
-            Node::Ref(_, ty, _) => Type::Ref(Box::new(ty.clone())),
+            Node::Ref(_, ty, _) => ty.clone(),
             Node::Deref(_, ty, _) => {
                 if let Type::Ref(a) = ty {
                     *a.clone()

@@ -148,6 +148,8 @@ pub enum Val {
     Index(usize, ValType),
     /// None
     None,
+    /// A reference.
+    Ref(usize, ValType),
     /// A pointer.
     Pointer(usize, ValType),
     /// A Char
@@ -174,6 +176,7 @@ impl Val {
             Val::Index(_, t) => t.clone(),
             Val::Pointer(_, t) => t.clone(),
             Val::None => ValType::None,
+            Val::Ref(_, t) => t.clone(),
         }
     }
 
@@ -195,6 +198,7 @@ impl Val {
             Val::Index(_, _) => false,
             Val::Pointer(_, _) => false,
             Val::None => true,
+            Val::Ref(_, _) => false,
         }
     }
 
@@ -327,6 +331,7 @@ impl fmt::Display for Val {
             Val::Bool(b) => write!(f, "{}", b),
             Val::Num(num) => write!(f, "{}", num),
             Val::Index(index, _) => write!(f, "[{}]", index),
+            Val::Ref(ptr, _) => write!(f, "&{}", ptr),
         }
     }
 }
@@ -340,6 +345,7 @@ impl fmt::Debug for Val {
             Val::Bool(b) => write!(f, "{}", b),
             Val::Num(num) => write!(f, "{}", num),
             Val::Index(index, _) => write!(f, "[{}]", index),
+            Val::Ref(ptr, _) => write!(f, "&{}", ptr),
         }
     }
 }

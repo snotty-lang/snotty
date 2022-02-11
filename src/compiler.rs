@@ -424,9 +424,7 @@ pub fn transpile(code: &Instructions) -> String {
                 goto(&mut bf_code, &mut location, start);
             }
             Instruction::Ref(mem) => {
-                let mut s = "+".repeat(*mem);
-                s.insert_str(0, "[-]");
-                bf_code.push_str(&s);
+                bf_code.push_str(&">".repeat(*mem));
             }
             _ => todo!(),
         }
@@ -478,6 +476,10 @@ macro_rules! goto_add {
             Val::None => {
                 $bf_code.push_str("[-]");
             }
+            Val::Ref(ptr, _) => {
+                goto($bf_code, $current, *ptr);
+                $block
+            }
         }
     };
     ($val: expr, $bf_code: expr, $current: expr, $block:block, $block2: block) => {
@@ -512,6 +514,10 @@ macro_rules! goto_add {
             Val::None => {
                 $bf_code.push_str("[-]");
                 $block2
+            }
+            Val::Ref(ptr, _) => {
+                goto($bf_code, $current, *ptr);
+                $block
             }
         }
     };

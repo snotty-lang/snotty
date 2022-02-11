@@ -139,12 +139,26 @@ impl CodeGenerator {
                             }
                             let size = type_.get_size();
                             let mem = memory.allocate(size);
-                            vars.insert(var.clone(), Val::Index(mem, type_.clone()));
                             self.instructions.push(
                                 Instruction::Copy(Val::Index(index, type_.clone())),
                                 (Some((mem, size)), memory.last_memory_index),
                             );
                             vars.insert(var.clone(), Val::Index(mem, type_));
+                            Ok(Val::None)
+                        }
+                        Val::Ref(index, type_) => {
+                            if ValType::from_parse_type(dec_type) != type_ {
+                                return Err(Error::new(
+                                    ErrorType::TypeError,
+                                    var1.position.clone(),
+                                    format!(
+                                        "Cannot assign `{}` to `{}`",
+                                        type_,
+                                        ValType::from_parse_type(dec_type)
+                                    ),
+                                ));
+                            }
+                            vars.insert(var.clone(), Val::Index(index, type_));
                             Ok(Val::None)
                         }
                         val => {
@@ -209,6 +223,27 @@ impl CodeGenerator {
                             } else {
                                 unreachable!();
                             }
+                            Ok(Val::None)
+                        }
+                        Val::Ref(index, type_) => {
+                            let var = vars.get_mut(var2).unwrap();
+                            if var.r#type() != type_ {
+                                return Err(Error::new(
+                                    ErrorType::TypeError,
+                                    var1.position.clone(),
+                                    format!(
+                                        "Variable {} is of type {:?} but is being assigned to type {:?}",
+                                        var1,
+                                        var.r#type(),
+                                        type_
+                                    ),
+                                ));
+                            }
+                            let size =  type_.get_size();
+                            self.instructions.push(
+                                Instruction::Copy(Val::Index(index, type_)),
+                                (Some((index, size)), memory.last_memory_index),
+                            );
                             Ok(Val::None)
                         }
                         val => {
@@ -510,7 +545,7 @@ impl CodeGenerator {
 
             Node::Ref(val1, ..) => {
                 let val = self.make_instruction(val1, vars, memory)?;
-                let val2 = if let Val::Index(mem, _) = val {
+                let mem = if let Val::Index(mem, _) = val {
                     mem
                 } else {
                     return Err(Error::new(
@@ -520,12 +555,7 @@ impl CodeGenerator {
                     ));
                 };
                 let t = val.r#type();
-                let mem = memory.allocate(POINTER_SIZE);
-                self.instructions.push(
-                    Instruction::Ref(val2),
-                    (Some((mem, POINTER_SIZE)), memory.last_memory_index),
-                );
-                Ok(Val::Index(mem, ValType::Pointer(Box::new(t))))
+                Ok(Val::Ref(mem, t))
             }
 
             Node::Deref(val1, ..) => {
