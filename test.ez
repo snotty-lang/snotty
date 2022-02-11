@@ -3,6 +3,8 @@ ezout b, '\n'
 modify_to_80(&b)
 ezout b, '\n'
 
-ez modify_to_80(number: &int) -> ; {
-    *number = 80
+ez modify_to_80(number: &int) {
+    foo()
 }
+
+ez foo() ;

@@ -9,5 +9,7 @@ ezout x
 ```
 
 # TODO
-* classes
+* struct
 * FIX Last line position errors
+* `return`
+* function expanding error
