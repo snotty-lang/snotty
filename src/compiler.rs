@@ -426,15 +426,17 @@ pub fn transpile(code: &Instructions) -> String {
             Instruction::Ref(mem) => {
                 bf_code.push_str(&">".repeat(*mem));
             }
-            Instruction::DerefRef(Val::Ref(mem, _)) => {
-                bf_code.push_str(&">".repeat(*mem));
+            Instruction::DerefRef(Val::Index(mem, _)) => {
+                goto(&mut bf_code, &mut location, *mem);
+                copy(&mut bf_code, location, start, location, free_idx);
+                goto(&mut bf_code, &mut location, start);
             }
             Instruction::DerefAssignRef(Val::Index(mem, _), assign) => {
-                bf_code.push_str(&">".repeat(*mem));
+                goto(&mut bf_code, &mut location, *mem);
                 goto_add!(assign, &mut bf_code, &mut location, {
                     copy(&mut bf_code, location, start, location, free_idx);
-                    goto(&mut bf_code, &mut location, start);
                 });
+                goto(&mut bf_code, &mut location, start);
             }
             c => todo!("{:?}", c),
         }

@@ -2,9 +2,10 @@ let b = 45
 ezout b, '\n'
 modify_to_80(&b)
 ezout b, '\n'
+let a = 6
+ezout a + 5, '\n'
 
 ez modify_to_80(number: &int) {
-    foo()
+    ezout *number, '\n';
+    *number = 5
 }
-
-ez foo() ;
