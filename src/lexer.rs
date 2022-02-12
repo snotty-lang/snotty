@@ -627,6 +627,10 @@ pub fn lex(input: &str, filename: Rc<String>) -> LexResult {
                     } else if c == '"' {
                         end = i + 2;
                         break;
+                    } else if c == '\n' {
+                        line += 1;
+                        last_line = i + 1
+                        word.push(c);
                     } else if c == '\\' {
                         escape = true;
                     } else if c.is_ascii() {

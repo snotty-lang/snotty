@@ -13,4 +13,4 @@ ezout x
 * FIX Last line position errors
 * `return`
 * function expanding error
-* Pointers
+* Pointers + Arrays + Strings + Dynamic Memory
