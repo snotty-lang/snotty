@@ -691,7 +691,7 @@ impl Parser {
         )
     }
 
-    fn factor(&mut self, scope: &mut Scope) -> ParseResult {
+    fn factor(&mut self, scope: &mut Scope) -> ParseResult {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
         let token = self.current_token.clone();
         match token.token_type {
             TokenType::Sub | TokenType::BNot | TokenType::Inc | TokenType::Dec => {
