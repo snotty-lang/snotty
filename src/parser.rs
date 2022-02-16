@@ -691,7 +691,7 @@ impl Parser {
         )
     }
 
-    fn factor(&mut self, scope: &mut Scope) -> ParseResult {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
+    fn factor(&mut self, scope: &mut Scope) -> ParseResult {
         let token = self.current_token.clone();
         match token.token_type {
             TokenType::Sub | TokenType::BNot | TokenType::Inc | TokenType::Dec => {
@@ -701,7 +701,7 @@ impl Parser {
                     Some(t) => t,
                     None => {
                         return Err(Error::new(
-                            ErrorType::SyntaxError,
+                            ErrorType::TypeError,
                             self.current_token.position.clone(),
                             format!("Expected a number, found {}", node.get_type()),
                         ))
@@ -1223,7 +1223,7 @@ fn check_undefined(global: &mut Scope) -> Option<Error> {
             }
             Node::StructConstructor(token, _, _) => {
                 return Some(Error::new(
-                    ErrorType::UndefinedFunction,
+                    ErrorType::UndefinedStruct,
                     token.position.clone(),
                     format!("Struct {} is not defined", token),
                 ));

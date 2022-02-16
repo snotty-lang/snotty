@@ -8,6 +8,7 @@ pub enum Type {
     Boolean,
     None,
     Char,
+    Struct(Token),
     Array(Box<Type>, usize),
     Ref(Box<Type>),
 }
@@ -90,6 +91,7 @@ impl Display for Type {
             Type::Char => write!(f, "char"),
             Type::Array(t, l) => write!(f, "[{}; {}]", t, l),
             Type::Ref(t) => write!(f, "&{}", t),
+            Type::Struct(s) => write!(f, "struct {}", s),
         }
     }
 }
@@ -215,8 +217,7 @@ impl Node {
 
     pub fn get_type(&self) -> Type {
         match self {
-            Node::StructConstructor(..) => todo!(),
-            Node::Struct(..) => todo!(),
+            Node::StructConstructor(t, ..) => Type::Struct(t.clone()),
             Node::Array(v, ty, _) => Type::Array(Box::new(ty.clone()), v.len()),
             Node::Return(a, _) => a.get_type(),
             Node::String(s) => {
@@ -246,6 +247,7 @@ impl Node {
             | Node::Expanded(_, ty)
             | Node::Index(_, _, ty, _) => ty.clone(),
             Node::While(_, _, _)
+            | Node::Struct(..)
             | Node::VarAssign(_, _, _)
             | Node::VarReassign(_, _)
             | Node::Statements(_, _)

@@ -1,1 +1,12 @@
-let a = 5
+struct b {
+    a: int,
+    c: char,
+    d: bool
+}
+
+struct b {
+    a: int,
+    c: char
+}
+
+let a = b { a : 4 , c: true };

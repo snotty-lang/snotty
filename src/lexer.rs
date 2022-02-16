@@ -629,7 +629,7 @@ pub fn lex(input: &str, filename: Rc<String>) -> LexResult {
                         break;
                     } else if c == '\n' {
                         line += 1;
-                        last_line = i + 1
+                        last_line = i + 1;
                         word.push(c);
                     } else if c == '\\' {
                         escape = true;

@@ -7,6 +7,7 @@ pub enum ErrorType {
     NumberTooLarge,
     SyntaxError,
     UndefinedFunction,
+    UndefinedStruct,
     UndefinedVariable,
     InvalidReturn,
     TypeError,
