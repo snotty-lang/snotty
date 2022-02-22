@@ -25,12 +25,10 @@
 pub mod core;
 pub mod utils;
 
-use std::fs;
-use std::process;
 use std::rc::Rc;
 
+use crate::core::{compiler, ir_code, lexer, parser, preprocessor};
 use utils::Error;
-use crate::core::{parser, lexer, compiler, ir_code, preprocessor};
 
 /// parses the passed ezlang code, and returns a the generated brainfuck code or an error, if any
 /// # Arguments
@@ -76,34 +74,4 @@ fn optimize(code: &mut String) {
             .replace("+-", "")
             .replace("-+", "");
     }
-}
-
-/// Reads and compiles the content of the passed file and returns it
-/// In case of an error, it exits the program
-#[inline(always)]
-pub fn compile(filename: String) -> String {
-    run(
-        &fs::read_to_string(&filename).unwrap_or_else(|e| {
-            println!("{}", e);
-            process::exit(1);
-        }),
-        filename,
-    )
-    .unwrap_or_else(|e| {
-        println!("{}", e);
-        process::exit(1);
-    })
-}
-
-/// Same as `run`, but a macro
-#[macro_export]
-macro_rules! ez {
-    ($($text: tt)*) => {{
-        let mut code = String::new();
-        $(
-            code.push(' ');
-            code.push_str(stringify!($text));
-        )*
-        ezlang::run(&code)
-    }};
 }
