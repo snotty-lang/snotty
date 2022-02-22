@@ -2,7 +2,7 @@ use crate::utils::{Instruction, Instructions, Val};
 
 /// Compiles the 3-address code into brainfuck code.
 pub fn transpile(code: &Instructions) -> String {
-    use super::goto_add;
+    use crate::goto_add;
     let mut location = 0;
     let mut bf_code = String::new();
     for (assign, instruction) in &code.0 {

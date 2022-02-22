@@ -4,24 +4,25 @@ use crate::utils::{Instruction, Instructions, Val, ValNumber};
 
 /// Evaluates constant time operations during compile time
 pub fn evaluate(code: &Instructions) -> Instructions {
+    use crate::check;
     let mut vars = HashMap::new();
     let mut new = Instructions::new();
     for (assign, instruction) in &code.0 {
         let evaluated = match instruction {
             Instruction::Add(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Num(left + right)
             }
             Instruction::Sub(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Num(left - right)
             }
             Instruction::Mul(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Num(left * right)
             }
             Instruction::Div(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 if right == 0 {
                     new.push(Instruction::Div(Val::Num(left), Val::Num(right)), *assign);
                     continue;
@@ -29,7 +30,7 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                 Val::Num(left / right)
             }
             Instruction::Mod(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 if right == 0 {
                     new.push(Instruction::Mod(Val::Num(left), Val::Num(right)), *assign);
                     continue;
@@ -37,11 +38,11 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                 Val::Num(left % right)
             }
             Instruction::Neg(val) => {
-                super::check!(val, new, vars, assign, instruction);
+                check!(val, new, vars, assign, instruction);
                 Val::Num(-val)
             }
             Instruction::Ascii(val) => {
-                super::check!(val, new, vars, assign, instruction);
+                check!(val, new, vars, assign, instruction);
                 new.push(Instruction::Ascii(Val::Num(val)), *assign);
                 continue;
             }
@@ -50,7 +51,7 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                 continue;
             }
             Instruction::Print(val) => {
-                super::check!(VAL val, new, vars, assign, instruction);
+                check!(VAL val, new, vars, assign, instruction);
                 let left_str = val.to_string();
                 let left_vec = left_str.chars().collect::<Vec<char>>();
                 for left in left_vec {
@@ -60,43 +61,43 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                 continue;
             }
             Instruction::Eq(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Bool(left == right)
             }
             Instruction::Neq(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Bool(left != right)
             }
             Instruction::Lt(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Bool(left < right)
             }
             Instruction::Le(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Bool(left <= right)
             }
             Instruction::LAnd(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Bool(left != 0 && right != 0)
             }
             Instruction::LOr(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Bool(left != 0 || right != 0)
             }
             Instruction::LNot(val) => {
-                super::check!(val, new, vars, assign, instruction);
+                check!(val, new, vars, assign, instruction);
                 Val::Bool(val == 0)
             }
             Instruction::Inc(val) => {
-                super::check!(val, new, vars, assign, instruction);
+                check!(val, new, vars, assign, instruction);
                 Val::Num(val + 1)
             }
             Instruction::Dec(val) => {
-                super::check!(val, new, vars, assign, instruction);
+                check!(val, new, vars, assign, instruction);
                 Val::Num(val - 1)
             }
             Instruction::Pow(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 if right < 0 {
                     Val::Num(1 / left.pow(-right as u32))
                 } else {
@@ -104,27 +105,27 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                 }
             }
             Instruction::Shl(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Num(left << right)
             }
             Instruction::Shr(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Num(left >> right)
             }
             Instruction::BAnd(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Num(left & right)
             }
             Instruction::BOr(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Num(left | right)
             }
             Instruction::BXor(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Num(left ^ right)
             }
             Instruction::BNot(val) => {
-                super::check!(val, new, vars, assign, instruction);
+                check!(val, new, vars, assign, instruction);
                 Val::Num(!val)
             }
             Instruction::Copy(val) => {
@@ -202,7 +203,7 @@ pub fn evaluate(code: &Instructions) -> Instructions {
                 }
             }
             Instruction::LXor(left, right) => {
-                super::check!(BINARY left, right, new, vars, assign, instruction);
+                check!(BINARY left, right, new, vars, assign, instruction);
                 Val::Bool((left != 0) ^ (right != 0))
             }
             _ => todo!(),

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::utils::{Instruction, Instructions, Val};
 
 pub fn optimize(code: &Instructions) -> Instructions {
+    use crate::check;
     let mut optimized = Instructions::new();
     let mut vars = HashMap::new();
     for (assign, instruction) in &code.0 {
@@ -61,73 +62,73 @@ pub fn optimize(code: &Instructions) -> Instructions {
                     continue;
                 }
                 Instruction::Add(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::Sub(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::Mul(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::Div(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::Mod(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::Eq(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::LAnd(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::LOr(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::Lt(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::Le(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::LNot(a) => {
-                    super::check!(2 a, optimized, vars, assign, instruction)
+                    check!(2 a, optimized, vars, assign, instruction)
                 }
-                Instruction::Neg(a) => super::check!(2 a, optimized, vars, assign, instruction),
-                Instruction::Inc(a) => super::check!(2 a, optimized, vars, assign, instruction),
-                Instruction::Dec(a) => super::check!(2 a, optimized, vars, assign, instruction),
+                Instruction::Neg(a) => check!(2 a, optimized, vars, assign, instruction),
+                Instruction::Inc(a) => check!(2 a, optimized, vars, assign, instruction),
+                Instruction::Dec(a) => check!(2 a, optimized, vars, assign, instruction),
                 Instruction::Print(a) => {
-                    super::check!(2 a, optimized, vars, assign, instruction)
+                    check!(2 a, optimized, vars, assign, instruction)
                 }
                 Instruction::Ascii(a) => {
-                    super::check!(2 a, optimized, vars, assign, instruction)
+                    check!(2 a, optimized, vars, assign, instruction)
                 }
                 Instruction::Neq(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::Pow(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::Shl(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::Shr(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::BAnd(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::BOr(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::BXor(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::BNot(a) => {
-                    super::check!(2 a, optimized, vars, assign, instruction)
+                    check!(2 a, optimized, vars, assign, instruction)
                 }
                 Instruction::Copy(val) => {
-                    super::check!(2 val, optimized, vars, assign, instruction)
+                    check!(2 val, optimized, vars, assign, instruction)
                 }
                 Instruction::TernaryIf(cond1, then1, else1) => {
                     let cond = if let Val::Index(index, _) = cond1 {
@@ -180,7 +181,7 @@ pub fn optimize(code: &Instructions) -> Instructions {
                     continue;
                 }
                 Instruction::LXor(a, b) => {
-                    super::check!(BINARY2 a, b, optimized, vars, assign, instruction)
+                    check!(BINARY2 a, b, optimized, vars, assign, instruction)
                 }
                 Instruction::Call(f, args) => {
                     let mut new = vec![];

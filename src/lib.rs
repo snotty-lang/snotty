@@ -22,26 +22,7 @@
 //! ```
 //! It is the run function but in macro style
 
-/// Contains the code transpiler, which generates the Brainfuck code
-pub mod compiler;
-
-/// Contains the `evaluate` function, which does constant time evaluation of the code.
-pub mod evaluate;
-
-/// Contains the Intermediate code generator
-pub mod ir_code;
-
-/// Contains the Lexer struct
-pub mod lexer;
-
-/// Contains the Parser struct
-pub mod parser;
-
-/// Contains the Preprocessor
-pub mod preprocessor;
-
-/// Optimizes the generated IR code
-pub mod ir_optimizer;
+pub mod core;
 pub mod utils;
 
 use std::fs;
@@ -49,6 +30,7 @@ use std::process;
 use std::rc::Rc;
 
 use utils::Error;
+use crate::core::{parser, lexer, compiler, ir_code, preprocessor};
 
 /// parses the passed ezlang code, and returns a the generated brainfuck code or an error, if any
 /// # Arguments
