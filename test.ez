@@ -1,5 +1,5 @@
 let b = 0
-let c = &b;
+let c = &b;git
 let a = c;
 *c = 3;
 ezout a, '\n';
