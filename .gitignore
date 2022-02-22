@@ -1,5 +1,5 @@
 /target
-.basic.py
-.todo
-.vscode
-.done
+/output
+/ezlang
+/brainfuck
+/output
