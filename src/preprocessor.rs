@@ -179,7 +179,7 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                         ));
                     }
                 }
-                _ => todo!(),
+                _ => unreachable!(),
             }
         } else {
             i += 1;

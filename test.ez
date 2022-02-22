@@ -1,12 +1,11 @@
-struct b {
-    a: int,
-    c: char,
-    d: bool
-}
-
-struct b {
-    a: int,
-    c: char
-}
-
-let a = b { a : 4 , c: true };
+let b = 0
+let c = &b;
+let a = c;
+*c = 3;
+ezout a, '\n';
+ezout b, '\n';
+ezout c, '\n';
+*c = a;
+ezout a, '\n';
+ezout b, '\n';
+ezout c, '\n';

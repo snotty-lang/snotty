@@ -438,7 +438,15 @@ pub fn transpile(code: &Instructions) -> String {
                 });
                 goto(&mut bf_code, &mut location, start);
             }
-            c => todo!("{:?}", c),
+            Instruction::DerefAssign(_, _) => todo!(),
+            Instruction::Return(_) => todo!(),
+            Instruction::Call(_, _) => todo!(),
+            Instruction::Deref(_) => todo!(),
+            Instruction::Shr(_, _) => todo!(),
+            Instruction::BAnd(_, _) => todo!(),
+            Instruction::BOr(_, _) => todo!(),
+            Instruction::BXor(_, _) => todo!(),
+            _ => unreachable!(),
         }
         // bf_code.push_str("|\n");
     }

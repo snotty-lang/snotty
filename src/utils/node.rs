@@ -228,19 +228,13 @@ impl Node {
                 }
             }
             Node::Ref(_, ty, _) => Type::Ref(Box::new(ty.clone())),
-            Node::Deref(_, ty, _) => {
-                if let Type::Ref(a) = ty {
-                    *a.clone()
-                } else {
-                    unreachable!()
-                }
-            }
             Node::Number(_) => Type::Number,
             Node::Boolean(_) => Type::Boolean,
             Node::Char(_, _) => Type::Char,
             Node::Input(_) => Type::Char,
             Node::VarAccess(_, ty)
             | Node::UnaryOp(_, _, ty)
+            | Node::Deref(_, ty, _)
             | Node::BinaryOp(_, _, _, ty)
             | Node::Call(_, _, ty, _)
             | Node::Ternary(_, _, _, ty, _)
