@@ -11,6 +11,7 @@ ezout x
 # TODO
 * struct
 * FIX Last line position errors
+* FIX referencing errors
 * `return`
 * function expanding error
 * Pointers + Arrays + Strings + Dynamic Memory
