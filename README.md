@@ -17,5 +17,4 @@ ezout x
 * Pointers + Arrays + Strings + Dynamic Memory
 
 # Ideas
-* `let x;` syntax
 * static variables

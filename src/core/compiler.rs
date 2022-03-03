@@ -472,7 +472,7 @@ macro_rules! goto_add {
             Val::Num(val) => {
                 $bf_code.push_str("[-]");
                 if *val < 0 {
-                    $bf_code.push_str(&("-".repeat(*val as u32 as usize)));
+                    $bf_code.push_str(&("-".repeat(-*val as u32 as usize)));
                 } else {
                     $bf_code.push_str(&("+".repeat(*val as u32 as usize)));
                 }
@@ -507,7 +507,7 @@ macro_rules! goto_add {
             Val::Num(val) => {
                 $bf_code.push_str("[-]");
                 if *val < 0 {
-                    $bf_code.push_str(&("-".repeat(*val as u32 as usize)));
+                    $bf_code.push_str(&("-".repeat(-*val as u32 as usize)));
                 } else {
                     $bf_code.push_str(&("+".repeat(*val as u32 as usize)));
                 }

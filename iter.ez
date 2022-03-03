@@ -2,6 +2,6 @@ let current = 0
 ez next() -> int { return current current += 1 }
 
 
-for (let i = 0 : i < 100 : ++i) {
+for (let i = 0 : i < 127+127+1 : ++i) {
     ezout next(), '\n'
 }
