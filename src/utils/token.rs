@@ -95,6 +95,8 @@ pub enum TokenType {
     RCurly,
     Assign,
     Comma,
+    Dot,
+    Path,
     Eol,
     Eof,
     TernaryIf,
@@ -176,6 +178,8 @@ impl fmt::Display for TokenType {
                 TokenType::LXor => "!&|".to_owned(),
                 TokenType::PreprocessorStatement(ref stmt) => format!("!{stmt}"),
                 TokenType::String(ref s) => format!("\"{s}\""),
+                TokenType::Dot => ".".to_string(),
+                TokenType::Path => "::".to_string(),
             }
         )
     }

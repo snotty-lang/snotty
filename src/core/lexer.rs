@@ -283,13 +283,24 @@ pub fn lex(input: &str, filename: Rc<String>) -> LexResult {
                 }
             },
             ':' => {
-                tokens.push(Token::new(
-                    TokenType::Colon,
-                    line,
-                    i,
-                    i + 1,
-                    Rc::clone(&filename),
-                ));
+                if let Some((_, ':')) = chars.peek() {
+                    chars.next();
+                    tokens.push(Token::new(
+                        TokenType::Path,
+                        line,
+                        i,
+                        i + 2,
+                        Rc::clone(&filename),
+                    ));
+                } else {
+                    tokens.push(Token::new(
+                        TokenType::Colon,
+                        line,
+                        i,
+                        i + 1,
+                        Rc::clone(&filename),
+                    ));
+                }
             }
             '%' => {
                 if let Some((_, '=')) = chars.peek() {
@@ -784,6 +795,15 @@ pub fn lex(input: &str, filename: Rc<String>) -> LexResult {
             '?' => {
                 tokens.push(Token::new(
                     TokenType::TernaryIf,
+                    line,
+                    i,
+                    i + 1,
+                    Rc::clone(&filename),
+                ));
+            }
+            '.' => {
+                tokens.push(Token::new(
+                    TokenType::Dot,
                     line,
                     i,
                     i + 1,

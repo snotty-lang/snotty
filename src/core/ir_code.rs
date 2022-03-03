@@ -758,6 +758,7 @@ impl CodeGenerator {
                     ValType::Pointer(Box::new(ValType::Char)),
                 ))
             }
+            Node::AttrAccess(_, _, _) => todo!(),
         }
     }
 }

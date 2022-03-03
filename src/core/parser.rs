@@ -567,12 +567,42 @@ impl Parser {
     }
 
     fn expression(&mut self, scope: &mut Scope) -> ParseResult {
-        self.binary_op(
+        self.access_attr(scope)
+    }
+
+    fn access_attr(&mut self, scope: &mut Scope) -> ParseResult {
+        let mut left = self.binary_op(
             Self::comparison,
             vec![TokenType::LAnd, TokenType::LOr, TokenType::LXor],
             Self::comparison,
             scope,
-        )
+        )?;
+        while self.current_token.token_type == TokenType::Dot {
+            self.advance();
+            if !matches!(self.current_token.token_type, TokenType::Identifier(_)) {
+                return Err(Error::new(
+                    ErrorType::SyntaxError,
+                    self.current_token.position.clone(),
+                    "Expected identifier".to_string(),
+                ));
+            }
+            let t = if let Some(t) = left.get_type().has_attr(&self.current_token) {
+                t
+            } else {
+                return Err(Error::new(
+                    ErrorType::TypeError,
+                    self.current_token.position.clone(),
+                    format!(
+                        "Cannot access attribute {} on type {}",
+                        self.current_token,
+                        left.get_type()
+                    ),
+                ));
+            };
+            left = Node::AttrAccess(Box::new(left), self.current_token.clone(), t);
+            self.advance();
+        }
+        Ok(left)
     }
 
     fn make_type(&mut self) -> Result<Type, Error> {
@@ -1470,6 +1500,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
             Node::Struct(..) => None,
             Node::UnaryOp(_, n1, _) => check_return(n1),
             Node::VarAssign(_, n1, _) => check_return(n1),
+            Node::AttrAccess(n, ..) => check_return(n),
             Node::StaticVar(_, n1) => check_return(n1),
             Node::VarAccess(..) => None,
             Node::VarReassign(_, n1) => check_return(n1),
@@ -1623,6 +1654,7 @@ fn remove_inline(node: &mut Node) {
         | Node::Ref(n, ..)
         | Node::Deref(n, ..)
         | Node::Return(n, ..)
+        | Node::AttrAccess(n, ..)
         | Node::UnaryOp(_, n, _)
         | Node::VarAssign(_, n, _)
         | Node::StaticVar(_, n)
@@ -1698,6 +1730,7 @@ fn insert_function(functions: &[Node], node: &mut Node) {
         | Node::Deref(n, ..)
         | Node::Return(n, ..)
         | Node::FuncDef(_, _, n, ..)
+        | Node::AttrAccess(n, ..)
         | Node::UnaryOp(_, n, _)
         | Node::VarAssign(_, n, _)
         | Node::StaticVar(_, n)
@@ -1767,6 +1800,7 @@ fn find_functions(node: &mut Node) -> Option<Vec<&mut Node>> {
         | Node::Ref(n, ..)
         | Node::Deref(n, ..)
         | Node::Return(n, ..)
+        | Node::AttrAccess(n, ..)
         | Node::UnaryOp(_, n, _)
         | Node::VarAssign(_, n, _)
         | Node::StaticVar(_, n)
@@ -1869,6 +1903,7 @@ fn check_recursive(node: &Node, stack: &mut Vec<Token>) -> Option<Error> {
         | Node::Ref(n, ..)
         | Node::Deref(n, ..)
         | Node::Return(n, ..)
+        | Node::AttrAccess(n, ..)
         | Node::StaticVar(_, n)
         | Node::UnaryOp(_, n, _)
         | Node::VarAssign(_, n, _)
@@ -1963,6 +1998,7 @@ fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
         | Node::Return(n, ..)
         | Node::UnaryOp(_, n, _)
         | Node::VarAssign(_, n, _)
+        | Node::AttrAccess(n, ..)
         | Node::FuncDef(_, _, n, _, _)
         | Node::VarReassign(_, n) => find_static(n),
         Node::VarAccess(..) => None,
@@ -2028,6 +2064,7 @@ fn remove_static(node: &mut Node) {
         | Node::Ref(n, ..)
         | Node::Deref(n, ..)
         | Node::FuncDef(_, _, n, ..)
+        | Node::AttrAccess(n, ..)
         | Node::Return(n, ..)
         | Node::UnaryOp(_, n, _)
         | Node::VarAssign(_, n, _)

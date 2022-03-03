@@ -90,6 +90,13 @@ impl Type {
             )
         )
     }
+
+    pub fn has_attr(&self, _attr: &Token) -> Option<Type> {
+        match self {
+            Type::Char => Some(Type::Char),
+            _ => None
+        }
+    }
 }
 
 impl Display for Type {
@@ -109,6 +116,8 @@ impl Display for Type {
 /// A Node in the AST.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
+    /// Node, Attr, Type
+    AttrAccess(Box<Node>, Token, Type),
     /// Struct, fields
     StructConstructor(Token, Vec<(Token, Node)>, Position),
     /// String
@@ -225,6 +234,13 @@ impl Node {
                 pos.line_end = end_pos.line_end;
                 pos
             }
+            Node::AttrAccess(node, attr, _) => {
+                let mut pos = node.position();
+                let end_pos = attr.position.clone();
+                pos.end = end_pos.end;
+                pos.line_end = end_pos.line_end;
+                pos
+            }
         }
     }
 
@@ -247,6 +263,7 @@ impl Node {
             Node::Input(_) => Type::Char,
             Node::VarAccess(_, ty)
             | Node::UnaryOp(_, _, ty)
+            | Node::AttrAccess(.., ty)
             | Node::Deref(_, ty, _)
             | Node::BinaryOp(_, _, _, ty)
             | Node::Call(_, _, ty, _)
@@ -289,6 +306,7 @@ impl Node {
 impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Node::AttrAccess(node, attr, _) => write!(f, "{}.{}", node, attr),
             Node::StructConstructor(name, fields, _) => {
                 write!(f, "{} {{", name)?;
                 for (i, (field, val)) in fields.iter().enumerate() {
