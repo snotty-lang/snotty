@@ -1922,7 +1922,7 @@ fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
         Node::Statements(nodes, ..) => {
             let mut new = vec![];
             for node in nodes.iter_mut().rev() {
-                if let Some(ref mut i) = find_functions(node) {
+                if let Some(ref mut i) = find_static(node) {
                     new.append(i);
                 }
             }
@@ -1930,7 +1930,7 @@ fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
         }
         Node::StructConstructor(_, n, _) => {
             for (_, n) in n {
-                if let a @ Some(_) = find_functions(n) {
+                if let a @ Some(_) = find_static(n) {
                     return a;
                 }
             }
@@ -1938,7 +1938,7 @@ fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
         }
         Node::Call(_, n, ..) | Node::Print(n, _) | Node::Array(n, ..) | Node::Ascii(n, _) => {
             for n in n {
-                if let a @ Some(_) = find_functions(n) {
+                if let a @ Some(_) = find_static(n) {
                     return a;
                 }
             }
@@ -1950,10 +1950,10 @@ fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
         | Node::If(n1, n2, None, _)
         | Node::While(n1, n2, _)
         | Node::BinaryOp(_, n1, n2, _) => {
-            if let a @ Some(_) = find_functions(n1) {
+            if let a @ Some(_) = find_static(n1) {
                 return a;
             }
-            find_functions(n2)
+            find_static(n2)
         }
         Node::Number(_) => None,
         Node::Boolean(_) => None,
@@ -1964,32 +1964,32 @@ fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
         | Node::UnaryOp(_, n, _)
         | Node::VarAssign(_, n, _)
         | Node::FuncDef(_, _, n, _, _)
-        | Node::VarReassign(_, n) => find_functions(n),
+        | Node::VarReassign(_, n) => find_static(n),
         Node::VarAccess(..) => None,
         Node::String(_) => None,
         Node::Input(..) => None,
         Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
-            if let a @ Some(_) = find_functions(n1) {
+            if let a @ Some(_) = find_static(n1) {
                 return a;
             }
-            if let a @ Some(_) = find_functions(n2) {
+            if let a @ Some(_) = find_static(n2) {
                 return a;
             }
-            find_functions(n3)
+            find_static(n3)
         }
         Node::None(_) => None,
         Node::Char(_) => None,
         Node::For(n1, n2, n3, n4, _) => {
-            if let a @ Some(_) = find_functions(n1) {
+            if let a @ Some(_) = find_static(n1) {
                 return a;
             }
-            if let a @ Some(_) = find_functions(n2) {
+            if let a @ Some(_) = find_static(n2) {
                 return a;
             }
-            if let a @ Some(_) = find_functions(n3) {
+            if let a @ Some(_) = find_static(n3) {
                 return a;
             }
-            find_functions(n4)
+            find_static(n4)
         }
         Node::Expanded(_, _) => unreachable!(),
         Node::StaticVar(..) => Some(vec![node]),
@@ -2005,12 +2005,12 @@ fn remove_static(node: &mut Node) {
         | Node::Array(n, ..)
         | Node::Ascii(n, _) => {
             for n in n.iter_mut().rev() {
-                remove_inline(n);
+                remove_static(n);
             }
         }
         Node::StructConstructor(_, n, _) => {
             for (_, n) in n {
-                remove_inline(n);
+                remove_static(n);
             }
         }
         Node::IndexAssign(_, n1, n2)
@@ -2018,8 +2018,8 @@ fn remove_static(node: &mut Node) {
         | Node::If(n1, n2, None, _)
         | Node::While(n1, n2, _)
         | Node::BinaryOp(_, n1, n2, _) => {
-            remove_inline(n1);
-            remove_inline(n2);
+            remove_static(n1);
+            remove_static(n2);
         }
         Node::String(_) => (),
         Node::Number(_) => (),
@@ -2031,21 +2031,21 @@ fn remove_static(node: &mut Node) {
         | Node::Return(n, ..)
         | Node::UnaryOp(_, n, _)
         | Node::VarAssign(_, n, _)
-        | Node::VarReassign(_, n) => remove_inline(n),
+        | Node::VarReassign(_, n) => remove_static(n),
         Node::VarAccess(..) => (),
         Node::Input(..) => (),
         Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
-            remove_inline(n1);
-            remove_inline(n2);
-            remove_inline(n3);
+            remove_static(n1);
+            remove_static(n2);
+            remove_static(n3);
         }
         Node::None(_) => (),
         Node::Char(_) => (),
         Node::For(n1, n2, n3, n4, _) => {
-            remove_inline(n1);
-            remove_inline(n2);
-            remove_inline(n3);
-            remove_inline(n4);
+            remove_static(n1);
+            remove_static(n2);
+            remove_static(n3);
+            remove_static(n4);
         }
         Node::Expanded(_, _) => unreachable!(),
         Node::StaticVar(..) => *node = Node::None(node.position()),

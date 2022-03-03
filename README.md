@@ -10,11 +10,10 @@ ezout x
 
 # TODO
 * struct
-* FIX Last line position errors
-* FIX referencing errors
-* `return`
-* function expanding error
 * Pointers + Arrays + Strings + Dynamic Memory
 
-# Ideas
-* static variables
+# FIXME
+* position errors (Last line errors durin parsing, position passed to errors)
+* referencing errors (referencing.ez)
+* function expanding error
+* `as` conversions
