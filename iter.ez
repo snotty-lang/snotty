@@ -1,4 +1,5 @@
-ez next() -> int { static current = 0 return current current += 1 }
+let current = 'y' as int
+ez next() -> char { return (current as char) current += 1 }
 
 for (let i = 0 : i < 127 : ++i) {
     ezout next(), '\n'

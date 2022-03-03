@@ -816,7 +816,30 @@ impl Parser {
     }
 
     fn power(&mut self, scope: &mut Scope) -> ParseResult {
-        self.binary_op(Self::call, vec![TokenType::Pow], Self::call, scope)
+        self.binary_op(Self::convert, vec![TokenType::Pow], Self::convert, scope)
+    }
+
+    fn convert(&mut self, scope: &mut Scope) -> ParseResult {
+        let mut left = self.call(scope)?;
+        let mut token_type = self.current_token.token_type.clone();
+        while let TokenType::Keyword(ref s) = token_type {
+            if s != "as" {
+                break;
+            }
+            let op = self.current_token.clone();
+            self.advance();
+            let right = self.make_type()?;
+            if !left.get_type().can_be_converted(&right) {
+                return Err(Error::new(
+                    ErrorType::TypeError,
+                    op.position,
+                    format!("Cannot convert type {} to type {}", left.get_type(), right),
+                ));
+            };
+            left.convert(right);
+            token_type = self.current_token.token_type.clone();
+        }
+        Ok(left)
     }
 
     fn call(&mut self, scope: &mut Scope) -> ParseResult {
@@ -964,8 +987,7 @@ impl Parser {
             }
             TokenType::Char(_) => {
                 self.advance();
-                let pos = token.position.clone();
-                Ok(Node::Char(token, pos))
+                Ok(Node::Char(token))
             }
             TokenType::Identifier(_) => {
                 self.advance();
@@ -1155,8 +1177,7 @@ impl Parser {
             }
             TokenType::Char(_) => {
                 self.advance();
-                let pos = token.position.clone();
-                Ok(Node::Char(token, pos))
+                Ok(Node::Char(token))
             }
             TokenType::Identifier(_) => {
                 self.advance();
@@ -1614,7 +1635,7 @@ fn remove_inline(node: &mut Node) {
             remove_inline(n3);
         }
         Node::None(_) => (),
-        Node::Char(_, _) => (),
+        Node::Char(_) => (),
         Node::For(n1, n2, n3, n4, _) => {
             remove_inline(n1);
             remove_inline(n2);
@@ -1689,7 +1710,7 @@ fn insert_function(functions: &[Node], node: &mut Node) {
             insert_function(functions, n3);
         }
         Node::None(_) => (),
-        Node::Char(_, _) => (),
+        Node::Char(_) => (),
         Node::For(n1, n2, n3, n4, _) => {
             insert_function(functions, n1);
             insert_function(functions, n2);
@@ -1763,7 +1784,7 @@ fn find_functions(node: &mut Node) -> Option<Vec<&mut Node>> {
             find_functions(n3)
         }
         Node::None(_) => None,
-        Node::Char(_, _) => None,
+        Node::Char(_) => None,
         Node::For(n1, n2, n3, n4, _) => {
             if let a @ Some(_) = find_functions(n1) {
                 return a;
@@ -1865,7 +1886,7 @@ fn check_recursive(node: &Node, stack: &mut Vec<Token>) -> Option<Error> {
             check_recursive(n3, stack)
         }
         Node::None(_) => None,
-        Node::Char(_, _) => None,
+        Node::Char(_) => None,
         Node::For(n1, n2, n3, n4, _) => {
             if let a @ Some(_) = check_recursive(n1, stack) {
                 return a;
@@ -1957,7 +1978,7 @@ fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
             find_functions(n3)
         }
         Node::None(_) => None,
-        Node::Char(_, _) => None,
+        Node::Char(_) => None,
         Node::For(n1, n2, n3, n4, _) => {
             if let a @ Some(_) = find_functions(n1) {
                 return a;
@@ -2019,7 +2040,7 @@ fn remove_static(node: &mut Node) {
             remove_inline(n3);
         }
         Node::None(_) => (),
-        Node::Char(_, _) => (),
+        Node::Char(_) => (),
         Node::For(n1, n2, n3, n4, _) => {
             remove_inline(n1);
             remove_inline(n2);

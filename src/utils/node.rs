@@ -80,6 +80,16 @@ impl Type {
             _ => None,
         }
     }
+
+    pub fn can_be_converted(&self, other: &Self) -> bool {
+        matches!(
+            (self, other),
+            (
+                Self::Number | Self::Boolean | Self::Char,
+                Self::Number | Self::Boolean | Self::Char,
+            )
+        )
+    }
 }
 
 impl Display for Type {
@@ -148,7 +158,7 @@ pub enum Node {
     /// None
     None(Position),
     /// Char
-    Char(Token, Position),
+    Char(Token),
     /// Elements
     Array(Vec<Node>, Type, Position),
     /// Array, index
@@ -169,6 +179,7 @@ impl Node {
             Node::Expanded(_, _) => unreachable!(),
             Node::String(token)
             | Node::Number(token)
+            | Node::Char(token)
             | Node::Boolean(token)
             | Node::VarAccess(token, _) => token.position.clone(),
             Node::Ref(.., pos)
@@ -185,7 +196,6 @@ impl Node {
             | Node::If(.., pos)
             | Node::Ternary(.., pos)
             | Node::None(pos)
-            | Node::Char(.., pos)
             | Node::DerefAssign(.., pos)
             | Node::Array(.., pos)
             | Node::Index(.., pos)
@@ -233,7 +243,7 @@ impl Node {
             Node::Ref(_, ty, _) => Type::Ref(Box::new(ty.clone())),
             Node::Number(_) => Type::Number,
             Node::Boolean(_) => Type::Boolean,
-            Node::Char(_, _) => Type::Char,
+            Node::Char(_) => Type::Char,
             Node::Input(_) => Type::Char,
             Node::VarAccess(_, ty)
             | Node::UnaryOp(_, _, ty)
@@ -257,6 +267,21 @@ impl Node {
             | Node::IndexAssign(_, _, _)
             | Node::DerefAssign(_, _, _)
             | Node::For(_, _, _, _, _) => Type::None,
+        }
+    }
+
+    pub fn convert(&mut self, t: Type) {
+        match (&self, t) {
+            (Node::Number(n) | Node::Boolean(n) | Node::Char(n), Type::Char) => {
+                *self = Node::Char(n.clone())
+            }
+            (Node::Number(n) | Node::Boolean(n) | Node::Char(n), Type::Boolean) => {
+                *self = Node::Boolean(n.clone())
+            }
+            (Node::Number(n) | Node::Boolean(n) | Node::Char(n), Type::Number) => {
+                *self = Node::Number(n.clone())
+            }
+            _ => (),
         }
     }
 }
@@ -369,7 +394,7 @@ impl fmt::Display for Node {
                 write!(f, "If( if {} then {})", cond, then)
             }
             Node::None(_) => write!(f, "None"),
-            Node::Char(c, _) => write!(f, "Char({})", c),
+            Node::Char(c) => write!(f, "Char({})", c),
             Node::Array(arr, ..) => {
                 write!(
                     f,
