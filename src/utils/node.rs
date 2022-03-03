@@ -122,7 +122,7 @@ pub enum Node {
     /// Variable, Expression
     VarReassign(Token, Box<Node>),
     /// Statements
-    Statements(Vec<Node>, Position),
+    Statements(Vec<Node>, Type, Position),
     /// Function, args
     Call(Token, Vec<Node>, Type, Position),
     /// Function, args, body, return type, inline
@@ -244,7 +244,7 @@ impl Node {
             | Node::Struct(..)
             | Node::VarAssign(_, _, _)
             | Node::VarReassign(_, _)
-            | Node::Statements(_, _)
+            | Node::Statements(..)
             | Node::FuncDef(_, _, _, _, _)
             | Node::Print(_, _)
             | Node::Ascii(_, _)
@@ -285,7 +285,7 @@ impl fmt::Display for Node {
             Node::UnaryOp(token, expr, _) => write!(f, "UnaryOp({} {})", token, expr),
             Node::VarReassign(token, expr) => write!(f, "Reassign({} = {})", token, expr),
             Node::VarAssign(token, expr, t) => write!(f, "Assign({} : {} = {})", token, t, expr),
-            Node::Statements(statements, _) => {
+            Node::Statements(statements, ..) => {
                 write!(
                     f,
                     "{{\n{}\n}}",

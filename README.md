@@ -15,3 +15,7 @@ ezout x
 * `return`
 * function expanding error
 * Pointers + Arrays + Strings + Dynamic Memory
+
+# Ideas
+* `let x;` syntax
+* static variables

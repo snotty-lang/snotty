@@ -282,7 +282,7 @@ impl CodeGenerator {
                 }
             }
 
-            Node::Statements(statements, _) => {
+            Node::Statements(statements, ..) => {
                 let mut new = memory.clone();
                 for statement in statements {
                     self.make_instruction(statement, vars, &mut new)?;

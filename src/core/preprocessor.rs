@@ -21,20 +21,22 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                         ))
                     }
                     Some(t) => match t.token_type {
-                        TokenType::Identifier(file) => match fs::read_to_string(&file) {
-                            Ok(contents) => {
-                                let mut new_tokens = lexer::lex(&contents, Rc::new(file))?;
-                                new_tokens.pop().unwrap();
-                                tokens.splice(i..=i + 1, new_tokens);
+                        TokenType::Identifier(file) => {
+                            match fs::read_to_string(&format!("{}.ez", file)) {
+                                Ok(contents) => {
+                                    let mut new_tokens = lexer::lex(&contents, Rc::new(file))?;
+                                    new_tokens.pop().unwrap();
+                                    tokens.splice(i..=i + 1, new_tokens);
+                                }
+                                Err(e) => {
+                                    return Err(Error::new(
+                                        ErrorType::FileNotFound,
+                                        t.position.clone(),
+                                        format!("Could not find file `{}` ({})", file, e),
+                                    ))
+                                }
                             }
-                            Err(e) => {
-                                return Err(Error::new(
-                                    ErrorType::FileNotFound,
-                                    t.position.clone(),
-                                    format!("Could not find file `{}` ({})", file, e),
-                                ))
-                            }
-                        },
+                        }
                         _ => {
                             return Err(Error::new(
                                 ErrorType::SyntaxError,
