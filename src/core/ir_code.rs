@@ -122,21 +122,10 @@ impl CodeGenerator {
                 Ok(Val::Index(mem, t))
             }
 
-            Node::VarAssign(var1, expr, dec_type) => {
+            Node::VarAssign(var1, expr, _) | Node::StaticVar(var1, expr) => {
                 if let TokenType::Identifier(ref var) = var1.token_type {
                     match self.make_instruction(expr, vars, memory)? {
                         Val::Index(index, type_) => {
-                            if ValType::from_parse_type(dec_type) != type_ {
-                                return Err(Error::new(
-                                    ErrorType::TypeError,
-                                    var1.position.clone(),
-                                    format!(
-                                        "Cannot assign `{}` to `{}`",
-                                        type_,
-                                        ValType::from_parse_type(dec_type)
-                                    ),
-                                ));
-                            }
                             let size = type_.get_size();
                             let mem = memory.allocate(size);
                             self.instructions.push(
@@ -147,18 +136,6 @@ impl CodeGenerator {
                             Ok(Val::None)
                         }
                         Val::Ref(index, type_) => {
-                            if !matches!(ValType::from_parse_type(dec_type), ValType::Ref(t) if *t == type_)
-                            {
-                                return Err(Error::new(
-                                    ErrorType::TypeError,
-                                    var1.position.clone(),
-                                    format!(
-                                        "Cannot assign `&{}` to `{}`",
-                                        type_,
-                                        ValType::from_parse_type(dec_type)
-                                    ),
-                                ));
-                            }
                             vars.insert(
                                 var.clone(),
                                 Val::Index(index, ValType::Ref(Box::new(type_))),
@@ -168,17 +145,6 @@ impl CodeGenerator {
                         val => {
                             let v = val.r#type();
                             let size = val.get_size();
-                            if ValType::from_parse_type(dec_type) != v {
-                                return Err(Error::new(
-                                    ErrorType::TypeError,
-                                    var1.position.clone(),
-                                    format!(
-                                        "Cannot assign `{}` to `{}`",
-                                        val.r#type(),
-                                        ValType::from_parse_type(dec_type)
-                                    ),
-                                ));
-                            }
                             let mem = memory.allocate(v.get_size());
                             self.instructions.push(
                                 Instruction::Copy(val),

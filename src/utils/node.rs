@@ -117,6 +117,8 @@ pub enum Node {
     UnaryOp(Token, Box<Node>, Type),
     /// Variable, Expression, Type
     VarAssign(Token, Box<Node>, Type),
+    /// Variable, Expression
+    StaticVar(Token, Box<Node>),
     /// Variable
     VarAccess(Token, Type),
     /// Variable, Expression
@@ -196,6 +198,7 @@ impl Node {
                 pos
             }
             Node::VarReassign(token, expr)
+            | Node::StaticVar(token, expr)
             | Node::VarAssign(token, expr, _)
             | Node::IndexAssign(token, _, expr)
             | Node::UnaryOp(token, expr, _) => {
@@ -243,6 +246,7 @@ impl Node {
             Node::While(_, _, _)
             | Node::Struct(..)
             | Node::VarAssign(_, _, _)
+            | Node::StaticVar(..)
             | Node::VarReassign(_, _)
             | Node::Statements(..)
             | Node::FuncDef(_, _, _, _, _)
@@ -400,6 +404,7 @@ impl fmt::Display for Node {
                     t
                 )
             }
+            Node::StaticVar(var, expr) => write!(f, "StaticVar({} = {})", var, expr),
         }
     }
 }

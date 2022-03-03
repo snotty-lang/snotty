@@ -127,6 +127,15 @@ impl Parser {
                     scope.register_variable(node.clone());
                     Ok((node, None))
                 }
+                "static" => {
+                    self.advance();
+                    let node = self.static_assignment(scope)?;
+                    if scope.has_static(&node) {
+                        return Ok((Node::None(node.position()), None));
+                    }
+                    scope.register_variable(node.clone());
+                    Ok((node, None))
+                }
                 "for" => {
                     let mut pos = self.current_token.position.clone();
                     self.advance();
@@ -694,6 +703,30 @@ impl Parser {
         }
     }
 
+    fn static_assignment(&mut self, scope: &mut Scope) -> ParseResult {
+        if let TokenType::Identifier(_) = self.current_token.token_type {
+            let token = self.current_token.clone();
+            self.advance();
+            match self.current_token.token_type {
+                TokenType::Assign => {
+                    self.advance();
+                    Ok(Node::StaticVar(token, Box::new(self.const_atom(scope)?)))
+                }
+                _ => Err(Error::new(
+                    ErrorType::SyntaxError,
+                    self.current_token.position.clone(),
+                    format!("Expected '=', found {}", self.current_token),
+                )),
+            }
+        } else {
+            Err(Error::new(
+                ErrorType::SyntaxError,
+                self.current_token.position.clone(),
+                format!("Expected an identifier, found {}", self.current_token),
+            ))
+        }
+    }
+
     fn comparison(&mut self, scope: &mut Scope) -> ParseResult {
         if let TokenType::LNot = self.current_token.token_type {
             let token = self.current_token.clone();
@@ -1098,6 +1131,68 @@ impl Parser {
         }
     }
 
+    fn const_atom(&mut self, scope: &mut Scope) -> ParseResult {
+        let token = self.current_token.clone();
+        match token.token_type {
+            TokenType::Keyword(ref keyword) => match keyword.as_ref() {
+                "true" => {
+                    self.advance();
+                    Ok(Node::Boolean(token))
+                }
+                "false" => {
+                    self.advance();
+                    Ok(Node::Boolean(token))
+                }
+                _ => Err(Error::new(
+                    ErrorType::SyntaxError,
+                    self.current_token.position.clone(),
+                    format!("Unexpected keyword: {}", self.current_token),
+                )),
+            },
+            TokenType::String(_) => {
+                self.advance();
+                Ok(Node::String(token))
+            }
+            TokenType::Char(_) => {
+                self.advance();
+                let pos = token.position.clone();
+                Ok(Node::Char(token, pos))
+            }
+            TokenType::Identifier(_) => {
+                self.advance();
+                if let TokenType::LSquare = self.current_token.token_type {
+                    self.advance();
+                    let index = self.expression(scope)?;
+                    if self.current_token.token_type != TokenType::RSquare {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            format!("Expected ']', found {}", self.current_token),
+                        ));
+                    }
+                    self.advance();
+                    let mut pos = token.position.clone();
+                    pos.end = self.current_token.position.end;
+                    pos.line_end = self.current_token.position.line_end;
+                    let t = scope.access_array_by_token(&token, &index)?;
+                    Ok(Node::Index(token, Box::new(index), t, pos))
+                } else {
+                    let t = scope.access_variable_by_token(&token)?;
+                    Ok(Node::VarAccess(token, t))
+                }
+            }
+            TokenType::Number(_) => {
+                self.advance();
+                Ok(Node::Number(token))
+            }
+            _ => Err(Error::new(
+                ErrorType::SyntaxError,
+                self.current_token.position.clone(),
+                format!("Unexpected token: {}", self.current_token),
+            )),
+        }
+    }
+
     fn function_definition(&mut self, scope: &mut Scope) -> ParseResult {
         let name = if let TokenType::Identifier(_) = self.current_token.token_type {
             self.current_token.clone()
@@ -1255,9 +1350,8 @@ pub fn parse(tokens: Vec<Token>) -> ParseResult {
     if let Some(err) = check_recursive(&ast, &mut vec![]) {
         return Err(err);
     }
-    if let Some(err) = expand_inline(&mut ast, vec![]) {
-        return Err(err);
-    }
+    global_static(&mut ast);
+    expand_inline(&mut ast, vec![]);
     Ok(ast)
 }
 
@@ -1355,6 +1449,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
             Node::Struct(..) => None,
             Node::UnaryOp(_, n1, _) => check_return(n1),
             Node::VarAssign(_, n1, _) => check_return(n1),
+            Node::StaticVar(_, n1) => check_return(n1),
             Node::VarAccess(..) => None,
             Node::VarReassign(_, n1) => check_return(n1),
             Node::Statements(nodes, ..) => {
@@ -1460,7 +1555,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
 }
 
 /// Expands inline functions
-fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) -> Option<Error> {
+fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
     if let Some(mut functions2) = find_functions(ast) {
         functions.extend(functions2.iter().map(|n| (**n).clone()));
         for f in functions2.iter_mut() {
@@ -1472,7 +1567,6 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) -> Option<Error> {
     }
     insert_function(&functions, ast);
     // println!("{ast}\n");
-    None
 }
 
 fn remove_inline(node: &mut Node) {
@@ -1510,6 +1604,7 @@ fn remove_inline(node: &mut Node) {
         | Node::Return(n, ..)
         | Node::UnaryOp(_, n, _)
         | Node::VarAssign(_, n, _)
+        | Node::StaticVar(_, n)
         | Node::VarReassign(_, n) => remove_inline(n),
         Node::VarAccess(..) => (),
         Node::Input(..) => (),
@@ -1584,6 +1679,7 @@ fn insert_function(functions: &[Node], node: &mut Node) {
         | Node::FuncDef(_, _, n, ..)
         | Node::UnaryOp(_, n, _)
         | Node::VarAssign(_, n, _)
+        | Node::StaticVar(_, n)
         | Node::VarReassign(_, n) => insert_function(functions, n),
         Node::VarAccess(..) => (),
         Node::Input(..) => (),
@@ -1652,6 +1748,7 @@ fn find_functions(node: &mut Node) -> Option<Vec<&mut Node>> {
         | Node::Return(n, ..)
         | Node::UnaryOp(_, n, _)
         | Node::VarAssign(_, n, _)
+        | Node::StaticVar(_, n)
         | Node::VarReassign(_, n) => find_functions(n),
         Node::VarAccess(..) => None,
         Node::String(_) => None,
@@ -1751,6 +1848,7 @@ fn check_recursive(node: &Node, stack: &mut Vec<Token>) -> Option<Error> {
         | Node::Ref(n, ..)
         | Node::Deref(n, ..)
         | Node::Return(n, ..)
+        | Node::StaticVar(_, n)
         | Node::UnaryOp(_, n, _)
         | Node::VarAssign(_, n, _)
         | Node::VarReassign(_, n) => check_recursive(n, stack),
@@ -1781,5 +1879,154 @@ fn check_recursive(node: &Node, stack: &mut Vec<Token>) -> Option<Error> {
             check_recursive(n4, stack)
         }
         Node::Expanded(_, _) => unreachable!(),
+    }
+}
+
+fn global_static(ast: &mut Node) {
+    let vars = find_static(ast)
+        .unwrap_or_default()
+        .iter()
+        .map(|n| (*n).clone())
+        .collect::<Vec<_>>();
+    remove_static(ast);
+    if let Node::Statements(ast, ..) = ast {
+        for var in vars {
+            ast.insert(0, var);
+        }
+    }
+}
+
+fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
+    match node {
+        Node::Statements(nodes, ..) => {
+            let mut new = vec![];
+            for node in nodes.iter_mut().rev() {
+                if let Some(ref mut i) = find_functions(node) {
+                    new.append(i);
+                }
+            }
+            Some(new)
+        }
+        Node::StructConstructor(_, n, _) => {
+            for (_, n) in n {
+                if let a @ Some(_) = find_functions(n) {
+                    return a;
+                }
+            }
+            None
+        }
+        Node::Call(_, n, ..) | Node::Print(n, _) | Node::Array(n, ..) | Node::Ascii(n, _) => {
+            for n in n {
+                if let a @ Some(_) = find_functions(n) {
+                    return a;
+                }
+            }
+            None
+        }
+        Node::Struct(..) => None,
+        Node::IndexAssign(_, n1, n2)
+        | Node::DerefAssign(n1, n2, _)
+        | Node::If(n1, n2, None, _)
+        | Node::While(n1, n2, _)
+        | Node::BinaryOp(_, n1, n2, _) => {
+            if let a @ Some(_) = find_functions(n1) {
+                return a;
+            }
+            find_functions(n2)
+        }
+        Node::Number(_) => None,
+        Node::Boolean(_) => None,
+        Node::Index(_, n, ..)
+        | Node::Ref(n, ..)
+        | Node::Deref(n, ..)
+        | Node::Return(n, ..)
+        | Node::UnaryOp(_, n, _)
+        | Node::VarAssign(_, n, _)
+        | Node::FuncDef(_, _, n, _, _)
+        | Node::VarReassign(_, n) => find_functions(n),
+        Node::VarAccess(..) => None,
+        Node::String(_) => None,
+        Node::Input(..) => None,
+        Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
+            if let a @ Some(_) = find_functions(n1) {
+                return a;
+            }
+            if let a @ Some(_) = find_functions(n2) {
+                return a;
+            }
+            find_functions(n3)
+        }
+        Node::None(_) => None,
+        Node::Char(_, _) => None,
+        Node::For(n1, n2, n3, n4, _) => {
+            if let a @ Some(_) = find_functions(n1) {
+                return a;
+            }
+            if let a @ Some(_) = find_functions(n2) {
+                return a;
+            }
+            if let a @ Some(_) = find_functions(n3) {
+                return a;
+            }
+            find_functions(n4)
+        }
+        Node::Expanded(_, _) => unreachable!(),
+        Node::StaticVar(..) => Some(vec![node]),
+    }
+}
+
+fn remove_static(node: &mut Node) {
+    match node {
+        Node::Struct(..) => (),
+        Node::Call(_, n, ..)
+        | Node::Statements(n, ..)
+        | Node::Print(n, _)
+        | Node::Array(n, ..)
+        | Node::Ascii(n, _) => {
+            for n in n.iter_mut().rev() {
+                remove_inline(n);
+            }
+        }
+        Node::StructConstructor(_, n, _) => {
+            for (_, n) in n {
+                remove_inline(n);
+            }
+        }
+        Node::IndexAssign(_, n1, n2)
+        | Node::DerefAssign(n1, n2, _)
+        | Node::If(n1, n2, None, _)
+        | Node::While(n1, n2, _)
+        | Node::BinaryOp(_, n1, n2, _) => {
+            remove_inline(n1);
+            remove_inline(n2);
+        }
+        Node::String(_) => (),
+        Node::Number(_) => (),
+        Node::Boolean(_) => (),
+        Node::Index(_, n, ..)
+        | Node::Ref(n, ..)
+        | Node::Deref(n, ..)
+        | Node::FuncDef(_, _, n, ..)
+        | Node::Return(n, ..)
+        | Node::UnaryOp(_, n, _)
+        | Node::VarAssign(_, n, _)
+        | Node::VarReassign(_, n) => remove_inline(n),
+        Node::VarAccess(..) => (),
+        Node::Input(..) => (),
+        Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
+            remove_inline(n1);
+            remove_inline(n2);
+            remove_inline(n3);
+        }
+        Node::None(_) => (),
+        Node::Char(_, _) => (),
+        Node::For(n1, n2, n3, n4, _) => {
+            remove_inline(n1);
+            remove_inline(n2);
+            remove_inline(n3);
+            remove_inline(n4);
+        }
+        Node::Expanded(_, _) => unreachable!(),
+        Node::StaticVar(..) => *node = Node::None(node.position()),
     }
 }

@@ -2,9 +2,9 @@ use super::{LexNumber, Position};
 use std::{cmp, fmt, rc::Rc};
 
 /// List of all the keywords identified by the lexer
-pub const KEYWORDS: [&str; 16] = [
+pub const KEYWORDS: [&str; 17] = [
     "ez", "return", "ezout", "ezin", "ezascii", "true", "false", "if", "else", "bool", "int",
-    "char", "while", "for", "struct", "let",
+    "char", "while", "for", "struct", "let", "static",
 ];
 
 pub const PREPROCESSOR_STATEMENTS: [&str; 6] =

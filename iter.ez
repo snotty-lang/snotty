@@ -1,7 +1,5 @@
-let current = 0
-ez next() -> int { return current current += 1 }
+ez next() -> int { static current = 0 return current current += 1 }
 
-
-for (let i = 0 : i < 127+127+1 : ++i) {
+for (let i = 0 : i < 127 : ++i) {
     ezout next(), '\n'
 }
