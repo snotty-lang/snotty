@@ -12,7 +12,7 @@ pub enum VarType {
 /// It is used to find undefined variables and functions
 #[derive(Debug, Clone)]
 pub struct Scope {
-    pub unresolved_functions: Vec<Node>,
+    pub unresolved_functions: Vec<(Vec<Type>, Type, Token)>,
     pub unresolved_structs: Vec<Node>,
     pub defined: Vec<VarType>,
     pub defined_static: Vec<(Type, Token)>,
@@ -75,12 +75,40 @@ impl Scope {
                 ))
             } else {
                 self.defined.push(func);
-                self.unresolved_functions.retain(|n| {
-                    if let Node::Call(t, ..) = n {
-                        return *t != token;
-                    }
-                    unreachable!()
-                });
+                self.unresolved_functions.retain(|n| n.2 != token);
+                None
+            }
+        } else {
+            unreachable!();
+        }
+    }
+
+    pub fn register_signature(&mut self, sign: Node) -> Option<Error> {
+        let pos = sign.position();
+        if let Node::FunctionSign(token, args, ret, _) = sign {
+            let func = (
+                args.iter().map(|a| a.1.clone()).collect::<Vec<_>>(),
+                ret,
+                token.clone(),
+            );
+            if self.defined.contains(&VarType::Function(
+                func.0.clone(),
+                func.1.clone(),
+                func.2.clone(),
+            )) {
+                Some(Error::new(
+                    ErrorType::Redefinition,
+                    pos,
+                    format!("Function {} already defined", token),
+                ))
+            } else if self.unresolved_functions.contains(&func) {
+                Some(Error::new(
+                    ErrorType::Redefinition,
+                    pos,
+                    format!("Function {}'s signature already defined", token),
+                ))
+            } else {
+                self.unresolved_functions.push(func);
                 None
             }
         } else {
@@ -128,8 +156,7 @@ impl Scope {
                             return Ok(arg.1.clone());
                         }
                     }
-                    if self.parent.is_some() {
-                        let parent = self.parent.as_mut().unwrap();
+                    if let Some(ref mut parent) = self.parent {
                         return parent.access_variable(node);
                     }
                     return Err(Error::new(
@@ -287,35 +314,39 @@ impl Scope {
         }
     }
 
-    pub fn access_function(&mut self, node: &Node) {
-        let mut found = false;
+    pub fn access_function(&mut self, node: &Node) -> Result<Type, Error> {
         match &node {
             Node::Call(token1, args1, ..) => {
-                if self.defined.iter().any(|a| {
+                if let Some(a) = self.defined.iter().find(|a| {
                     if let VarType::Function(args, _, name) = a {
                         name == token1 && args1.len() == args.len()
                     } else {
                         false
                     }
                 }) {
-                    found = true;
+                    if let VarType::Function(_, t, _) = a {
+                        Ok(t.clone())
+                    } else {
+                        unreachable!();
+                    }
+                } else if let Some(a) = self
+                    .unresolved_functions
+                    .iter()
+                    .find(|a| a.2 == *token1 && args1.len() == a.0.len())
+                {
+                    Ok(a.1.clone())
+                } else {
+                    if let Some(ref mut parent) = self.parent {
+                        return parent.access_function(node);
+                    }
+                    Err(Error::new(
+                        ErrorType::UndefinedVariable,
+                        token1.position.clone(),
+                        format!("Function {} is not defined", token1),
+                    ))
                 }
             }
             _ => unreachable!(),
-        }
-        if !found {
-            if let Some(ref mut parent) = self.parent {
-                let old = parent.unresolved_functions.len();
-                parent.access_function(node);
-                if parent.unresolved_functions.len() <= old {
-                    return self.unresolved_functions.retain(|n| n != node);
-                }
-            }
-            if !self.unresolved_functions.contains(node) {
-                self.unresolved_functions.push(node.clone())
-            }
-        } else if self.unresolved_functions.contains(node) {
-            self.unresolved_functions.retain(|n| n != node);
         }
     }
 
@@ -353,9 +384,6 @@ impl Scope {
     }
 
     pub fn refresh(&mut self) {
-        for node in self.unresolved_functions.clone() {
-            self.access_function(&node);
-        }
         for node in self.unresolved_structs.clone() {
             self.access_struct(&node);
         }

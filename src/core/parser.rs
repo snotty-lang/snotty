@@ -293,6 +293,12 @@ impl Parser {
                     scope.register_function(node.clone());
                     Ok((node, None))
                 }
+                "ezsign" => {
+                    self.advance();
+                    let node = self.function_signature()?;
+                    scope.register_signature(node.clone());
+                    Ok((node, None))
+                }
                 "struct" => {
                     self.advance();
                     let node = self.struct_definition()?;
@@ -928,8 +934,11 @@ impl Parser {
                 self.advance();
                 pos.end = self.current_token.position.end;
                 pos.line_end = self.current_token.position.line_end;
-                let node = Node::Call(atom, args, Type::None, pos);
-                scope.access_function(&node);
+                let mut node = Node::Call(atom, args, Type::None, pos);
+                let t1 = scope.access_function(&node)?;
+                if let Node::Call(_, _, ref mut t, _) = node {
+                    *t = t1;
+                }
                 return Ok(node);
             } else if let TokenType::LCurly = self.current_token.token_type {
                 self.advance();
@@ -1375,6 +1384,90 @@ impl Parser {
         Ok(Node::FuncDef(name, params, Box::new(stmt), ret, pos))
     }
 
+    fn function_signature(&mut self) -> ParseResult {
+        let name = if let TokenType::Identifier(_) = self.current_token.token_type {
+            self.current_token.clone()
+        } else {
+            return Err(Error::new(
+                ErrorType::SyntaxError,
+                self.current_token.position.clone(),
+                format!("Expected identifier, found {}", self.current_token),
+            ));
+        };
+        self.advance();
+        if self.current_token.token_type != TokenType::LParen {
+            return Err(Error::new(
+                ErrorType::SyntaxError,
+                self.current_token.position.clone(),
+                format!("Expected '(', found {}", self.current_token),
+            ));
+        }
+        self.advance();
+        let mut params = vec![];
+        if let TokenType::Identifier(_) = self.current_token.token_type {
+            let p = self.current_token.clone();
+            self.advance();
+            if self.current_token.token_type != TokenType::Colon {
+                return Err(Error::new(
+                    ErrorType::SyntaxError,
+                    self.current_token.position.clone(),
+                    format!("Expected ':', found {}", self.current_token),
+                ));
+            }
+            self.advance();
+            let t = self.make_type()?;
+            params.push((p, t));
+            while self.current_token.token_type == TokenType::Comma {
+                self.advance();
+                if let TokenType::Identifier(_) = self.current_token.token_type {
+                    let p = self.current_token.clone();
+                    self.advance();
+                    if self.current_token.token_type != TokenType::Colon {
+                        return Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            format!("Expected ':', found {}", self.current_token),
+                        ));
+                    }
+                    self.advance();
+                    let t = self.make_type()?;
+                    params.push((p, t));
+                } else {
+                    return Err(Error::new(
+                        ErrorType::SyntaxError,
+                        self.current_token.position.clone(),
+                        format!("Expected identifier, found {}", self.current_token),
+                    ));
+                }
+            }
+            if self.current_token.token_type != TokenType::RParen {
+                return Err(Error::new(
+                    ErrorType::SyntaxError,
+                    self.current_token.position.clone(),
+                    format!("Expected ')' or ',', found {}", self.current_token),
+                ));
+            }
+        } else if self.current_token.token_type != TokenType::RParen {
+            return Err(Error::new(
+                ErrorType::SyntaxError,
+                self.current_token.position.clone(),
+                format!("Expected identifier or ')', found {}", self.current_token),
+            ));
+        }
+        self.advance();
+
+        let ret = if self.current_token.token_type == TokenType::Arrow {
+            self.advance();
+            self.make_type()?
+        } else {
+            Type::None
+        };
+        let mut pos = name.position.clone();
+        pos.end = self.current_token.position.end;
+        pos.line_end = self.current_token.position.line_end;
+        Ok(Node::FunctionSign(name, params, ret, pos))
+    }
+
     fn binary_op(
         &mut self,
         func1: fn(&mut Self, &mut Scope) -> ParseResult,
@@ -1433,16 +1526,17 @@ pub fn parse(tokens: Vec<Token>) -> ParseResult {
         return Err(err);
     }
     global_static(&mut ast);
+    remove_signs(&mut ast);
     expand_inline(&mut ast, vec![]);
     Ok(ast)
 }
 
-fn check_functions(scope: &mut Scope) -> Option<Node> {
-    if !scope.unresolved_functions.is_empty() {
-        return Some(scope.unresolved_functions.pop().unwrap());
+fn check_functions(scope: &mut Scope) -> Option<(Token, u32)> {
+    if let Some((.., name)) = scope.unresolved_functions.pop() {
+        return Some((name, 0));
     }
-    if !scope.unresolved_structs.is_empty() {
-        return Some(scope.unresolved_structs.pop().unwrap());
+    if let Some(Node::StructConstructor(name, ..)) = scope.unresolved_structs.pop() {
+        return Some((name, 1));
     }
     for child in &mut scope.scopes {
         if let Some(err) = check_functions(child) {
@@ -1468,20 +1562,20 @@ fn check_undefined(global: &mut Scope) -> Option<Error> {
         refresh(child, clone.clone());
     }
 
-    if let Some(node) = check_functions(global) {
-        match &node {
-            Node::Call(token, ..) => {
-                return Some(Error::new(
-                    ErrorType::UndefinedFunction,
-                    token.position.clone(),
-                    format!("Function {} is not defined", token),
-                ));
-            }
-            Node::StructConstructor(token, _, _) => {
+    if let Some((name, t)) = check_functions(global) {
+        match t {
+            0 => {
                 return Some(Error::new(
                     ErrorType::UndefinedStruct,
-                    token.position.clone(),
-                    format!("Struct {} is not defined", token),
+                    name.position.clone(),
+                    format!("Function {} is not defined", name),
+                ));
+            }
+            1 => {
+                return Some(Error::new(
+                    ErrorType::UndefinedStruct,
+                    name.position.clone(),
+                    format!("Struct {} is not defined", name),
                 ));
             }
             _ => unreachable!(),
@@ -1614,6 +1708,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
             Node::Number(_) => None,
             Node::Boolean(_) => None,
             Node::Input(..) => None,
+            Node::FunctionSign(..) => None,
             Node::None(_) => None,
             Node::Char(..) => None,
             Node::Array(..) => None,
@@ -1650,7 +1745,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
         remove_inline(ast);
     }
     insert_function(&functions, ast);
-    println!("{ast}\n");
+    // println!("{ast}\n");
 }
 
 fn remove_inline(node: &mut Node) {
@@ -1681,6 +1776,7 @@ fn remove_inline(node: &mut Node) {
         }
         Node::String(_) => (),
         Node::Number(_) => (),
+        Node::FunctionSign(..) => (),
         Node::Boolean(_) => (),
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
@@ -1756,6 +1852,7 @@ fn insert_function(functions: &[Node], node: &mut Node) {
         }
         Node::Struct(..) => (),
         Node::String(_) => (),
+        Node::FunctionSign(..) => (),
         Node::Number(_) => (),
         Node::Boolean(_) => (),
         Node::Index(_, n, ..)
@@ -1830,6 +1927,7 @@ fn find_functions(node: &mut Node) -> Option<Vec<&mut Node>> {
         }
         Node::Number(_) => None,
         Node::Boolean(_) => None,
+        Node::FunctionSign(..) => None,
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
         | Node::Converted(n, _)
@@ -1934,6 +2032,7 @@ fn check_recursive(node: &Node, stack: &mut Vec<Token>) -> Option<Error> {
         }
         Node::Number(_) => None,
         Node::Boolean(_) => None,
+        Node::FunctionSign(..) => None,
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
         | Node::Deref(n, ..)
@@ -2026,6 +2125,7 @@ fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
             }
             find_static(n2)
         }
+        Node::FunctionSign(..) => None,
         Node::Number(_) => None,
         Node::Boolean(_) => None,
         Node::Index(_, n, ..)
@@ -2097,6 +2197,7 @@ fn remove_static(node: &mut Node) {
         Node::String(_) => (),
         Node::Number(_) => (),
         Node::Boolean(_) => (),
+        Node::FunctionSign(..) => (),
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
         | Node::Deref(n, ..)
@@ -2124,5 +2225,64 @@ fn remove_static(node: &mut Node) {
         }
         Node::Expanded(_, _) => unreachable!(),
         Node::StaticVar(..) => *node = Node::None(node.position()),
+    }
+}
+
+fn remove_signs(node: &mut Node) {
+    match node {
+        Node::Struct(..) => (),
+        Node::Call(_, n, ..)
+        | Node::Statements(n, ..)
+        | Node::Print(n, _)
+        | Node::Array(n, ..)
+        | Node::Ascii(n, _) => {
+            for n in n.iter_mut().rev() {
+                remove_signs(n);
+            }
+        }
+        Node::StructConstructor(_, n, _) => {
+            for (_, n) in n {
+                remove_signs(n);
+            }
+        }
+        Node::IndexAssign(_, n1, n2)
+        | Node::DerefAssign(n1, n2, _)
+        | Node::If(n1, n2, None, _)
+        | Node::While(n1, n2, _)
+        | Node::BinaryOp(_, n1, n2, _) => {
+            remove_signs(n1);
+            remove_signs(n2);
+        }
+        Node::String(_) => (),
+        Node::Number(_) => (),
+        Node::Boolean(_) => (),
+        Node::Index(_, n, ..)
+        | Node::Ref(n, ..)
+        | Node::Deref(n, ..)
+        | Node::Converted(n, _)
+        | Node::FuncDef(_, _, n, ..)
+        | Node::StaticVar(_, n)
+        | Node::AttrAccess(n, ..)
+        | Node::Return(n, ..)
+        | Node::UnaryOp(_, n, _)
+        | Node::VarAssign(_, n, _)
+        | Node::VarReassign(_, n) => remove_signs(n),
+        Node::VarAccess(..) => (),
+        Node::Input(..) => (),
+        Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
+            remove_signs(n1);
+            remove_signs(n2);
+            remove_signs(n3);
+        }
+        Node::None(_) => (),
+        Node::Char(_) => (),
+        Node::For(n1, n2, n3, n4, _) => {
+            remove_signs(n1);
+            remove_signs(n2);
+            remove_signs(n3);
+            remove_signs(n4);
+        }
+        Node::Expanded(_, _) => unreachable!(),
+        Node::FunctionSign(..) => *node = Node::None(node.position()),
     }
 }

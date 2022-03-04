@@ -407,7 +407,7 @@ impl CodeGenerator {
 
             Node::None(_) => Ok(Val::None),
 
-            Node::Call(..) | Node::FuncDef(..) => unreachable!(),
+            Node::Call(..) | Node::FuncDef(..) | Node::FunctionSign(..) => unreachable!(),
 
             Node::Index(arr1, index1, ..) => {
                 let arr = if let TokenType::Identifier(ref var) = arr1.token_type {
