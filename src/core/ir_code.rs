@@ -126,10 +126,7 @@ impl CodeGenerator {
                 if let TokenType::Identifier(ref var) = var1.token_type {
                     match self.make_instruction(expr, vars, memory)? {
                         Val::Index(index, type_ @ ValType::Ref(_)) => {
-                            vars.insert(
-                                var.clone(),
-                                Val::Index(index, type_),
-                            );
+                            vars.insert(var.clone(), Val::Index(index, type_));
                             Ok(Val::None)
                         }
                         Val::Index(index, type_) => {

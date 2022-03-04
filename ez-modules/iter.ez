@@ -1,5 +1,4 @@
 ez next() -> int { static current = 0 return current current += 1 }
 
-for (let i = 0 : i < 127 : ++i) {
-    ezout next(), '\n'
-}
+for (let i = 0 : true : i = next()) ezout i, '\n'
+

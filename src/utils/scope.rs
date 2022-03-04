@@ -37,15 +37,21 @@ impl Scope {
     pub fn register_struct(&mut self, struct_: Node) -> Option<Error> {
         let pos = struct_.position();
         if let Node::Struct(token, fields, _) = struct_ {
-            let s = VarType::Struct(fields.iter().map(|a| a.1.clone()).collect(), token.clone());
-            if self.defined.contains(&s) {
+            if self
+                .defined
+                .iter()
+                .any(|a| matches!(a, VarType::Struct(_, a) if *a == token))
+            {
                 return Some(Error::new(
                     ErrorType::Redefinition,
                     pos,
                     format!("Struct {} already defined", token),
                 ));
             } else {
-                self.defined.push(s);
+                self.defined.push(VarType::Struct(
+                    fields.iter().map(|a| a.1.clone()).collect(),
+                    token,
+                ));
             }
         } else {
             unreachable!();

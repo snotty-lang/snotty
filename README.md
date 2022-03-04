@@ -16,3 +16,5 @@ ezout x
 * position errors (Last line errors during lexing, position passed to errors)
 * function expanding error
 * `as` conversions
+* static variables with same name
+* Function Call Types
