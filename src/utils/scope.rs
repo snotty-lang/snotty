@@ -100,6 +100,7 @@ impl Scope {
                 if let Some(a) = self
                     .defined
                     .iter()
+                    .rev()
                     .find(|a| matches!(a, VarType::Variable(_, n) if n == token))
                 {
                     if let VarType::Variable(t, _) = a {
@@ -136,6 +137,7 @@ impl Scope {
                 if let Some(t) = self
                     .defined
                     .iter()
+                    .rev()
                     .find(|a| matches!(a, VarType::Variable(_, n) if n == token))
                 {
                     if let VarType::Variable(t, _) = t {
@@ -195,6 +197,7 @@ impl Scope {
         if let Some(a) = self
             .defined
             .iter()
+            .rev()
             .find(|a| matches!(a, VarType::Variable(_, n) if n == token))
         {
             if let VarType::Variable(t, _) = a {
@@ -230,6 +233,7 @@ impl Scope {
         if let Some(t) = self
             .defined
             .iter()
+            .rev()
             .find(|a| matches!(a, VarType::Variable(_, n) if n == token))
         {
             if let VarType::Variable(t, _) = t {

@@ -378,10 +378,18 @@ impl Parser {
                     Ok((self.expression(scope)?, None))
                 } else if self.current_token.token_type == TokenType::Assign {
                     self.advance();
+                    let right = self.expression(scope)?;
+                    if node.get_type() != right.get_type() {
+                        return Err(Error::new(
+                            ErrorType::TypeError,
+                            self.current_token.position.clone(),
+                            format!("Cannot assign {} to {}", right.get_type(), node.get_type()),
+                        ));
+                    }
                     pos.end = self.current_token.position.end;
                     pos.line_end = self.current_token.position.line_end;
                     Ok((
-                        Node::DerefAssign(Box::new(node), Box::new(self.expression(scope)?), pos),
+                        Node::DerefAssign(Box::new(node), Box::new(right), pos),
                         None,
                     ))
                 } else {
@@ -406,6 +414,13 @@ impl Parser {
                             ))
                         }
                     };
+                    if rt != t {
+                        return Err(Error::new(
+                            ErrorType::TypeError,
+                            self.current_token.position.clone(),
+                            format!("Cannot assign {} to {}", right.get_type(), t),
+                        ));
+                    }
                     let node = Node::DerefAssign(
                         Box::new(node.clone()),
                         Box::new(Node::BinaryOp(
@@ -691,7 +706,16 @@ impl Parser {
                 }
                 TokenType::Assign => {
                     self.advance();
-                    Ok(Node::VarReassign(token, Box::new(self.expression(scope)?)))
+                    let node = self.expression(scope)?;
+                    let t = scope.access_variable_by_token(&token)?;
+                    if node.get_type() != t {
+                        return Err(Error::new(
+                            ErrorType::TypeError,
+                            self.current_token.position.clone(),
+                            format!("Cannot assign {} to {}", t, node.get_type()),
+                        ));
+                    }
+                    Ok(Node::VarReassign(token, Box::new(node)))
                 }
                 ref x if ASSIGNMENT_OPERATORS.contains(x) && !init => {
                     let op = self.current_token.clone().un_augmented();
@@ -708,6 +732,13 @@ impl Parser {
                             ))
                         }
                     };
+                    if rt != t {
+                        return Err(Error::new(
+                            ErrorType::TypeError,
+                            self.current_token.position.clone(),
+                            format!("Cannot assign {} to {}", right.get_type(), t),
+                        ));
+                    }
                     Ok(Node::VarReassign(
                         token.clone(),
                         Box::new(Node::BinaryOp(

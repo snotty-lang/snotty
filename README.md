@@ -14,6 +14,5 @@ ezout x
 
 ## FIXME
 * position errors (Last line errors during lexing, position passed to errors)
-* referencing errors (ez-modules/referencing.ez)
 * function expanding error
 * `as` conversions

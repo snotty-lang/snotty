@@ -97,7 +97,7 @@ impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::DerefAssign(val, expr) | Self::DerefAssignRef(val, expr) => {
-                write!(f, "*[{}] = {}", val, expr)
+                write!(f, "{} = {}", val, expr)
             }
             Self::Clear(from, to) => write!(f, "clear {} - {}", from, to - 1),
             Self::While(cond) => write!(f, "WHILE {}", cond),
@@ -323,7 +323,7 @@ impl fmt::Display for ValType {
             Self::Ref(t) => write!(f, "&{}", t),
             Self::Char => write!(f, "char"),
             Self::Pointer(t) => write!(f, "&{}", **t),
-            Self::None => write!(f, "()"),
+            Self::None => write!(f, ";"),
             Self::Number => write!(f, "integer"),
             Self::Boolean => write!(f, "bool"),
         }
@@ -335,7 +335,7 @@ impl fmt::Display for Val {
         match self {
             Val::Char(c) => write!(f, "{}", *c as char),
             Val::Pointer(mem, _) => write!(f, "*{}", mem),
-            Val::None => write!(f, "()"),
+            Val::None => write!(f, ";"),
             Val::Bool(b) => write!(f, "{}", b),
             Val::Num(num) => write!(f, "{}", num),
             Val::Index(index, _) => write!(f, "[{}]", index),

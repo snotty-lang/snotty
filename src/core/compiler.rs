@@ -434,13 +434,11 @@ pub fn transpile(code: &Instructions) -> String {
             Instruction::DerefAssignRef(Val::Index(mem, _), assign) => {
                 goto(&mut bf_code, &mut location, *mem);
                 goto_add!(assign, &mut bf_code, &mut location, {
-                    copy(&mut bf_code, location, start, location, free_idx);
+                    copy(&mut bf_code, location, *mem, location, free_idx);
                 });
                 goto(&mut bf_code, &mut location, start);
             }
             Instruction::DerefAssign(_, _) => todo!(),
-            Instruction::Return(_) => todo!(),
-            Instruction::Call(_, _) => todo!(),
             Instruction::Deref(_) => todo!(),
             Instruction::Shr(_, _) => todo!(),
             Instruction::BAnd(_, _) => todo!(),
@@ -455,6 +453,9 @@ pub fn transpile(code: &Instructions) -> String {
 
 /// Goes from the `from` location to the `to` location
 fn goto(bf_code: &mut String, from: &mut usize, to: usize) {
+    if *from == to {
+        return;
+    }
     let diff = *from as i32 - to as i32;
     if diff < 0 {
         bf_code.push_str(&">".repeat(-diff as usize))

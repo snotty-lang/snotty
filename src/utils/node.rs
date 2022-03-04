@@ -94,7 +94,7 @@ impl Type {
     pub fn has_attr(&self, _attr: &Token) -> Option<Type> {
         match self {
             Type::Char => Some(Type::Char),
-            _ => None
+            _ => None,
         }
     }
 }

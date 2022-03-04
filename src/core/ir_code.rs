@@ -125,6 +125,13 @@ impl CodeGenerator {
             Node::VarAssign(var1, expr, _) | Node::StaticVar(var1, expr) => {
                 if let TokenType::Identifier(ref var) = var1.token_type {
                     match self.make_instruction(expr, vars, memory)? {
+                        Val::Index(index, type_ @ ValType::Ref(_)) => {
+                            vars.insert(
+                                var.clone(),
+                                Val::Index(index, type_),
+                            );
+                            Ok(Val::None)
+                        }
                         Val::Index(index, type_) => {
                             let size = type_.get_size();
                             let mem = memory.allocate(size);
@@ -170,6 +177,27 @@ impl CodeGenerator {
             Node::VarReassign(var1, expr) => {
                 if let TokenType::Identifier(ref var2) = var1.token_type {
                     match self.make_instruction(expr, vars, memory)? {
+                        Val::Index(index, type_ @ ValType::Ref(_)) => {
+                            let var = vars.get_mut(var2).unwrap();
+                            if var.r#type() != type_ {
+                                return Err(Error::new(
+                                    ErrorType::TypeError,
+                                    var1.position.clone(),
+                                    format!(
+                                        "Variable {} is of type {} but is being assigned to type {}",
+                                        var1,
+                                        var.r#type(),
+                                        type_
+                                    ),
+                                ));
+                            }
+                            let size = type_.get_size();
+                            self.instructions.push(
+                                Instruction::Copy(Val::Index(index, type_)),
+                                (Some((index, size)), memory.last_memory_index),
+                            );
+                            Ok(Val::None)
+                        }
                         Val::Index(index, type_) => {
                             let var = vars.get_mut(var2).unwrap();
                             if var.r#type() != type_ {
@@ -226,7 +254,7 @@ impl CodeGenerator {
                                     var1.position.clone(),
                                     format!(
                                         "Variable {} is of type {} but is being assigned to type {}",
-                                        val_type,
+                                        val,
                                         var.r#type(),
                                         val_type
                                     ),
