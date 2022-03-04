@@ -1530,6 +1530,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
             }
             Node::Struct(..) => None,
             Node::UnaryOp(_, n1, _) => check_return(n1),
+            Node::Converted(n, _) => check_return(n),
             Node::VarAssign(_, n1, _) => check_return(n1),
             Node::AttrAccess(n, ..) => check_return(n),
             Node::StaticVar(_, n1) => check_return(n1),
@@ -1640,7 +1641,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
 /// Expands inline functions
 fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
     if let Some(mut functions2) = find_functions(ast) {
-        functions.extend(functions2.iter().map(|n| (**n).clone()));
+        functions.extend(functions2.iter().map(|f| (*f).clone()));
         for f in functions2.iter_mut() {
             if let Node::FuncDef(_, _, f, ..) = f {
                 expand_inline(f, functions.clone());
@@ -1649,7 +1650,7 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
         remove_inline(ast);
     }
     insert_function(&functions, ast);
-    // println!("{ast}\n");
+    println!("{ast}\n");
 }
 
 fn remove_inline(node: &mut Node) {
@@ -1687,6 +1688,7 @@ fn remove_inline(node: &mut Node) {
         | Node::Return(n, ..)
         | Node::AttrAccess(n, ..)
         | Node::UnaryOp(_, n, _)
+        | Node::Converted(n, _)
         | Node::VarAssign(_, n, _)
         | Node::StaticVar(_, n)
         | Node::VarReassign(_, n) => remove_inline(n),
@@ -1717,7 +1719,7 @@ fn insert_function(functions: &[Node], node: &mut Node) {
                 _ => false,
             }) {
                 Some(f) => f,
-                None => return,
+                None => unreachable!(),
             };
             let (params, body, ret) = match func {
                 Node::FuncDef(_, p, b, ret, ..) => (p, b.clone(), ret),
@@ -1763,6 +1765,7 @@ fn insert_function(functions: &[Node], node: &mut Node) {
         | Node::FuncDef(_, _, n, ..)
         | Node::AttrAccess(n, ..)
         | Node::UnaryOp(_, n, _)
+        | Node::Converted(n, _)
         | Node::VarAssign(_, n, _)
         | Node::StaticVar(_, n)
         | Node::VarReassign(_, n) => insert_function(functions, n),
@@ -1829,6 +1832,7 @@ fn find_functions(node: &mut Node) -> Option<Vec<&mut Node>> {
         Node::Boolean(_) => None,
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
+        | Node::Converted(n, _)
         | Node::Deref(n, ..)
         | Node::Return(n, ..)
         | Node::AttrAccess(n, ..)
@@ -1934,6 +1938,7 @@ fn check_recursive(node: &Node, stack: &mut Vec<Token>) -> Option<Error> {
         | Node::Ref(n, ..)
         | Node::Deref(n, ..)
         | Node::Return(n, ..)
+        | Node::Converted(n, _)
         | Node::AttrAccess(n, ..)
         | Node::StaticVar(_, n)
         | Node::UnaryOp(_, n, _)
@@ -2028,6 +2033,7 @@ fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
         | Node::Deref(n, ..)
         | Node::Return(n, ..)
         | Node::UnaryOp(_, n, _)
+        | Node::Converted(n, _)
         | Node::VarAssign(_, n, _)
         | Node::AttrAccess(n, ..)
         | Node::FuncDef(_, _, n, _, _)
@@ -2094,6 +2100,7 @@ fn remove_static(node: &mut Node) {
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
         | Node::Deref(n, ..)
+        | Node::Converted(n, _)
         | Node::FuncDef(_, _, n, ..)
         | Node::AttrAccess(n, ..)
         | Node::Return(n, ..)

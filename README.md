@@ -9,12 +9,11 @@ ezout x
 ```
 
 ## TODO
-* struct
+* structs
 * Pointers + Arrays + Strings + Dynamic Memory
 
 ## FIXME
 * position errors (Last line errors during lexing, position passed to errors)
 * function expanding error
-* `as` conversions
 * static variables with same name
 * Function Call Types

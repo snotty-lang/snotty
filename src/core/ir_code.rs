@@ -580,7 +580,7 @@ impl CodeGenerator {
                 }
             }
 
-            Node::Char(c, ..) => {
+            Node::Char(c) => {
                 if let TokenType::Char(c) = c.token_type {
                     Ok(Val::Char(c))
                 } else {
@@ -783,7 +783,34 @@ impl CodeGenerator {
                     ValType::Pointer(Box::new(ValType::Char)),
                 ))
             }
+
             Node::AttrAccess(_, _, _) => todo!(),
+
+            Node::Converted(n, t) => {
+                let val = self.make_instruction(n, vars, memory)?;
+                let t = ValType::from_parse_type(t);
+                Ok(match val {
+                    Val::Num(n) => match t {
+                        ValType::Boolean => Val::Bool(n != 0),
+                        ValType::Char => Val::Char(n as u8),
+                        ValType::Number => val,
+                        _ => unreachable!(),
+                    },
+                    Val::Bool(n) => match t {
+                        ValType::Boolean => val,
+                        ValType::Char => Val::Char(n as u8),
+                        ValType::Number => Val::Num(n as i8),
+                        _ => unreachable!(),
+                    },
+                    Val::Char(n) => match t {
+                        ValType::Boolean => Val::Bool(n as u8 != 0),
+                        ValType::Char => val,
+                        ValType::Number => Val::Num(n as i8),
+                        _ => unreachable!(),
+                    },
+                    _ => unreachable!(),
+                })
+            }
         }
     }
 }

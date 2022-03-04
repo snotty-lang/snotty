@@ -116,6 +116,8 @@ impl Display for Type {
 /// A Node in the AST.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
+    /// Node, Type
+    Converted(Box<Node>, Type),
     /// Node, Attr, Type
     AttrAccess(Box<Node>, Token, Type),
     /// Struct, fields
@@ -241,6 +243,7 @@ impl Node {
                 pos.line_end = end_pos.line_end;
                 pos
             }
+            Node::Converted(n, _) => n.position(),
         }
     }
 
@@ -263,6 +266,7 @@ impl Node {
             Node::Input(_) => Type::Char,
             Node::VarAccess(_, ty)
             | Node::UnaryOp(_, _, ty)
+            | Node::Converted(_, ty)
             | Node::AttrAccess(.., ty)
             | Node::Deref(_, ty, _)
             | Node::BinaryOp(_, _, _, ty)
@@ -288,24 +292,14 @@ impl Node {
     }
 
     pub fn convert(&mut self, t: Type) {
-        match (&self, t) {
-            (Node::Number(n) | Node::Boolean(n) | Node::Char(n), Type::Char) => {
-                *self = Node::Char(n.clone())
-            }
-            (Node::Number(n) | Node::Boolean(n) | Node::Char(n), Type::Boolean) => {
-                *self = Node::Boolean(n.clone())
-            }
-            (Node::Number(n) | Node::Boolean(n) | Node::Char(n), Type::Number) => {
-                *self = Node::Number(n.clone())
-            }
-            _ => (),
-        }
+        *self = Node::Converted(Box::new(self.clone()), t);
     }
 }
 
 impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Node::Converted(expr, ty) => write!(f, "{} as {}", expr, ty),
             Node::AttrAccess(node, attr, _) => write!(f, "{}.{}", node, attr),
             Node::StructConstructor(name, fields, _) => {
                 write!(f, "{} {{", name)?;
