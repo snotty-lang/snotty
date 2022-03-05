@@ -881,7 +881,27 @@ impl Parser {
                 };
                 Ok(Node::UnaryOp(token, Box::new(node), t))
             }
-            _ => self.power(scope),
+            _ => {
+                let node = self.power(scope)?;
+                let token = self.current_token.clone();
+                match token.token_type {
+                    TokenType::Inc | TokenType::Dec => {
+                        self.advance();
+                        let t = match node.get_type().get_result_type_unary(&token) {
+                            Some(t) => t,
+                            None => {
+                                return Err(Error::new(
+                                    ErrorType::TypeError,
+                                    self.current_token.position.clone(),
+                                    format!("Expected a number, found {}", node.get_type()),
+                                ))
+                            }
+                        };
+                        Ok(Node::UnaryOp(token, Box::new(node), t))
+                    }
+                    _ => Ok(node)
+                }
+            },
         }
     }
 
@@ -982,7 +1002,27 @@ impl Parser {
                 };
                 Ok(Node::UnaryOp(token, Box::new(node), t))
             }
-            _ => self.const_power(scope),
+            _ => {
+                let node = self.const_power(scope)?;
+                let token = self.current_token.clone();
+                match token.token_type {
+                    TokenType::Inc | TokenType::Dec => {
+                        self.advance();
+                        let t = match node.get_type().get_result_type_unary(&token) {
+                            Some(t) => t,
+                            None => {
+                                return Err(Error::new(
+                                    ErrorType::TypeError,
+                                    self.current_token.position.clone(),
+                                    format!("Expected a number, found {}", node.get_type()),
+                                ))
+                            }
+                        };
+                        Ok(Node::UnaryOp(token, Box::new(node), t))
+                    }
+                    _ => Ok(node)
+                }
+            },
         }
     }
 
