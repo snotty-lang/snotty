@@ -842,7 +842,7 @@ impl CodeGenerator {
                 Ok(match val {
                     Val::Num(n) => match t {
                         ValType::Boolean => Val::Bool(n != 0),
-                        ValType::Char => Val::Char(n as u8),
+                        ValType::Char => Val::Char((n as i16 + 128) as u8),
                         ValType::Number => val,
                         _ => unreachable!(),
                     },
@@ -855,10 +855,11 @@ impl CodeGenerator {
                     Val::Char(n) => match t {
                         ValType::Boolean => Val::Bool(n as u8 != 0),
                         ValType::Char => val,
-                        ValType::Number => Val::Num(n as i8),
+                        ValType::Number => Val::Num((n as i16 - 128) as i8),
                         _ => unreachable!(),
                     },
-                    _ => unreachable!(),
+                    Val::Index(n, _) => Val::Index(n, t),
+                    _ => unreachable!("{val} {t}"),
                 })
             }
         }

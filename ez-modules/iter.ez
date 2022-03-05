@@ -1,4 +1,8 @@
-ez next() -> int { static current = 0 return current current += 1 }
+ez next() -> char { 
+    static current = 38
+    return current as char
+    current += 1
+}
 
-for (let i = next() : i < 6 : i = next()) ezout i, '\n'
-
+for (let i = next() : i as int < 64 : i = next())
+    ezout i, '\n'
