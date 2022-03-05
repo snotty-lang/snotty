@@ -11,6 +11,7 @@ pub enum Type {
     Struct(Token),
     Array(Box<Type>, usize),
     Ref(Box<Type>),
+    Pointer(Box<Type>),
 }
 
 impl Type {
@@ -25,9 +26,9 @@ impl Type {
                     Some(Self::Number)
                 }
             }
-            (Self::Ref(t), Self::Number) | (Self::Number, Self::Ref(t)) => {
+            (Self::Pointer(t), Self::Number) => {
                 if let TokenType::Add | TokenType::Sub = op.token_type {
-                    Some(Self::Ref(t.clone()))
+                    Some(Self::Pointer(t.clone()))
                 } else {
                     None
                 }
@@ -70,9 +71,9 @@ impl Type {
                     None
                 }
             }
-            Self::Ref(t) => {
+            Self::Pointer(t) => {
                 if let TokenType::Inc | TokenType::Dec = op.token_type {
-                    Some(Self::Ref(t.clone()))
+                    Some(Self::Pointer(t.clone()))
                 } else {
                     None
                 }
@@ -82,13 +83,14 @@ impl Type {
     }
 
     pub fn can_be_converted(&self, other: &Self) -> bool {
-        matches!(
-            (self, other),
+        match (self, other) {
             (
                 Self::Number | Self::Boolean | Self::Char,
                 Self::Number | Self::Boolean | Self::Char,
-            )
-        )
+            ) => true,
+            (Self::Ref(t1), Self::Pointer(t2)) if t1 == t2 => true,
+            _ => false,
+        }
     }
 
     pub fn has_attr(&self, _attr: &Token) -> Option<Type> {
@@ -109,6 +111,7 @@ impl Display for Type {
             Type::Array(t, l) => write!(f, "[{}; {}]", t, l),
             Type::Ref(t) => write!(f, "&{}", t),
             Type::Struct(s) => write!(f, "struct {}", s),
+            Type::Pointer(t) => write!(f, "*point {}", t),
         }
     }
 }
@@ -116,6 +119,8 @@ impl Display for Type {
 /// A Node in the AST.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
+    /// Expression
+    Pointer(Box<Node>, Position),
     /// Name, Params, Return, Position
     FunctionSign(Token, Vec<(Token, Type)>, Type, Position),
     /// Node, Type
@@ -199,6 +204,7 @@ impl Node {
             | Node::StructConstructor(.., pos)
             | Node::Struct(.., pos)
             | Node::For(.., pos)
+            | Node::Pointer(.., pos)
             | Node::FunctionSign(.., pos)
             | Node::Deref(.., pos)
             | Node::While(.., pos)
@@ -263,6 +269,7 @@ impl Node {
                 }
             }
             Node::Ref(_, ty, _) => Type::Ref(Box::new(ty.clone())),
+            Node::Pointer(n, _) => Type::Pointer(Box::new(n.get_type())),
             Node::Number(_) => Type::Number,
             Node::Boolean(_) => Type::Boolean,
             Node::Char(_) => Type::Char,
@@ -408,6 +415,9 @@ impl fmt::Display for Node {
             }
             Node::Ref(expr, ..) => {
                 write!(f, "Ref({})", expr)
+            }
+            Node::Pointer(expr, ..) => {
+                write!(f, "Pointer({})", expr)
             }
             Node::Deref(expr, ..) => {
                 write!(f, "Deref({})", expr)

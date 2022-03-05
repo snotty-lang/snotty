@@ -899,9 +899,9 @@ impl Parser {
                         };
                         Ok(Node::UnaryOp(token, Box::new(node), t))
                     }
-                    _ => Ok(node)
+                    _ => Ok(node),
                 }
-            },
+            }
         }
     }
 
@@ -1020,9 +1020,9 @@ impl Parser {
                         };
                         Ok(Node::UnaryOp(token, Box::new(node), t))
                     }
-                    _ => Ok(node)
+                    _ => Ok(node),
                 }
-            },
+            }
         }
     }
 
@@ -1299,21 +1299,26 @@ impl Parser {
                 Ok(Node::Number(token))
             }
             TokenType::Mul => {
-                self.advance();
                 let mut pos = token.position;
                 pos.end = self.current_token.position.end;
                 pos.line_end = self.current_token.position.line_end;
-                let e = self.atom(scope)?;
-                let t = if let Type::Ref(t) = e.get_type() {
-                    *t
+                self.advance();
+                if matches!(self.current_token.token_type, TokenType::Keyword(ref s) if s == "point") {
+                    self.advance();
+                    Ok(Node::Pointer(Box::new(self.expression(scope)?), pos))
                 } else {
-                    return Err(Error::new(
-                        ErrorType::TypeError,
-                        e.position(),
-                        format!("Expected a reference type, found {}", e.get_type()),
-                    ));
-                };
-                Ok(Node::Deref(Box::new(e), t, pos))
+                    let e = self.atom(scope)?;
+                    let t = if let Type::Ref(t) | Type::Pointer(t) = e.get_type() {
+                        *t
+                    } else {
+                        return Err(Error::new(
+                            ErrorType::TypeError,
+                            e.position(),
+                            format!("Expected a reference type, found {}", e.get_type()),
+                        ));
+                    };
+                    Ok(Node::Deref(Box::new(e), t, pos))
+                }
             }
             TokenType::Pow => {
                 self.advance();
@@ -1321,9 +1326,9 @@ impl Parser {
                 pos.end = self.current_token.position.end - 1;
                 pos.line_end = self.current_token.position.line_end;
                 let e = self.atom(scope)?;
-                let (a, b) = if let Type::Ref(a) = e.get_type() {
+                let (a, b) = if let Type::Ref(a) | Type::Pointer(a) = e.get_type() {
                     (
-                        if let Type::Ref(b) = *a.clone() {
+                        if let Type::Ref(b) | Type::Pointer(b) = *a.clone() {
                             *b
                         } else {
                             return Err(Error::new(
@@ -1400,32 +1405,29 @@ impl Parser {
                 self.advance();
                 Ok(Node::Char(token))
             }
-            TokenType::Identifier(_) => {
-                self.advance();
-                if let TokenType::LSquare = self.current_token.token_type {
-                    self.advance();
-                    let index = self.expression(scope)?;
-                    if self.current_token.token_type != TokenType::RSquare {
-                        return Err(Error::new(
-                            ErrorType::SyntaxError,
-                            self.current_token.position.clone(),
-                            format!("Expected ']', found {}", self.current_token),
-                        ));
-                    }
-                    self.advance();
-                    let mut pos = token.position.clone();
-                    pos.end = self.current_token.position.end;
-                    pos.line_end = self.current_token.position.line_end;
-                    let t = scope.access_array_by_token(&token, &index)?;
-                    Ok(Node::Index(token, Box::new(index), t, pos))
-                } else {
-                    let t = scope.access_variable_by_token(&token)?;
-                    Ok(Node::VarAccess(token, t))
-                }
-            }
             TokenType::Number(_) => {
                 self.advance();
                 Ok(Node::Number(token))
+            }
+            TokenType::LParen => {
+                self.advance();
+                if self.current_token.token_type == TokenType::RParen {
+                    let mut pos = token.position;
+                    pos.end = self.current_token.position.end;
+                    pos.line_end = self.current_token.position.line_end;
+                    self.advance();
+                    return Ok(Node::None(pos));
+                }
+                let node = self.const_expression(scope)?;
+                if self.current_token.token_type != TokenType::RParen {
+                    return Err(Error::new(
+                        ErrorType::SyntaxError,
+                        self.current_token.position.clone(),
+                        format!("Expected ')', found {}", self.current_token),
+                    ));
+                }
+                self.advance();
+                Ok(node)
             }
             _ => Err(Error::new(
                 ErrorType::SyntaxError,
@@ -1846,7 +1848,7 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
             Node::Index(_, n1, ..) => check_return(n1),
             Node::FuncDef(..) => None,
             Node::Return(_, pos) => Some(pos.clone()),
-            Node::Ref(n1, ..) | Node::Deref(n1, ..) => check_return(n1),
+            Node::Ref(n1, ..) | Node::Deref(n1, ..) | Node::Pointer(n1, ..) => check_return(n1),
             Node::Print(n1, _) | Node::Ascii(n1, _) => {
                 for n in n1 {
                     if let Some(t) = check_return(n) {
@@ -1931,6 +1933,7 @@ fn remove_inline(node: &mut Node) {
         Node::Boolean(_) => (),
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
+        | Node::Pointer(n, ..)
         | Node::Deref(n, ..)
         | Node::Return(n, ..)
         | Node::AttrAccess(n, ..)
@@ -2014,6 +2017,7 @@ fn insert_function(functions: &[Node], node: &mut Node) {
         Node::Boolean(_) => (),
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
+        | Node::Pointer(n, ..)
         | Node::Deref(n, ..)
         | Node::Return(n, ..)
         | Node::FuncDef(_, _, n, ..)
@@ -2087,6 +2091,7 @@ fn find_functions(node: &mut Node) -> Option<Vec<&mut Node>> {
         Node::FunctionSign(..) => None,
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
+        | Node::Pointer(n, ..)
         | Node::Converted(n, _)
         | Node::Deref(n, ..)
         | Node::Return(n, ..)
@@ -2193,6 +2198,7 @@ fn check_recursive(node: &Node, stack: &mut Vec<Token>) -> Option<Error> {
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
         | Node::Deref(n, ..)
+        | Node::Pointer(n, ..)
         | Node::Return(n, ..)
         | Node::Converted(n, _)
         | Node::AttrAccess(n, ..)
@@ -2283,6 +2289,7 @@ fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
         Node::Boolean(_) => None,
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
+        | Node::Pointer(n, ..)
         | Node::Deref(n, ..)
         | Node::Return(n, ..)
         | Node::UnaryOp(_, n, _)
@@ -2354,6 +2361,7 @@ fn remove_static(node: &mut Node) {
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
         | Node::Deref(n, ..)
+        | Node::Pointer(n, ..)
         | Node::Converted(n, _)
         | Node::FuncDef(_, _, n, ..)
         | Node::AttrAccess(n, ..)
@@ -2411,6 +2419,7 @@ fn remove_signs(node: &mut Node) {
         Node::Boolean(_) => (),
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
+        | Node::Pointer(n, ..)
         | Node::Deref(n, ..)
         | Node::Converted(n, _)
         | Node::FuncDef(_, _, n, ..)

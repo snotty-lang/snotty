@@ -832,6 +832,8 @@ impl CodeGenerator {
             Node::Struct(_, _, _) => todo!(),
 
             Node::StructConstructor(_, _, _) => todo!(),
+
+            Node::Pointer(_, _) => todo!(),
         }
     }
 }
