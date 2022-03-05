@@ -1,1 +1,6 @@
-!use iter
+struct Str {
+    ptr : &char,
+    len: int
+}
+
+let s = Str { ptr: 54, len: 5 };

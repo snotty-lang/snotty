@@ -122,37 +122,7 @@ impl CodeGenerator {
                 Ok(Val::Index(mem, t))
             }
 
-            Node::StaticVar(var1, expr) => {
-                if let TokenType::Identifier(ref var) = var1.token_type {
-                    match self.make_instruction(expr, vars, memory)? {
-                        Val::Index(index, type_) => {
-                            let size = type_.get_size();
-                            let mem = memory.allocate(size);
-                            self.instructions.push(
-                                Instruction::Copy(Val::Index(index, type_.clone())),
-                                (Some((mem, size)), memory.last_memory_index),
-                            );
-                            vars.insert(var.clone(), Val::Index(mem, type_));
-                            Ok(Val::None)
-                        }
-                        val => {
-                            let v = val.r#type();
-                            let size = val.get_size();
-                            let mem = memory.allocate(v.get_size());
-                            self.instructions.push(
-                                Instruction::Copy(val),
-                                (Some((mem, size)), memory.last_memory_index),
-                            );
-                            vars.insert(var.clone(), Val::Index(mem, v));
-                            Ok(Val::None)
-                        }
-                    }
-                } else {
-                    unreachable!();
-                }
-            }
-
-            Node::VarAssign(var1, expr, _) => {
+            Node::VarAssign(var1, expr, _) | Node::StaticVar(var1, expr) => {
                 if let TokenType::Identifier(ref var) = var1.token_type {
                     match self.make_instruction(expr, vars, memory)? {
                         Val::Index(index, type_ @ ValType::Ref(_)) => {
@@ -800,10 +770,6 @@ impl CodeGenerator {
                 Ok(Val::Index(mem, t))
             }
 
-            Node::Struct(_, _, _) => todo!(),
-
-            Node::StructConstructor(_, _, _) => todo!(),
-
             Node::String(t) => {
                 let s = if let TokenType::String(ref s) = t.token_type {
                     s
@@ -834,8 +800,6 @@ impl CodeGenerator {
                 ))
             }
 
-            Node::AttrAccess(_, _, _) => todo!(),
-
             Node::Converted(n, t) => {
                 let val = self.make_instruction(n, vars, memory)?;
                 let t = ValType::from_parse_type(t);
@@ -862,6 +826,12 @@ impl CodeGenerator {
                     _ => unreachable!("{val} {t}"),
                 })
             }
+        
+            Node::AttrAccess(_, _, _) => todo!(),
+        
+            Node::Struct(_, _, _) => todo!(),
+
+            Node::StructConstructor(_, _, _) => todo!(),
         }
     }
 }

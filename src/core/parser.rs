@@ -587,45 +587,6 @@ impl Parser {
         }
     }
 
-    fn expression(&mut self, scope: &mut Scope) -> ParseResult {
-        self.access_attr(scope)
-    }
-
-    fn access_attr(&mut self, scope: &mut Scope) -> ParseResult {
-        let mut left = self.binary_op(
-            Self::comparison,
-            vec![TokenType::LAnd, TokenType::LOr, TokenType::LXor],
-            Self::comparison,
-            scope,
-        )?;
-        while self.current_token.token_type == TokenType::Dot {
-            self.advance();
-            if !matches!(self.current_token.token_type, TokenType::Identifier(_)) {
-                return Err(Error::new(
-                    ErrorType::SyntaxError,
-                    self.current_token.position.clone(),
-                    "Expected identifier".to_string(),
-                ));
-            }
-            let t = if let Some(t) = left.get_type().has_attr(&self.current_token) {
-                t
-            } else {
-                return Err(Error::new(
-                    ErrorType::TypeError,
-                    self.current_token.position.clone(),
-                    format!(
-                        "Cannot access attribute {} on type {}",
-                        self.current_token,
-                        left.get_type()
-                    ),
-                ));
-            };
-            left = Node::AttrAccess(Box::new(left), self.current_token.clone(), t);
-            self.advance();
-        }
-        Ok(left)
-    }
-
     fn make_type(&mut self) -> Result<Type, Error> {
         match self.current_token.token_type {
             TokenType::Keyword(ref keyword) => match keyword.as_ref() {
@@ -777,7 +738,7 @@ impl Parser {
             match self.current_token.token_type {
                 TokenType::Assign => {
                     self.advance();
-                    Ok(Node::StaticVar(token, Box::new(self.const_atom(scope)?)))
+                    Ok(Node::StaticVar(token, Box::new(self.const_expression(scope)?)))
                 }
                 _ => Err(Error::new(
                     ErrorType::SyntaxError,
@@ -792,6 +753,45 @@ impl Parser {
                 format!("Expected an identifier, found {}", self.current_token),
             ))
         }
+    }
+
+    fn access_attr(&mut self, scope: &mut Scope) -> ParseResult {
+        let mut left = self.binary_op(
+            Self::comparison,
+            vec![TokenType::LAnd, TokenType::LOr, TokenType::LXor],
+            Self::comparison,
+            scope,
+        )?;
+        while self.current_token.token_type == TokenType::Dot {
+            self.advance();
+            if !matches!(self.current_token.token_type, TokenType::Identifier(_)) {
+                return Err(Error::new(
+                    ErrorType::SyntaxError,
+                    self.current_token.position.clone(),
+                    "Expected identifier".to_string(),
+                ));
+            }
+            let t = if let Some(t) = left.get_type().has_attr(&self.current_token) {
+                t
+            } else {
+                return Err(Error::new(
+                    ErrorType::TypeError,
+                    self.current_token.position.clone(),
+                    format!(
+                        "Cannot access attribute {} on type {}",
+                        self.current_token,
+                        left.get_type()
+                    ),
+                ));
+            };
+            left = Node::AttrAccess(Box::new(left), self.current_token.clone(), t);
+            self.advance();
+        }
+        Ok(left)
+    }
+
+    fn expression(&mut self, scope: &mut Scope) -> ParseResult {
+        self.access_attr(scope)
     }
 
     fn comparison(&mut self, scope: &mut Scope) -> ParseResult {
@@ -886,6 +886,107 @@ impl Parser {
         self.binary_op(Self::convert, vec![TokenType::Pow], Self::convert, scope)
     }
 
+    fn const_expression(&mut self, scope: &mut Scope) -> ParseResult {
+        self.binary_op(
+            Self::const_comparison,
+            vec![TokenType::LAnd, TokenType::LOr, TokenType::LXor],
+            Self::const_comparison,
+            scope,
+        )
+    }
+
+    fn const_comparison(&mut self, scope: &mut Scope) -> ParseResult {
+        if let TokenType::LNot = self.current_token.token_type {
+            let token = self.current_token.clone();
+            self.advance();
+            let node = self.comparison(scope)?;
+            let t = match node.get_type().get_result_type_unary(&token) {
+                Some(t) => t,
+                None => {
+                    return Err(Error::new(
+                        ErrorType::SyntaxError,
+                        self.current_token.position.clone(),
+                        format!("Expected a boolean, found {}", node.get_type()),
+                    ))
+                }
+            };
+            Ok(Node::UnaryOp(token, Box::new(node), t))
+        } else {
+            self.binary_op(
+                Self::const_bitwise,
+                vec![
+                    TokenType::Eq,
+                    TokenType::Neq,
+                    TokenType::Lt,
+                    TokenType::Gt,
+                    TokenType::Le,
+                    TokenType::Ge,
+                ],
+                Self::const_bitwise,
+                scope,
+            )
+        }
+    }
+
+    fn const_bitwise(&mut self, scope: &mut Scope) -> ParseResult {
+        self.binary_op(
+            Self::const_arithmetic,
+            vec![
+                TokenType::BAnd,
+                TokenType::BOr,
+                TokenType::BXor,
+                TokenType::Shl,
+                TokenType::Shr,
+            ],
+            Self::const_arithmetic,
+            scope,
+        )
+    }
+
+    fn const_arithmetic(&mut self, scope: &mut Scope) -> ParseResult {
+        self.binary_op(
+            Self::const_term,
+            vec![TokenType::Add, TokenType::Sub],
+            Self::const_term,
+            scope,
+        )
+    }
+
+    fn const_term(&mut self, scope: &mut Scope) -> ParseResult {
+        self.binary_op(
+            Self::const_factor,
+            vec![TokenType::Mul, TokenType::Div, TokenType::Mod],
+            Self::const_factor,
+            scope,
+        )
+    }
+
+    fn const_factor(&mut self, scope: &mut Scope) -> ParseResult {
+        let token = self.current_token.clone();
+        match token.token_type {
+            TokenType::Sub | TokenType::BNot | TokenType::Inc | TokenType::Dec => {
+                self.advance();
+                let node = self.factor(scope)?;
+                let t = match node.get_type().get_result_type_unary(&token) {
+                    Some(t) => t,
+                    None => {
+                        return Err(Error::new(
+                            ErrorType::TypeError,
+                            self.current_token.position.clone(),
+                            format!("Expected a number, found {}", node.get_type()),
+                        ))
+                    }
+                };
+                Ok(Node::UnaryOp(token, Box::new(node), t))
+            }
+            _ => self.const_power(scope),
+        }
+    }
+
+    fn const_power(&mut self, scope: &mut Scope) -> ParseResult {
+        self.binary_op(Self::const_atom, vec![TokenType::Pow], Self::const_atom, scope)
+    }
+
     fn convert(&mut self, scope: &mut Scope) -> ParseResult {
         let mut left = self.call(scope)?;
         let mut token_type = self.current_token.token_type.clone();
@@ -960,6 +1061,8 @@ impl Parser {
                             break;
                         }
                         self.advance();
+                    } else if self.current_token.token_type == TokenType::RCurly {
+                        break;
                     } else {
                         return Err(Error::new(
                             ErrorType::SyntaxError,
