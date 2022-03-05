@@ -319,7 +319,11 @@ impl Scope {
             Node::Call(token1, args1, ..) => {
                 if let Some(a) = self.defined.iter().find(|a| {
                     if let VarType::Function(args, _, name) = a {
-                        name == token1 && args1.len() == args.len()
+                        name == token1
+                            && args1
+                                .iter()
+                                .zip(args.iter())
+                                .all(|(a, p)| a.get_type() == *p)
                     } else {
                         false
                     }
@@ -329,11 +333,13 @@ impl Scope {
                     } else {
                         unreachable!();
                     }
-                } else if let Some(a) = self
-                    .unresolved_functions
-                    .iter()
-                    .find(|a| a.2 == *token1 && args1.len() == a.0.len())
-                {
+                } else if let Some(a) = self.unresolved_functions.iter().find(|a| {
+                    a.2 == *token1
+                        && args1
+                            .iter()
+                            .zip(a.0.iter())
+                            .all(|(a, p)| a.get_type() == *p)
+                }) {
                     Ok(a.1.clone())
                 } else {
                     if let Some(ref mut parent) = self.parent {

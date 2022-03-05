@@ -738,7 +738,10 @@ impl Parser {
             match self.current_token.token_type {
                 TokenType::Assign => {
                     self.advance();
-                    Ok(Node::StaticVar(token, Box::new(self.const_expression(scope)?)))
+                    Ok(Node::StaticVar(
+                        token,
+                        Box::new(self.const_expression(scope)?),
+                    ))
                 }
                 _ => Err(Error::new(
                     ErrorType::SyntaxError,
@@ -984,7 +987,12 @@ impl Parser {
     }
 
     fn const_power(&mut self, scope: &mut Scope) -> ParseResult {
-        self.binary_op(Self::const_atom, vec![TokenType::Pow], Self::const_atom, scope)
+        self.binary_op(
+            Self::const_atom,
+            vec![TokenType::Pow],
+            Self::const_atom,
+            scope,
+        )
     }
 
     fn convert(&mut self, scope: &mut Scope) -> ParseResult {
@@ -1914,7 +1922,13 @@ fn insert_function(functions: &[Node], node: &mut Node) {
     match node {
         Node::Call(name, args, ..) => {
             let func = match functions.iter().find(|f| match f {
-                Node::FuncDef(n, a, ..) => n == name && a.len() == args.len(),
+                Node::FuncDef(n, a, ..) => {
+                    n == name
+                        && args
+                            .iter()
+                            .zip(a.iter())
+                            .all(|(a, (_, p))| a.get_type() == *p)
+                }
                 _ => false,
             }) {
                 Some(f) => f,

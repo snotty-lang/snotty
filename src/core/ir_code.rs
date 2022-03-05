@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::utils::{
-    Error, ErrorType, Instruction, Instructions, Memory, Node, TokenType, Val, ValNumber,
-    ValType, POINTER_SIZE,
+    Error, ErrorType, Instruction, Instructions, Memory, Node, TokenType, Val, ValNumber, ValType,
+    POINTER_SIZE,
 };
 
 /// Generates the Intermediate 3-address code from the AST
@@ -826,9 +826,9 @@ impl CodeGenerator {
                     _ => unreachable!("{val} {t}"),
                 })
             }
-        
+
             Node::AttrAccess(_, _, _) => todo!(),
-        
+
             Node::Struct(_, _, _) => todo!(),
 
             Node::StructConstructor(_, _, _) => todo!(),
