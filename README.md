@@ -15,4 +15,3 @@ ezout x
 ## FIXME
 * position errors (Last line errors during lexing, position passed to errors)
 * function expanding error
-* static variables with same name

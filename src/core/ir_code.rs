@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::utils::{
-    Error, ErrorType, Instruction, Instructions, Memory, Node, TokenType, Val, ValNumber, ValType,
-    POINTER_SIZE,
+    Error, ErrorType, Instruction, Instructions, Memory, Node, TokenType, Val, ValNumber,
+    ValType, POINTER_SIZE,
 };
 
 /// Generates the Intermediate 3-address code from the AST
@@ -122,7 +122,37 @@ impl CodeGenerator {
                 Ok(Val::Index(mem, t))
             }
 
-            Node::VarAssign(var1, expr, _) | Node::StaticVar(var1, expr) => {
+            Node::StaticVar(var1, expr) => {
+                if let TokenType::Identifier(ref var) = var1.token_type {
+                    match self.make_instruction(expr, vars, memory)? {
+                        Val::Index(index, type_) => {
+                            let size = type_.get_size();
+                            let mem = memory.allocate(size);
+                            self.instructions.push(
+                                Instruction::Copy(Val::Index(index, type_.clone())),
+                                (Some((mem, size)), memory.last_memory_index),
+                            );
+                            vars.insert(var.clone(), Val::Index(mem, type_));
+                            Ok(Val::None)
+                        }
+                        val => {
+                            let v = val.r#type();
+                            let size = val.get_size();
+                            let mem = memory.allocate(v.get_size());
+                            self.instructions.push(
+                                Instruction::Copy(val),
+                                (Some((mem, size)), memory.last_memory_index),
+                            );
+                            vars.insert(var.clone(), Val::Index(mem, v));
+                            Ok(Val::None)
+                        }
+                    }
+                } else {
+                    unreachable!();
+                }
+            }
+
+            Node::VarAssign(var1, expr, _) => {
                 if let TokenType::Identifier(ref var) = var1.token_type {
                     match self.make_instruction(expr, vars, memory)? {
                         Val::Index(index, type_ @ ValType::Ref(_)) => {
@@ -616,7 +646,7 @@ impl CodeGenerator {
             }
 
             Node::While(cond1, body1, _) => {
-                let cond = self.make_instruction(cond1, vars, memory)?;
+                let mut cond = self.make_instruction(cond1, vars, memory)?;
                 if cond.r#type() != ValType::Boolean {
                     return Err(Error::new(
                         ErrorType::TypeError,
@@ -626,6 +656,16 @@ impl CodeGenerator {
                             cond.r#type()
                         ),
                     ));
+                }
+
+                if let Val::Bool(_) = cond {
+                    let size = cond.get_size();
+                    let mem = memory.allocate(size);
+                    self.instructions.push(
+                        Instruction::Copy(cond),
+                        (Some((mem, size)), memory.last_memory_index),
+                    );
+                    cond = Val::Index(mem, ValType::Boolean);
                 }
 
                 self.instructions.push(
@@ -672,7 +712,7 @@ impl CodeGenerator {
                     ));
                 }
 
-                let cond = self.make_instruction(cond1, vars, memory)?;
+                let mut cond = self.make_instruction(cond1, vars, memory)?;
                 if cond.r#type() != ValType::Boolean {
                     return Err(Error::new(
                         ErrorType::TypeError,
@@ -682,6 +722,16 @@ impl CodeGenerator {
                             cond.r#type()
                         ),
                     ));
+                }
+
+                if let Val::Bool(_) = cond {
+                    let size = cond.get_size();
+                    let mem = memory.allocate(size);
+                    self.instructions.push(
+                        Instruction::Copy(cond),
+                        (Some((mem, size)), memory.last_memory_index),
+                    );
+                    cond = Val::Index(mem, ValType::Boolean);
                 }
 
                 self.instructions.push(
@@ -816,13 +866,16 @@ impl CodeGenerator {
 }
 
 /// Generates and returns the Intermediate Representation of the AST
-pub fn generate_code(ast: Node) -> Result<Instructions, Error> {
+pub fn generate_code(ast: Node, statics: Vec<Node>) -> Result<Instructions, Error> {
     let mut obj = CodeGenerator {
         instructions: Instructions::new(),
         ret: None,
     };
     let mut vars = HashMap::new();
     let mut memory = Memory::new();
+    for node in statics {
+        obj.make_instruction(&node, &mut vars, &mut memory)?;
+    }
     obj.make_instruction(&ast, &mut vars, &mut memory)?;
     Ok(obj.instructions)
 }

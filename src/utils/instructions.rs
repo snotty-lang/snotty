@@ -180,7 +180,7 @@ impl Val {
             Val::Index(_, t) => t.clone(),
             Val::Pointer(_, t) => ValType::Pointer(Box::new(t.clone())),
             Val::None => ValType::None,
-            Val::Ref(_, t) => t.clone(),
+            Val::Ref(_, t) => ValType::Ref(Box::new(t.clone())),
         }
     }
 

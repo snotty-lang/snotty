@@ -446,7 +446,7 @@ pub fn transpile(code: &Instructions) -> String {
             Instruction::BXor(_, _) => todo!(),
             _ => unreachable!(),
         }
-        // bf_code.push_str("|\n");
+        bf_code.push_str("|\n");
     }
     bf_code
 }

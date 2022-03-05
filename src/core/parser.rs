@@ -1507,7 +1507,7 @@ impl Parser {
 /// Returns the root node of the AST.
 /// # Errors
 /// If the tokens cannot be parsed into an AST, an error is returned.
-pub fn parse(tokens: Vec<Token>) -> ParseResult {
+pub fn parse(tokens: Vec<Token>) -> Result<(Node, Vec<Node>), Error> {
     let token = tokens[0].clone();
     let mut global = Scope::new(None);
     let mut obj = Parser {
@@ -1525,10 +1525,10 @@ pub fn parse(tokens: Vec<Token>) -> ParseResult {
     if let Some(err) = check_recursive(&ast, &mut vec![]) {
         return Err(err);
     }
-    global_static(&mut ast);
+    let statics = global_static(&mut ast);
     remove_signs(&mut ast);
     expand_inline(&mut ast, vec![]);
-    Ok(ast)
+    Ok((ast, statics))
 }
 
 fn check_functions(scope: &mut Scope) -> Option<(Token, u32)> {
@@ -2073,18 +2073,14 @@ fn check_recursive(node: &Node, stack: &mut Vec<Token>) -> Option<Error> {
     }
 }
 
-fn global_static(ast: &mut Node) {
+fn global_static(ast: &mut Node) -> Vec<Node> {
     let vars = find_static(ast)
         .unwrap_or_default()
         .iter()
         .map(|n| (*n).clone())
         .collect::<Vec<_>>();
     remove_static(ast);
-    if let Node::Statements(ast, ..) = ast {
-        for var in vars {
-            ast.insert(0, var);
-        }
-    }
+    vars
 }
 
 fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
