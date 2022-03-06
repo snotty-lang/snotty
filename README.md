@@ -13,7 +13,6 @@ ezout x
 * Pointers + Arrays + Strings + Dynamic Memory
 
 ## FIXME
-* function expanding error
 * position errors (Last line errors during lexing, position passed to errors)
 
 ## TODO-NON-CODE

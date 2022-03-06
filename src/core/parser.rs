@@ -1874,16 +1874,18 @@ fn check_return(node: &Node) -> Option<Position> {
 /// Expands inline functions
 fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
     if let Some(mut functions2) = find_functions(ast) {
+        let len = functions.len();
         functions.extend(functions2.iter().map(|f| (*f).clone()));
-        for f in functions2.iter_mut() {
+        for (i, f) in functions2.iter_mut().enumerate() {
             if let Node::FuncDef(_, _, f, ..) = f {
                 expand_inline(f, functions.clone());
             }
+            functions[i + len] = (*f).clone();
         }
         remove_inline(ast);
     }
     insert_function(&functions, ast);
-    // println!("{ast}\n");
+    // println!("{ast}\n{:?}\n", functions.iter().map(|d| d.to_string()).collect::<Vec<_>>());
 }
 
 fn remove_inline(node: &mut Node) {
