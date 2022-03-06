@@ -21,8 +21,24 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                         ))
                     }
                     Some(t) => match t.token_type {
-                        TokenType::Identifier(file) | TokenType::String(file) => {
+                        TokenType::String(file) => {
                             match fs::read_to_string(&file) {
+                                Ok(contents) => {
+                                    let mut new_tokens = lexer::lex(&contents, Rc::new(file))?;
+                                    new_tokens.pop().unwrap();
+                                    tokens.splice(i..=i + 1, new_tokens);
+                                }
+                                Err(e) => {
+                                    return Err(Error::new(
+                                        ErrorType::FileNotFound,
+                                        t.position.clone(),
+                                        format!("Could not find file `{}` ({})", file, e),
+                                    ))
+                                }
+                            }
+                        }
+                        TokenType::Identifier(file) => {
+                            match fs::read_to_string(&format!("{}.ez", file)) {
                                 Ok(contents) => {
                                     let mut new_tokens = lexer::lex(&contents, Rc::new(file))?;
                                     new_tokens.pop().unwrap();
@@ -65,12 +81,16 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                                 "Expected replace element `replace`".to_owned(),
                             ))
                         }
-                        Some(t) => t,
+                        Some(t) => if let TokenType::String(s) = t.token_type {
+                            lexer::lex(&s, Rc::new(format!("{}/replace  at {}:{}", t.position.file, t.position.line_start, t.position.start)))?
+                        } else {
+                            vec![t]
+                        },
                     };
                     tokens.drain(i..=i + 2);
-                    for token in tokens.iter_mut() {
-                        if *token == find {
-                            *token = replace.to_owned();
+                    for i in 0..tokens.len() {
+                        if tokens[i] == find {
+                            tokens.splice(i..=i, replace.clone());
                         }
                     }
                 }
@@ -83,7 +103,7 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                         ))
                     }
                     Some(t) => match t.token_type {
-                        TokenType::Identifier(ident) | TokenType::String(ident) => {
+                        TokenType::Identifier(ident) => {
                             declared.insert(ident);
                             tokens.drain(i..=i + 1);
                         }
@@ -105,7 +125,7 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                         ))
                     }
                     Some(t) => match t.token_type {
-                        TokenType::Identifier(ref ident) | TokenType::String(ref ident) => {
+                        TokenType::Identifier(ref ident) => {
                             if declared.contains(ident) {
                                 ifs.push(None);
                             } else {

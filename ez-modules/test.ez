@@ -1,1 +1,4 @@
 !use "ez-modules/iter.ez"
+!replace CG "ezout 76"
+
+CG
