@@ -822,6 +822,7 @@ impl CodeGenerator {
                         ValType::Number => Val::Num((n as i16 - 128) as i8),
                         _ => unreachable!(),
                     },
+                    Val::Ref(n, t) => Val::Pointer(n, t),
                     Val::Index(n, _) => Val::Index(n, t),
                     _ => unreachable!("{val} {t}"),
                 })
