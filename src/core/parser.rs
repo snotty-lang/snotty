@@ -1659,7 +1659,6 @@ pub fn parse(tokens: Vec<Token>) -> Result<(Node, Vec<Node>), Error> {
     if let Some(err) = check_recursive(&ast, &mut vec![]) {
         return Err(err);
     }
-    println!("Parsed");
     if let Some(err) = check_numbers(&ast) {
         return Err(err);
     }
