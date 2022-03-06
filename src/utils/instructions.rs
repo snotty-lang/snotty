@@ -300,7 +300,6 @@ impl ValType {
             Type::Boolean => Self::Boolean,
             Type::Ref(t) => Self::Ref(Box::new(Self::from_parse_type(t))),
             Type::None => Self::None,
-            Type::Array(t, _) => Self::Pointer(Box::new(Self::from_parse_type(t))),
             Type::Struct(..) => todo!(),
             Type::Pointer(t) => Self::Pointer(Box::new(Self::from_parse_type(t))),
         }

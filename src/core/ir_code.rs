@@ -407,8 +407,6 @@ impl CodeGenerator {
 
             Node::None(_) => Ok(Val::None),
 
-            Node::Call(..) | Node::FuncDef(..) | Node::FunctionSign(..) => unreachable!(),
-
             Node::Index(arr1, index1, ..) => {
                 let arr = if let TokenType::Identifier(ref var) = arr1.token_type {
                     vars.get(var).cloned().unwrap()
@@ -828,6 +826,14 @@ impl CodeGenerator {
                 })
             }
 
+            Node::StaticVar(var1, expr) => {
+                let t = ValType::from_parse_type(&expr.get_type());
+                if let TokenType::Identifier(ref var) = var1.token_type {
+                    vars.insert(var.clone(), Val::Index(memory.get_static(t.get_size()), t));
+                }
+                Ok(Val::None)
+            }
+
             Node::AttrAccess(_, _, _) => todo!(),
 
             Node::Struct(_, _, _) => todo!(),
@@ -836,13 +842,7 @@ impl CodeGenerator {
 
             Node::Pointer(_, _) => todo!(),
 
-            Node::StaticVar(var1, expr) => {
-                let t = ValType::from_parse_type(&expr.get_type());
-                if let TokenType::Identifier(ref var) = var1.token_type {
-                    vars.insert(var.clone(), Val::Index(memory.get_static(t.get_size()), t));
-                }
-                Ok(Val::None)
-            }
+            Node::Call(..) | Node::FuncDef(..) | Node::FunctionSign(..) => unreachable!(),
         }
     }
 

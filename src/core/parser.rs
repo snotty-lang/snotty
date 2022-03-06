@@ -618,39 +618,19 @@ impl Parser {
                     Type::Ref(Box::new(self.make_type()?))
                 })))
             }
+            TokenType::Mul => {
+                self.advance();
+                Ok(Type::Pointer(Box::new(self.make_type()?)))
+            }
+            TokenType::Pow => {
+                self.advance();
+                Ok(Type::Pointer(Box::new({
+                    Type::Pointer(Box::new(self.make_type()?))
+                })))
+            }
             TokenType::Eol => {
                 self.advance();
                 Ok(Type::None)
-            }
-            TokenType::LSquare => {
-                self.advance();
-                let type_ = self.make_type()?;
-                if self.current_token.token_type != TokenType::Eol {
-                    return Err(Error::new(
-                        ErrorType::SyntaxError,
-                        self.current_token.position.clone(),
-                        "Expected ';'".to_string(),
-                    ));
-                }
-                self.advance();
-                if let TokenType::Number(a) = self.current_token.token_type {
-                    self.advance();
-                    if self.current_token.token_type != TokenType::RSquare {
-                        return Err(Error::new(
-                            ErrorType::SyntaxError,
-                            self.current_token.position.clone(),
-                            "Expected ']'".to_string(),
-                        ));
-                    }
-                    self.advance();
-                    Ok(Type::Array(Box::new(type_), a as usize))
-                } else {
-                    Err(Error::new(
-                        ErrorType::SyntaxError,
-                        self.current_token.position.clone(),
-                        "Expected array size".to_string(),
-                    ))
-                }
             }
             _ => Err(Error::new(
                 ErrorType::SyntaxError,

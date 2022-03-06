@@ -9,7 +9,6 @@ pub enum Type {
     None,
     Char,
     Struct(Token),
-    Array(Box<Type>, usize),
     Ref(Box<Type>),
     Pointer(Box<Type>),
 }
@@ -108,7 +107,6 @@ impl Display for Type {
             Type::Boolean => write!(f, "bool"),
             Type::None => write!(f, "()"),
             Type::Char => write!(f, "char"),
-            Type::Array(t, l) => write!(f, "[{}; {}]", t, l),
             Type::Ref(t) => write!(f, "&{}", t),
             Type::Struct(s) => write!(f, "struct {}", s),
             Type::Pointer(t) => write!(f, "*point {}", t),
@@ -259,15 +257,9 @@ impl Node {
     pub fn get_type(&self) -> Type {
         match self {
             Node::StructConstructor(t, ..) => Type::Struct(t.clone()),
-            Node::Array(v, ty, _) => Type::Array(Box::new(ty.clone()), v.len()),
+            Node::Array(_, ty, _) => Type::Pointer(Box::new(ty.clone())),
             Node::Return(a, _) => a.get_type(),
-            Node::String(s) => {
-                if let TokenType::String(ref s) = s.token_type {
-                    Type::Array(Box::new(Type::Char), s.len() + 1)
-                } else {
-                    unreachable!()
-                }
-            }
+            Node::String(_) => Type::Pointer(Box::new(Type::Char)),
             Node::Ref(_, ty, _) => Type::Ref(Box::new(ty.clone())),
             Node::Pointer(n, _) => Type::Pointer(Box::new(n.get_type())),
             Node::Number(_) => Type::Number,

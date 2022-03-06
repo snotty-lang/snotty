@@ -1,4 +1,4 @@
-use super::{Error, ErrorType, Node, Token, TokenType, Type};
+use super::{Error, ErrorType, Node, Token, Type};
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -166,7 +166,7 @@ impl Scope {
                     ));
                 }
             }
-            Node::IndexAssign(token, index, ..) | Node::Index(token, index, ..) => {
+            Node::IndexAssign(token, ..) | Node::Index(token, ..) => {
                 if let Some(t) = self
                     .defined
                     .iter()
@@ -174,24 +174,7 @@ impl Scope {
                     .find(|a| matches!(a, VarType::Variable(_, n) if n == token))
                 {
                     if let VarType::Variable(t, _) = t {
-                        if let Type::Array(_, l) = t {
-                            if let Node::Number(n) = &**index {
-                                let n = if let TokenType::Number(n) = n.token_type {
-                                    n
-                                } else {
-                                    unreachable!();
-                                };
-                                if n as usize >= *l {
-                                    return Err(Error::new(
-                                        ErrorType::IndexOutOfBounds,
-                                        token.position.clone(),
-                                        format!(
-                                            "Length of the array is {}, but the index is {}",
-                                            l, n
-                                        ),
-                                    ));
-                                }
-                            }
+                        if let Type::Pointer(_) = t {
                             Ok(t.clone())
                         } else {
                             Err(Error::new(
@@ -270,21 +253,7 @@ impl Scope {
             .find(|a| matches!(a, VarType::Variable(_, n) if n == token))
         {
             if let VarType::Variable(t, _) = t {
-                if let Type::Array(t, l) = t {
-                    if let Node::Number(n) = index {
-                        let n = if let TokenType::Number(n) = n.token_type {
-                            n
-                        } else {
-                            unreachable!();
-                        };
-                        if n as usize >= *l {
-                            return Err(Error::new(
-                                ErrorType::IndexOutOfBounds,
-                                token.position.clone(),
-                                format!("Length of the array is {}, but the index is {}", l, n),
-                            ));
-                        }
-                    }
+                if let Type::Pointer(t) = t {
                     Ok(*t.clone())
                 } else {
                     Err(Error::new(
