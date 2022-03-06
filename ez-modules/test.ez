@@ -1,7 +1,1 @@
-ezsign b()
-
-ez a() {let a = 8 b()}
-ez c() {let a = 4}
-ez b() {let a = 5 c()}
-
-a()
+!use "ez-modules/iter.ez"

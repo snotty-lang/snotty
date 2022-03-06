@@ -21,8 +21,8 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                         ))
                     }
                     Some(t) => match t.token_type {
-                        TokenType::Identifier(file) => {
-                            match fs::read_to_string(&format!("{}.ez", file)) {
+                        TokenType::Identifier(file) | TokenType::String(file) => {
+                            match fs::read_to_string(&file) {
                                 Ok(contents) => {
                                     let mut new_tokens = lexer::lex(&contents, Rc::new(file))?;
                                     new_tokens.pop().unwrap();
@@ -55,16 +55,7 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                                 "Expected find element `replace`".to_owned(),
                             ))
                         }
-                        Some(t) => match t.token_type {
-                            TokenType::Identifier(find) => find,
-                            _ => {
-                                return Err(Error::new(
-                                    ErrorType::SyntaxError,
-                                    t.position,
-                                    "Expected find element `replace`".to_owned(),
-                                ))
-                            }
-                        },
+                        Some(t) => t,
                     };
                     let replace = match tokens.get(i + 2).cloned() {
                         None => {
@@ -74,23 +65,12 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                                 "Expected replace element `replace`".to_owned(),
                             ))
                         }
-                        Some(t) => match t.token_type {
-                            TokenType::Identifier(replace) => replace,
-                            _ => {
-                                return Err(Error::new(
-                                    ErrorType::SyntaxError,
-                                    t.position,
-                                    "Expected replace element `replace`".to_owned(),
-                                ))
-                            }
-                        },
+                        Some(t) => t,
                     };
                     tokens.drain(i..=i + 2);
                     for token in tokens.iter_mut() {
-                        if let TokenType::Identifier(ref mut id) = token.token_type {
-                            if *id == find {
-                                *id = replace.to_owned();
-                            }
+                        if *token == find {
+                            *token = replace.to_owned();
                         }
                     }
                 }
@@ -103,7 +83,7 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                         ))
                     }
                     Some(t) => match t.token_type {
-                        TokenType::Identifier(ident) => {
+                        TokenType::Identifier(ident) | TokenType::String(ident) => {
                             declared.insert(ident);
                             tokens.drain(i..=i + 1);
                         }
@@ -125,7 +105,7 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                         ))
                     }
                     Some(t) => match t.token_type {
-                        TokenType::Identifier(ref ident) => {
+                        TokenType::Identifier(ref ident) | TokenType::String(ref ident) => {
                             if declared.contains(ident) {
                                 ifs.push(None);
                             } else {
