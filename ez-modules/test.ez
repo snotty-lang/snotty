@@ -1,10 +1,1 @@
-struct Str {
-    ptr : &char,
-    len: int
-}
-
-ez new(ptr: &char, len: int) -> Str {
-    Str { ptr: ptr, len: len }
-}
-
-let s = new("hello", 5);
+-0

@@ -1659,6 +1659,10 @@ pub fn parse(tokens: Vec<Token>) -> Result<(Node, Vec<Node>), Error> {
     if let Some(err) = check_recursive(&ast, &mut vec![]) {
         return Err(err);
     }
+    println!("Parsed");
+    if let Some(err) = check_numbers(&ast) {
+        return Err(err);
+    }
     let statics = get_static_types(&mut ast);
     remove_signs(&mut ast);
     expand_inline(&mut ast, vec![]);
@@ -1721,135 +1725,6 @@ fn check_undefined(global: &mut Scope) -> Option<Error> {
 
 /// Checks for invalid placement and use of keywords
 fn keyword_checks(ast: &Node) -> Option<Error> {
-    fn check_return(node: &Node) -> Option<Position> {
-        match node {
-            Node::BinaryOp(_, n1, n2, _)
-            | Node::IndexAssign(_, n1, n2)
-            | Node::While(n1, n2, _)
-            | Node::DerefAssign(n1, n2, _) => {
-                let n1 = check_return(n1);
-                if n1.is_some() {
-                    return n1;
-                }
-                let n2 = check_return(n2);
-                if n2.is_some() {
-                    return n2;
-                }
-                None
-            }
-            Node::For(n1, n2, n3, n4, _) => {
-                let n1 = check_return(n1);
-                if n1.is_some() {
-                    return n1;
-                }
-                let n2 = check_return(n2);
-                if n2.is_some() {
-                    return n2;
-                }
-                let n3 = check_return(n3);
-                if n3.is_some() {
-                    return n3;
-                }
-                let n4 = check_return(n4);
-                if n4.is_some() {
-                    return n4;
-                }
-                None
-            }
-            Node::Struct(..) => None,
-            Node::UnaryOp(_, n1, _) => check_return(n1),
-            Node::Converted(n, _) => check_return(n),
-            Node::VarAssign(_, n1, _) => check_return(n1),
-            Node::AttrAccess(n, ..) => check_return(n),
-            Node::StaticVar(_, n1) => check_return(n1),
-            Node::VarAccess(..) => None,
-            Node::VarReassign(_, n1) => check_return(n1),
-            Node::Statements(nodes, ..) => {
-                let mut ret = None;
-                for node in nodes {
-                    let n = check_return(node);
-                    if n.is_some() {
-                        ret = n;
-                        break;
-                    }
-                }
-                ret
-            }
-            Node::StructConstructor(_, nodes, _) => {
-                let mut ret = None;
-                for (_, node) in nodes {
-                    let n = check_return(node);
-                    if n.is_some() {
-                        ret = n;
-                        break;
-                    }
-                }
-                ret
-            }
-            Node::Ternary(n1, n2, n3, ..) => {
-                let n1 = check_return(n1);
-                if n1.is_some() {
-                    return n1;
-                }
-                let n2 = check_return(n2);
-                if n2.is_some() {
-                    return n2;
-                }
-                let n3 = check_return(n3);
-                if n3.is_some() {
-                    return n3;
-                }
-                None
-            }
-            Node::If(n1, n2, n3, _) => {
-                let n1 = check_return(n1);
-                if n1.is_some() {
-                    return n1;
-                }
-                let n2 = check_return(n2);
-                if n2.is_some() {
-                    return n2;
-                }
-                if let Some(n3) = n3 {
-                    let n3 = check_return(n3);
-                    if n3.is_some() {
-                        return n3;
-                    }
-                }
-                None
-            }
-            Node::Call(_, n1, ..) => {
-                for i in n1.iter().map(check_return) {
-                    if i.is_some() {
-                        return i;
-                    }
-                }
-                None
-            }
-            Node::Index(_, n1, ..) => check_return(n1),
-            Node::FuncDef(..) => None,
-            Node::Return(_, pos) => Some(pos.clone()),
-            Node::Ref(n1, ..) | Node::Deref(n1, ..) | Node::Pointer(n1, ..) => check_return(n1),
-            Node::Print(n1, _) | Node::Ascii(n1, _) => {
-                for n in n1 {
-                    if let Some(t) = check_return(n) {
-                        return Some(t);
-                    }
-                }
-                None
-            }
-            Node::String(_) => None,
-            Node::Number(_) => None,
-            Node::Boolean(_) => None,
-            Node::Input(..) => None,
-            Node::FunctionSign(..) => None,
-            Node::None(_) => None,
-            Node::Char(..) => None,
-            Node::Array(..) => None,
-            Node::Expanded(..) => unreachable!(),
-            // _ => None,
-        }
-    }
     match ast {
         Node::Statements(nodes, ..) => {
             for node in nodes.iter() {
@@ -1864,6 +1739,136 @@ fn keyword_checks(ast: &Node) -> Option<Error> {
             None
         }
         _ => unreachable!(),
+    }
+}
+
+fn check_return(node: &Node) -> Option<Position> {
+    match node {
+        Node::BinaryOp(_, n1, n2, _)
+        | Node::IndexAssign(_, n1, n2)
+        | Node::While(n1, n2, _)
+        | Node::DerefAssign(n1, n2, _) => {
+            let n1 = check_return(n1);
+            if n1.is_some() {
+                return n1;
+            }
+            let n2 = check_return(n2);
+            if n2.is_some() {
+                return n2;
+            }
+            None
+        }
+        Node::For(n1, n2, n3, n4, _) => {
+            let n1 = check_return(n1);
+            if n1.is_some() {
+                return n1;
+            }
+            let n2 = check_return(n2);
+            if n2.is_some() {
+                return n2;
+            }
+            let n3 = check_return(n3);
+            if n3.is_some() {
+                return n3;
+            }
+            let n4 = check_return(n4);
+            if n4.is_some() {
+                return n4;
+            }
+            None
+        }
+        Node::Struct(..) => None,
+        Node::UnaryOp(_, n1, _) => check_return(n1),
+        Node::Converted(n, _) => check_return(n),
+        Node::VarAssign(_, n1, _) => check_return(n1),
+        Node::AttrAccess(n, ..) => check_return(n),
+        Node::StaticVar(_, n1) => check_return(n1),
+        Node::VarAccess(..) => None,
+        Node::VarReassign(_, n1) => check_return(n1),
+        Node::Statements(nodes, ..) => {
+            let mut ret = None;
+            for node in nodes {
+                let n = check_return(node);
+                if n.is_some() {
+                    ret = n;
+                    break;
+                }
+            }
+            ret
+        }
+        Node::StructConstructor(_, nodes, _) => {
+            let mut ret = None;
+            for (_, node) in nodes {
+                let n = check_return(node);
+                if n.is_some() {
+                    ret = n;
+                    break;
+                }
+            }
+            ret
+        }
+        Node::Ternary(n1, n2, n3, ..) => {
+            let n1 = check_return(n1);
+            if n1.is_some() {
+                return n1;
+            }
+            let n2 = check_return(n2);
+            if n2.is_some() {
+                return n2;
+            }
+            let n3 = check_return(n3);
+            if n3.is_some() {
+                return n3;
+            }
+            None
+        }
+        Node::If(n1, n2, n3, _) => {
+            let n1 = check_return(n1);
+            if n1.is_some() {
+                return n1;
+            }
+            let n2 = check_return(n2);
+            if n2.is_some() {
+                return n2;
+            }
+            if let Some(n3) = n3 {
+                let n3 = check_return(n3);
+                if n3.is_some() {
+                    return n3;
+                }
+            }
+            None
+        }
+        Node::Call(_, n1, ..) => {
+            for i in n1.iter().map(check_return) {
+                if i.is_some() {
+                    return i;
+                }
+            }
+            None
+        }
+        Node::Index(_, n1, ..) => check_return(n1),
+        Node::FuncDef(..) => None,
+        Node::Return(_, pos) => Some(pos.clone()),
+        Node::Ref(n1, ..) | Node::Deref(n1, ..) | Node::Pointer(n1, ..) => check_return(n1),
+        Node::Print(n1, _) | Node::Ascii(n1, _) => {
+            for n in n1 {
+                if let Some(t) = check_return(n) {
+                    return Some(t);
+                }
+            }
+            None
+        }
+        Node::String(_) => None,
+        Node::Number(_) => None,
+        Node::Boolean(_) => None,
+        Node::Input(..) => None,
+        Node::FunctionSign(..) => None,
+        Node::None(_) => None,
+        Node::Char(..) => None,
+        Node::Array(..) => None,
+        Node::Expanded(..) => unreachable!(),
+        // _ => None,
     }
 }
 
@@ -2365,5 +2370,155 @@ fn remove_signs(node: &mut Node) {
         }
         Node::Expanded(_, _) => unreachable!(),
         Node::FunctionSign(..) => *node = Node::None(node.position()),
+    }
+}
+
+/// Checks for Numbers above the i8 limit
+fn check_numbers(node: &Node) -> Option<Error> {
+    match node {
+        Node::BinaryOp(_, n1, n2, _)
+        | Node::IndexAssign(_, n1, n2)
+        | Node::While(n1, n2, _)
+        | Node::DerefAssign(n1, n2, _) => {
+            let n1 = check_numbers(n1);
+            if n1.is_some() {
+                return n1;
+            }
+            let n2 = check_numbers(n2);
+            if n2.is_some() {
+                return n2;
+            }
+            None
+        }
+        Node::For(n1, n2, n3, n4, _) => {
+            let n1 = check_numbers(n1);
+            if n1.is_some() {
+                return n1;
+            }
+            let n2 = check_numbers(n2);
+            if n2.is_some() {
+                return n2;
+            }
+            let n3 = check_numbers(n3);
+            if n3.is_some() {
+                return n3;
+            }
+            let n4 = check_numbers(n4);
+            if n4.is_some() {
+                return n4;
+            }
+            None
+        }
+        Node::Struct(..) => None,
+        Node::UnaryOp(op, expr, _)
+            if op.token_type == TokenType::Sub
+                && matches!(
+                    **expr,
+                    Node::Number(Token {
+                        token_type: TokenType::Number(0..=256),
+                        ..
+                    })
+                ) =>
+        {
+            None
+        }
+        Node::UnaryOp(_, n1, _) => check_numbers(n1),
+        Node::Converted(n, _) => check_numbers(n),
+        Node::VarAssign(_, n1, _) => check_numbers(n1),
+        Node::AttrAccess(n, ..) => check_numbers(n),
+        Node::StaticVar(_, n1) => check_numbers(n1),
+        Node::VarAccess(..) => None,
+        Node::VarReassign(_, n1) => check_numbers(n1),
+        Node::Statements(nodes, ..) => {
+            let mut ret = None;
+            for node in nodes {
+                let n = check_numbers(node);
+                if n.is_some() {
+                    ret = n;
+                    break;
+                }
+            }
+            ret
+        }
+        Node::StructConstructor(_, nodes, _) => {
+            let mut ret = None;
+            for (_, node) in nodes {
+                let n = check_numbers(node);
+                if n.is_some() {
+                    ret = n;
+                    break;
+                }
+            }
+            ret
+        }
+        Node::Ternary(n1, n2, n3, ..) => {
+            let n1 = check_numbers(n1);
+            if n1.is_some() {
+                return n1;
+            }
+            let n2 = check_numbers(n2);
+            if n2.is_some() {
+                return n2;
+            }
+            let n3 = check_numbers(n3);
+            if n3.is_some() {
+                return n3;
+            }
+            None
+        }
+        Node::If(n1, n2, n3, _) => {
+            let n1 = check_numbers(n1);
+            if n1.is_some() {
+                return n1;
+            }
+            let n2 = check_numbers(n2);
+            if n2.is_some() {
+                return n2;
+            }
+            if let Some(n3) = n3 {
+                let n3 = check_numbers(n3);
+                if n3.is_some() {
+                    return n3;
+                }
+            }
+            None
+        }
+        Node::Call(_, n1, ..) => {
+            for i in n1.iter().map(check_numbers) {
+                if i.is_some() {
+                    return i;
+                }
+            }
+            None
+        }
+        Node::Index(_, n1, ..) => check_numbers(n1),
+        Node::FuncDef(..) => None,
+        Node::Return(n, _) => check_numbers(n),
+        Node::Ref(n1, ..) | Node::Deref(n1, ..) | Node::Pointer(n1, ..) => check_numbers(n1),
+        Node::Print(n1, _) | Node::Ascii(n1, _) => {
+            for n in n1 {
+                if let Some(t) = check_numbers(n) {
+                    return Some(t);
+                }
+            }
+            None
+        }
+        Node::String(_) => None,
+        Node::Number(Token {
+            token_type: TokenType::Number(0..=255),
+            ..
+        }) => None,
+        Node::Number(_) => Some(Error::new(
+            ErrorType::NumberTooLarge,
+            node.position(),
+            "Number is too large".to_string(),
+        )),
+        Node::Boolean(_) => None,
+        Node::Input(..) => None,
+        Node::FunctionSign(..) => None,
+        Node::None(_) => None,
+        Node::Char(..) => None,
+        Node::Array(..) => None,
+        Node::Expanded(..) => unreachable!(),
     }
 }
