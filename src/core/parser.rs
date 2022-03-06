@@ -1303,7 +1303,8 @@ impl Parser {
                 pos.end = self.current_token.position.end;
                 pos.line_end = self.current_token.position.line_end;
                 self.advance();
-                if matches!(self.current_token.token_type, TokenType::Keyword(ref s) if s == "point") {
+                if matches!(self.current_token.token_type, TokenType::Keyword(ref s) if s == "point")
+                {
                     self.advance();
                     Ok(Node::Pointer(Box::new(self.expression(scope)?), pos))
                 } else {
@@ -1678,7 +1679,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<(Node, Vec<Node>), Error> {
     if let Some(err) = check_recursive(&ast, &mut vec![]) {
         return Err(err);
     }
-    let statics = global_static(&mut ast);
+    let statics = get_static_types(&mut ast);
     remove_signs(&mut ast);
     expand_inline(&mut ast, vec![]);
     Ok((ast, statics))
@@ -2236,14 +2237,12 @@ fn check_recursive(node: &Node, stack: &mut Vec<Token>) -> Option<Error> {
     }
 }
 
-fn global_static(ast: &mut Node) -> Vec<Node> {
-    let vars = find_static(ast)
+fn get_static_types(ast: &mut Node) -> Vec<Node> {
+    find_static(ast)
         .unwrap_or_default()
         .iter()
         .map(|n| (*n).clone())
-        .collect::<Vec<_>>();
-    remove_static(ast);
-    vars
+        .collect::<Vec<_>>()
 }
 
 fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
@@ -2326,66 +2325,6 @@ fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
         }
         Node::Expanded(_, _) => unreachable!(),
         Node::StaticVar(..) => Some(vec![node]),
-    }
-}
-
-fn remove_static(node: &mut Node) {
-    match node {
-        Node::Struct(..) => (),
-        Node::Call(_, n, ..)
-        | Node::Statements(n, ..)
-        | Node::Print(n, _)
-        | Node::Array(n, ..)
-        | Node::Ascii(n, _) => {
-            for n in n.iter_mut().rev() {
-                remove_static(n);
-            }
-        }
-        Node::StructConstructor(_, n, _) => {
-            for (_, n) in n {
-                remove_static(n);
-            }
-        }
-        Node::IndexAssign(_, n1, n2)
-        | Node::DerefAssign(n1, n2, _)
-        | Node::If(n1, n2, None, _)
-        | Node::While(n1, n2, _)
-        | Node::BinaryOp(_, n1, n2, _) => {
-            remove_static(n1);
-            remove_static(n2);
-        }
-        Node::String(_) => (),
-        Node::Number(_) => (),
-        Node::Boolean(_) => (),
-        Node::FunctionSign(..) => (),
-        Node::Index(_, n, ..)
-        | Node::Ref(n, ..)
-        | Node::Deref(n, ..)
-        | Node::Pointer(n, ..)
-        | Node::Converted(n, _)
-        | Node::FuncDef(_, _, n, ..)
-        | Node::AttrAccess(n, ..)
-        | Node::Return(n, ..)
-        | Node::UnaryOp(_, n, _)
-        | Node::VarAssign(_, n, _)
-        | Node::VarReassign(_, n) => remove_static(n),
-        Node::VarAccess(..) => (),
-        Node::Input(..) => (),
-        Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
-            remove_static(n1);
-            remove_static(n2);
-            remove_static(n3);
-        }
-        Node::None(_) => (),
-        Node::Char(_) => (),
-        Node::For(n1, n2, n3, n4, _) => {
-            remove_static(n1);
-            remove_static(n2);
-            remove_static(n3);
-            remove_static(n4);
-        }
-        Node::Expanded(_, _) => unreachable!(),
-        Node::StaticVar(..) => *node = Node::None(node.position()),
     }
 }
 

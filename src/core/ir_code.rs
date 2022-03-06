@@ -122,7 +122,7 @@ impl CodeGenerator {
                 Ok(Val::Index(mem, t))
             }
 
-            Node::VarAssign(var1, expr, _) | Node::StaticVar(var1, expr) => {
+            Node::VarAssign(var1, expr, _) => {
                 if let TokenType::Identifier(ref var) = var1.token_type {
                     match self.make_instruction(expr, vars, memory)? {
                         Val::Index(index, type_ @ ValType::Ref(_)) => {
@@ -834,6 +834,48 @@ impl CodeGenerator {
             Node::StructConstructor(_, _, _) => todo!(),
 
             Node::Pointer(_, _) => todo!(),
+
+            Node::StaticVar(var1, expr) => {
+                let t = ValType::from_parse_type(&expr.get_type());
+                if let TokenType::Identifier(ref var) = var1.token_type {
+                    vars.insert(var.clone(), Val::Index(memory.get_static(t.get_size()), t));
+                }
+                Ok(Val::None)
+            }
+        }
+    }
+
+    fn make_static(
+        &mut self,
+        node: &Node,
+        vars: &mut HashMap<String, Val>,
+        memory: &mut Memory,
+    ) -> Result<Val, Error> {
+        match node {
+            Node::StaticVar(_, expr) => {
+                match self.make_instruction(expr, vars, memory)? {
+                    Val::Index(_, ValType::Ref(_)) | Val::Ref(..) => (),
+                    Val::Index(index, type_) => {
+                        let size = type_.get_size();
+                        let mem = memory.allocate_static(size);
+                        self.instructions.push(
+                            Instruction::Copy(Val::Index(index, type_.clone())),
+                            (Some((mem, size)), memory.last_memory_index),
+                        );
+                    }
+                    val => {
+                        let v = val.r#type();
+                        let size = val.get_size();
+                        let mem = memory.allocate_static(v.get_size());
+                        self.instructions.push(
+                            Instruction::Copy(val),
+                            (Some((mem, size)), memory.last_memory_index),
+                        );
+                    }
+                }
+                Ok(Val::None)
+            }
+            _ => unreachable!(),
         }
     }
 }
@@ -845,9 +887,20 @@ pub fn generate_code(ast: Node, statics: Vec<Node>) -> Result<Instructions, Erro
         ret: None,
     };
     let mut vars = HashMap::new();
-    let mut memory = Memory::new();
+    let mut memory = Memory::new(
+        statics
+            .iter()
+            .map(|t| {
+                if let Node::StaticVar(_, expr) = t {
+                    ValType::from_parse_type(&expr.get_type()).get_size()
+                } else {
+                    unreachable!()
+                }
+            })
+            .sum(),
+    );
     for node in statics {
-        obj.make_instruction(&node, &mut vars, &mut memory)?;
+        obj.make_static(&node, &mut vars, &mut memory)?;
     }
     obj.make_instruction(&ast, &mut vars, &mut memory)?;
     Ok(obj.instructions)
