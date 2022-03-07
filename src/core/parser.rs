@@ -102,6 +102,13 @@ impl Parser {
                     }
                     self.advance();
                     let condition = self.expression(scope)?;
+                    if condition.get_type() != Type::Boolean {
+                        return Err(Error::new(
+                            ErrorType::TypeError,
+                            condition.position(),
+                            "Condition in a while loop can only be a bool".to_string(),
+                        ));
+                    }
                     if self.current_token.token_type != TokenType::RParen {
                         return Err(Error::new(
                             ErrorType::SyntaxError,
@@ -158,6 +165,13 @@ impl Parser {
                     }
                     self.advance();
                     let condition = self.expression(scope)?;
+                    if condition.get_type() != Type::Boolean {
+                        return Err(Error::new(
+                            ErrorType::TypeError,
+                            condition.position(),
+                            "Condition in a for loop can only be a bool".to_string(),
+                        ));
+                    }
                     if self.current_token.token_type != TokenType::Colon {
                         return Err(Error::new(
                             ErrorType::SyntaxError,
@@ -227,6 +241,13 @@ impl Parser {
                     }
                     self.advance();
                     let condition = self.expression(scope)?;
+                    if condition.get_type() != Type::Boolean {
+                        return Err(Error::new(
+                            ErrorType::TypeError,
+                            condition.position(),
+                            "Condition in an if statement can only be a bool".to_string(),
+                        ));
+                    }
                     if self.current_token.token_type != TokenType::RParen {
                         return Err(Error::new(
                             ErrorType::SyntaxError,

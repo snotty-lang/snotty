@@ -8,7 +8,7 @@ use crate::utils::{
 /// Generates the Intermediate 3-address code from the AST
 pub struct CodeGenerator {
     instructions: Instructions,
-    ret: Option<(usize, usize)>,
+    ret: Vec<(usize, usize)>,
 }
 
 impl CodeGenerator {
@@ -333,7 +333,7 @@ impl CodeGenerator {
                         ),
                     ));
                 }
-                let mem = memory.allocate(2);
+                let mem = memory.allocate(2); // Is used while compiling
                 self.instructions.push(
                     Instruction::If(cond, mem, else1.is_some()),
                     (None, memory.last_memory_index),
@@ -344,7 +344,7 @@ impl CodeGenerator {
                         ErrorType::TypeError,
                         then1.position(),
                         format!(
-                            "If statement can only return (None, memory.last_memory_index), and not type {:?}",
+                            "If statement can only return None, and not type {:?}",
                             then.r#type()
                         ),
                     ));
@@ -356,13 +356,13 @@ impl CodeGenerator {
                     let e = self.make_instruction(else_, vars, memory)?;
                     if e.r#type() != ValType::None {
                         return Err(Error::new(
-                                ErrorType::TypeError,
-                                then1.position(),
-                                format!(
-                                    "If statement can only return (None, memory.last_memory_index), and not type {:?}",
-                                    then.r#type()
-                                ),
-                            ));
+                            ErrorType::TypeError,
+                            then1.position(),
+                            format!(
+                                "If statement can only return None, and not type {:?}",
+                                then.r#type()
+                            ),
+                        ));
                     }
                 }
                 self.instructions.push(
@@ -528,7 +528,7 @@ impl CodeGenerator {
 
             Node::Return(val, ..) => {
                 let val = self.make_instruction(val, vars, memory)?;
-                let (mem, size) = self.ret.unwrap();
+                let &(mem, size) = self.ret.last().unwrap();
                 self.instructions.push(
                     Instruction::Copy(val),
                     (Some((mem, size)), memory.last_memory_index),
@@ -753,18 +753,22 @@ impl CodeGenerator {
                 let t = ValType::from_parse_type(t);
                 let size = t.get_size();
                 let mem = memory.allocate(size);
-                self.ret = Some((mem, size));
+                self.ret.push((mem, size));
 
+                let mut new_vars = vars.clone();
                 let mut new = memory.clone();
+
                 for statement in statements {
-                    self.make_instruction(statement, vars, &mut new)?;
+                    self.make_instruction(statement, &mut new_vars, &mut new)?;
                 }
+                self.ret.pop().unwrap();
                 if new.last_memory_index > memory.last_memory_index {
                     self.instructions.push(
                         Instruction::Clear(memory.last_memory_index, new.last_memory_index),
                         (None, memory.last_memory_index),
                     );
                 }
+                println!("EXPAND:: {:?}", memory);
                 Ok(Val::Index(mem, t))
             }
 
@@ -885,7 +889,7 @@ impl CodeGenerator {
 pub fn generate_code(ast: Node, statics: Vec<Node>) -> Result<Instructions, Error> {
     let mut obj = CodeGenerator {
         instructions: Instructions::new(),
-        ret: None,
+        ret: vec![],
     };
     let mut vars = HashMap::new();
     let mut memory = Memory::new(
