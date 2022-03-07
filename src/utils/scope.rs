@@ -59,22 +59,8 @@ impl Scope {
         None
     }
 
-    pub fn register_signature(
-        &mut self,
-        (token, args, ret): (Token, Vec<Type>, Type),
-    ) -> Option<Error> {
-        let pos = token.position.clone();
-        let func = (token.clone(), args, ret);
-        if self.signatures.contains(&func) {
-            Some(Error::new(
-                ErrorType::Redefinition,
-                pos,
-                format!("Function {}'s signature already defined", token),
-            ))
-        } else {
-            self.signatures.push(func);
-            None
-        }
+    pub fn register_signature(&mut self, func: (Token, Vec<Type>, Type)) {
+        self.signatures.push(func);
     }
 
     pub fn register_variable(&mut self, assign_node: Node) {
@@ -250,6 +236,7 @@ impl Scope {
                 if let Some(a) = self.signatures.iter().find(|a| {
                     let (name, args, _) = a;
                     name == token1
+                        && args.len() == args1.len()
                         && args1
                             .iter()
                             .zip(args.iter())
@@ -261,7 +248,7 @@ impl Scope {
                         return parent.access_function(node);
                     }
                     Err(Error::new(
-                        ErrorType::UndefinedVariable,
+                        ErrorType::UndefinedFunction,
                         token1.position.clone(),
                         format!("Function {} is not defined", token1),
                     ))

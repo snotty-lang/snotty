@@ -635,7 +635,7 @@ impl Parser {
 
     fn find_signs(&mut self) -> Result<Vec<(Token, Vec<Type>, Type)>, Error> {
         let mut signatures = vec![];
-        while self.current_token.token_type != TokenType::Eol {
+        while self.current_token.token_type != TokenType::Eof {
             match self.current_token.token_type {
                 TokenType::Keyword(ref s) if s == "ez" => {
                     self.advance();
@@ -1651,15 +1651,10 @@ pub fn parse(tokens: Vec<Token>) -> Result<(Node, Vec<Node>), Error> {
         token_index: 0,
         current_token: token,
     };
-    if let Some(i) = obj
-        .clone()
+    obj.clone()
         .find_signs()?
         .iter()
-        .filter_map(|s| global.register_signature(s.clone()))
-        .next()
-    {
-        return Err(i);
-    }
+        .for_each(|s| global.register_signature(s.clone()));
     let mut ast = obj.statements(TokenType::Eof, true, &mut global)?.0;
     if let Some(err) = check_undefined(&mut global) {
         return Err(err);
@@ -1951,6 +1946,7 @@ fn insert_function(node: &mut Node, functions: &[Node]) -> Option<Error> {
             let func = match functions.iter().find(|f| match f {
                 Node::FuncDef(n, a, ..) => {
                     n == name
+                        && args.len() == a.len()
                         && args
                             .iter()
                             .zip(a.iter())
@@ -1963,7 +1959,7 @@ fn insert_function(node: &mut Node, functions: &[Node]) -> Option<Error> {
                     return Some(Error::new(
                         ErrorType::UndefinedFunction,
                         name.position.clone(),
-                        format!("Function {} not defined", name),
+                        format!("Function {} is not defined", name),
                     ))
                 }
             };
