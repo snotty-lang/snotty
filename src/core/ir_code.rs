@@ -842,7 +842,7 @@ impl CodeGenerator {
 
             Node::Pointer(_, _) => todo!(),
 
-            Node::Call(..) | Node::FuncDef(..) | Node::FunctionSign(..) => unreachable!(),
+            Node::Call(..) | Node::FuncDef(..) => unreachable!(),
         }
     }
 
@@ -860,7 +860,7 @@ impl CodeGenerator {
                         let size = type_.get_size();
                         let mem = memory.allocate_static(size);
                         self.instructions.push(
-                            Instruction::Copy(Val::Index(index, type_.clone())),
+                            Instruction::Copy(Val::Index(index, type_)),
                             (Some((mem, size)), memory.last_memory_index),
                         );
                     }

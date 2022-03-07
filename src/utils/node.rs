@@ -119,8 +119,6 @@ impl Display for Type {
 pub enum Node {
     /// Expression
     Pointer(Box<Node>, Position),
-    /// Name, Params, Return, Position
-    FunctionSign(Token, Vec<(Token, Type)>, Type, Position),
     /// Node, Type
     Converted(Box<Node>, Type),
     /// Node, Attr, Type
@@ -203,7 +201,6 @@ impl Node {
             | Node::Struct(.., pos)
             | Node::For(.., pos)
             | Node::Pointer(.., pos)
-            | Node::FunctionSign(.., pos)
             | Node::Deref(.., pos)
             | Node::While(.., pos)
             | Node::Statements(.., pos)
@@ -286,7 +283,6 @@ impl Node {
             | Node::Print(_, _)
             | Node::Ascii(_, _)
             | Node::If(_, _, _, _)
-            | Node::FunctionSign(..)
             | Node::None(_)
             | Node::IndexAssign(_, _, _)
             | Node::DerefAssign(_, _, _)
@@ -302,18 +298,6 @@ impl Node {
 impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Node::FunctionSign(name, args, ret, _) => {
-                write!(
-                    f,
-                    "FuncSign({}({}) -> {:?})",
-                    name,
-                    args.iter()
-                        .map(|n| format!("{} : {:?}", n.0, n.1))
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                    ret,
-                )
-            }
             Node::Converted(expr, ty) => write!(f, "{} as {}", expr, ty),
             Node::AttrAccess(node, attr, _) => write!(f, "{}.{}", node, attr),
             Node::StructConstructor(name, fields, _) => {

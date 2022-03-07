@@ -6,6 +6,7 @@ use crate::utils::{
 type ParseResult = Result<Node, Error>;
 
 /// Parses the List of Tokens into an AST
+#[derive(Clone)]
 pub struct Parser {
     tokens: Vec<Token>,
     token_index: usize,
@@ -289,15 +290,7 @@ impl Parser {
                 }
                 "ez" => {
                     self.advance();
-                    let node = self.function_definition(scope)?;
-                    scope.register_function(node.clone());
-                    Ok((node, None))
-                }
-                "ezsign" => {
-                    self.advance();
-                    let node = self.function_signature()?;
-                    scope.register_signature(node.clone());
-                    Ok((node, None))
+                    Ok((self.function_definition(scope)?, None))
                 }
                 "struct" => {
                     self.advance();
@@ -638,6 +631,20 @@ impl Parser {
                 format!("Expected type, found {}", self.current_token),
             )),
         }
+    }
+
+    fn find_signs(&mut self) -> Result<Vec<(Token, Vec<Type>, Type)>, Error> {
+        let mut signatures = vec![];
+        while self.current_token.token_type != TokenType::Eol {
+            match self.current_token.token_type {
+                TokenType::Keyword(ref s) if s == "ez" => {
+                    self.advance();
+                    signatures.push(self.function_signature()?)
+                }
+                _ => self.advance(),
+            }
+        }
+        Ok(signatures)
     }
 
     fn assignment(&mut self, init: bool, scope: &mut Scope) -> ParseResult {
@@ -1518,7 +1525,7 @@ impl Parser {
         Ok(Node::FuncDef(name, params, Box::new(stmt), ret, pos))
     }
 
-    fn function_signature(&mut self) -> ParseResult {
+    fn function_signature(&mut self) -> Result<(Token, Vec<Type>, Type), Error> {
         let name = if let TokenType::Identifier(_) = self.current_token.token_type {
             self.current_token.clone()
         } else {
@@ -1539,7 +1546,6 @@ impl Parser {
         self.advance();
         let mut params = vec![];
         if let TokenType::Identifier(_) = self.current_token.token_type {
-            let p = self.current_token.clone();
             self.advance();
             if self.current_token.token_type != TokenType::Colon {
                 return Err(Error::new(
@@ -1550,11 +1556,10 @@ impl Parser {
             }
             self.advance();
             let t = self.make_type()?;
-            params.push((p, t));
+            params.push(t);
             while self.current_token.token_type == TokenType::Comma {
                 self.advance();
                 if let TokenType::Identifier(_) = self.current_token.token_type {
-                    let p = self.current_token.clone();
                     self.advance();
                     if self.current_token.token_type != TokenType::Colon {
                         return Err(Error::new(
@@ -1565,7 +1570,7 @@ impl Parser {
                     }
                     self.advance();
                     let t = self.make_type()?;
-                    params.push((p, t));
+                    params.push(t);
                 } else {
                     return Err(Error::new(
                         ErrorType::SyntaxError,
@@ -1596,10 +1601,7 @@ impl Parser {
         } else {
             Type::None
         };
-        let mut pos = name.position.clone();
-        pos.end = self.current_token.position.end;
-        pos.line_end = self.current_token.position.line_end;
-        Ok(Node::FunctionSign(name, params, ret, pos))
+        Ok((name, params, ret))
     }
 
     fn binary_op(
@@ -1649,6 +1651,15 @@ pub fn parse(tokens: Vec<Token>) -> Result<(Node, Vec<Node>), Error> {
         token_index: 0,
         current_token: token,
     };
+    if let Some(i) = obj
+        .clone()
+        .find_signs()?
+        .iter()
+        .filter_map(|s| global.register_signature(s.clone()))
+        .next()
+    {
+        return Err(i);
+    }
     let mut ast = obj.statements(TokenType::Eof, true, &mut global)?.0;
     if let Some(err) = check_undefined(&mut global) {
         return Err(err);
@@ -1663,17 +1674,15 @@ pub fn parse(tokens: Vec<Token>) -> Result<(Node, Vec<Node>), Error> {
         return Err(err);
     }
     let statics = get_static_types(&mut ast);
-    remove_signs(&mut ast);
-    expand_inline(&mut ast, vec![]);
+    if let Some(err) = expand_inline(&mut ast, vec![]) {
+        return Err(err);
+    }
     Ok((ast, statics))
 }
 
-fn check_functions(scope: &mut Scope) -> Option<(Token, u32)> {
-    if let Some((.., name)) = scope.unresolved_functions.pop() {
-        return Some((name, 0));
-    }
+fn check_functions(scope: &mut Scope) -> Option<Token> {
     if let Some(Node::StructConstructor(name, ..)) = scope.unresolved_structs.pop() {
-        return Some((name, 1));
+        return Some(name);
     }
     for child in &mut scope.scopes {
         if let Some(err) = check_functions(child) {
@@ -1699,24 +1708,12 @@ fn check_undefined(global: &mut Scope) -> Option<Error> {
         refresh(child, clone.clone());
     }
 
-    if let Some((name, t)) = check_functions(global) {
-        match t {
-            0 => {
-                return Some(Error::new(
-                    ErrorType::UndefinedStruct,
-                    name.position.clone(),
-                    format!("Function {} is not defined", name),
-                ));
-            }
-            1 => {
-                return Some(Error::new(
-                    ErrorType::UndefinedStruct,
-                    name.position.clone(),
-                    format!("Struct {} is not defined", name),
-                ));
-            }
-            _ => unreachable!(),
-        }
+    if let Some(name) = check_functions(global) {
+        return Some(Error::new(
+            ErrorType::UndefinedStruct,
+            name.position.clone(),
+            format!("Struct {} is not defined", name),
+        ));
     }
 
     None
@@ -1862,7 +1859,6 @@ fn check_return(node: &Node) -> Option<Position> {
         Node::Number(_) => None,
         Node::Boolean(_) => None,
         Node::Input(..) => None,
-        Node::FunctionSign(..) => None,
         Node::None(_) => None,
         Node::Char(..) => None,
         Node::Array(..) => None,
@@ -1872,19 +1868,21 @@ fn check_return(node: &Node) -> Option<Position> {
 }
 
 /// Expands inline functions
-fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) {
+fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) -> Option<Error> {
     if let Some(mut functions2) = find_functions(ast) {
         let len = functions.len();
         functions.extend(functions2.iter().map(|f| (*f).clone()));
         for (i, f) in functions2.iter_mut().enumerate() {
             if let Node::FuncDef(_, _, f, ..) = f {
-                expand_inline(f, functions.clone());
+                if let err @ Some(_) = expand_inline(f, functions.clone()) {
+                    return err;
+                }
             }
             functions[i + len] = (*f).clone();
         }
         remove_inline(ast);
     }
-    insert_function(&functions, ast);
+    insert_function(ast, &functions)
     // println!("{ast}\n{:?}\n", functions.iter().map(|d| d.to_string()).collect::<Vec<_>>());
 }
 
@@ -1916,7 +1914,6 @@ fn remove_inline(node: &mut Node) {
         }
         Node::String(_) => (),
         Node::Number(_) => (),
-        Node::FunctionSign(..) => (),
         Node::Boolean(_) => (),
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
@@ -1948,7 +1945,7 @@ fn remove_inline(node: &mut Node) {
     }
 }
 
-fn insert_function(functions: &[Node], node: &mut Node) {
+fn insert_function(node: &mut Node, functions: &[Node]) -> Option<Error> {
     match node {
         Node::Call(name, args, ..) => {
             let func = match functions.iter().find(|f| match f {
@@ -1962,7 +1959,13 @@ fn insert_function(functions: &[Node], node: &mut Node) {
                 _ => false,
             }) {
                 Some(f) => f,
-                None => unreachable!(),
+                None => {
+                    return Some(Error::new(
+                        ErrorType::UndefinedFunction,
+                        name.position.clone(),
+                        format!("Function {} not defined", name),
+                    ))
+                }
             };
             let (params, body, ret) = match func {
                 Node::FuncDef(_, p, b, ret, ..) => (p, b.clone(), ret),
@@ -1978,56 +1981,82 @@ fn insert_function(functions: &[Node], node: &mut Node) {
             }
             expanded.push(*body);
             *node = Node::Expanded(expanded, ret.clone());
+            None
         }
-        Node::Statements(n, ..) | Node::Print(n, _) | Node::Array(n, ..) | Node::Ascii(n, _) => {
-            for n in n.iter_mut().rev() {
-                insert_function(functions, n);
+        Node::Statements(nodes, ..) => {
+            for node in nodes.iter_mut().rev() {
+                if let a @ Some(_) = insert_function(node, functions) {
+                    return a;
+                }
             }
+            None
         }
         Node::StructConstructor(_, n, _) => {
             for (_, n) in n {
-                insert_function(functions, n);
+                if let a @ Some(_) = insert_function(n, functions) {
+                    return a;
+                }
             }
+            None
         }
+        Node::Print(n, _) | Node::Array(n, ..) | Node::Ascii(n, _) => {
+            for n in n {
+                if let a @ Some(_) = insert_function(n, functions) {
+                    return a;
+                }
+            }
+            None
+        }
+        Node::Struct(..) => None,
         Node::IndexAssign(_, n1, n2)
         | Node::DerefAssign(n1, n2, _)
         | Node::If(n1, n2, None, _)
         | Node::While(n1, n2, _)
         | Node::BinaryOp(_, n1, n2, _) => {
-            insert_function(functions, n1);
-            insert_function(functions, n2);
+            if let a @ Some(_) = insert_function(n1, functions) {
+                return a;
+            }
+            insert_function(n2, functions)
         }
-        Node::Struct(..) => (),
-        Node::String(_) => (),
-        Node::FunctionSign(..) => (),
-        Node::Number(_) => (),
-        Node::Boolean(_) => (),
+        Node::Number(_) => None,
+        Node::Boolean(_) => None,
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
-        | Node::Pointer(n, ..)
         | Node::Deref(n, ..)
+        | Node::Pointer(n, ..)
         | Node::Return(n, ..)
+        | Node::Converted(n, _)
         | Node::FuncDef(_, _, n, ..)
         | Node::AttrAccess(n, ..)
-        | Node::UnaryOp(_, n, _)
-        | Node::Converted(n, _)
-        | Node::VarAssign(_, n, _)
         | Node::StaticVar(_, n)
-        | Node::VarReassign(_, n) => insert_function(functions, n),
-        Node::VarAccess(..) => (),
-        Node::Input(..) => (),
+        | Node::UnaryOp(_, n, _)
+        | Node::VarAssign(_, n, _)
+        | Node::VarReassign(_, n) => insert_function(n, functions),
+        Node::VarAccess(..) => None,
+        Node::String(_) => None,
+        Node::Input(..) => None,
         Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
-            insert_function(functions, n1);
-            insert_function(functions, n2);
-            insert_function(functions, n3);
+            if let a @ Some(_) = insert_function(n1, functions) {
+                return a;
+            }
+            if let a @ Some(_) = insert_function(n2, functions) {
+                return a;
+            }
+            insert_function(n3, functions)
         }
-        Node::None(_) => (),
-        Node::Char(_) => (),
+        Node::None(_) => None,
+        Node::Char(_) => None,
         Node::For(n1, n2, n3, n4, _) => {
-            insert_function(functions, n1);
-            insert_function(functions, n2);
-            insert_function(functions, n3);
-            insert_function(functions, n4);
+            if let a @ Some(_) = insert_function(n1, functions) {
+                return a;
+            }
+            if let a @ Some(_) = insert_function(n2, functions) {
+                return a;
+            }
+            if let a @ Some(_) = insert_function(n3, functions) {
+                return a;
+            }
+            insert_function(n4, functions)
         }
         Node::Expanded(_, _) => unreachable!(),
     }
@@ -2075,7 +2104,6 @@ fn find_functions(node: &mut Node) -> Option<Vec<&mut Node>> {
         }
         Node::Number(_) => None,
         Node::Boolean(_) => None,
-        Node::FunctionSign(..) => None,
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
         | Node::Pointer(n, ..)
@@ -2181,7 +2209,6 @@ fn check_recursive(node: &Node, stack: &mut Vec<Token>) -> Option<Error> {
         }
         Node::Number(_) => None,
         Node::Boolean(_) => None,
-        Node::FunctionSign(..) => None,
         Node::Index(_, n, ..)
         | Node::Ref(n, ..)
         | Node::Deref(n, ..)
@@ -2269,7 +2296,6 @@ fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
             }
             find_static(n2)
         }
-        Node::FunctionSign(..) => None,
         Node::Number(_) => None,
         Node::Boolean(_) => None,
         Node::Index(_, n, ..)
@@ -2311,66 +2337,6 @@ fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
         }
         Node::Expanded(_, _) => unreachable!(),
         Node::StaticVar(..) => Some(vec![node]),
-    }
-}
-
-fn remove_signs(node: &mut Node) {
-    match node {
-        Node::Struct(..) => (),
-        Node::Call(_, n, ..)
-        | Node::Statements(n, ..)
-        | Node::Print(n, _)
-        | Node::Array(n, ..)
-        | Node::Ascii(n, _) => {
-            for n in n.iter_mut().rev() {
-                remove_signs(n);
-            }
-        }
-        Node::StructConstructor(_, n, _) => {
-            for (_, n) in n {
-                remove_signs(n);
-            }
-        }
-        Node::IndexAssign(_, n1, n2)
-        | Node::DerefAssign(n1, n2, _)
-        | Node::If(n1, n2, None, _)
-        | Node::While(n1, n2, _)
-        | Node::BinaryOp(_, n1, n2, _) => {
-            remove_signs(n1);
-            remove_signs(n2);
-        }
-        Node::String(_) => (),
-        Node::Number(_) => (),
-        Node::Boolean(_) => (),
-        Node::Index(_, n, ..)
-        | Node::Ref(n, ..)
-        | Node::Pointer(n, ..)
-        | Node::Deref(n, ..)
-        | Node::Converted(n, _)
-        | Node::FuncDef(_, _, n, ..)
-        | Node::StaticVar(_, n)
-        | Node::AttrAccess(n, ..)
-        | Node::Return(n, ..)
-        | Node::UnaryOp(_, n, _)
-        | Node::VarAssign(_, n, _)
-        | Node::VarReassign(_, n) => remove_signs(n),
-        Node::VarAccess(..) => (),
-        Node::Input(..) => (),
-        Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
-            remove_signs(n1);
-            remove_signs(n2);
-            remove_signs(n3);
-        }
-        Node::None(_) => (),
-        Node::Char(_) => (),
-        Node::For(n1, n2, n3, n4, _) => {
-            remove_signs(n1);
-            remove_signs(n2);
-            remove_signs(n3);
-            remove_signs(n4);
-        }
-        Node::Expanded(_, _) => unreachable!(),
-        Node::FunctionSign(..) => *node = Node::None(node.position()),
     }
 }
 
@@ -2516,7 +2482,6 @@ fn check_numbers(node: &Node) -> Option<Error> {
         )),
         Node::Boolean(_) => None,
         Node::Input(..) => None,
-        Node::FunctionSign(..) => None,
         Node::None(_) => None,
         Node::Char(..) => None,
         Node::Array(..) => None,
