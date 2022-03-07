@@ -3,19 +3,19 @@
 
 # Variables
 
-Variables are defined using the assignment operator `:`, like so:
-Variables can have many types, such as integers, strings, arrays, tables, and null.
-Functions and classes may also be treated as first-class variables.
-Only letters and/or numbers can be used for variable names (case sensitive), thus camelCase is recommended for names consisting of multiple words.
+Variables are defined using the assignment keyword `let`, like so:
+```
+let my_var = 7
+```
+The type of the variables are infered by the compiler, so you don't have to specify the type. In this case, the type of `my_var` is `int`.
 
-## Null
+# Static Variables
+Variables can also be static, these will be accessable in the scope the are defined in for the whole duration of the program. They act like the static variables in C.
+The keyword to define a static variable is `static`. For example:
+```
+static my_static_var = 7
+```
+The type of static variables are also infered by the compiler. Value assigned to a static variable during its initialization must be known at compile time.
 
-The character `_` represents a null value, such as for default arguments in a function.
-Assignments to `_` are not allowed.
 
-## Constants
-
-Variables can be made constant by prefixing them with `<>`.
-Any attempt to assign a new value to a constant variable will raise a `TypeError`.
-
-This example raises `[TypeError] object is immutable`.
+Note: All variables are mutable, and can be mutated
