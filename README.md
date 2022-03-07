@@ -1,20 +1,18 @@
 # ezlang
-An language, that is, well, ez. It can get compiled to brainfuck. And it's currently under development.
+ezlang is a strong and statically typed, compiled language. And yes, it gets compiled to, not machine code, but brainfuck
 
-# How to use
-Create a `.ez` file and run it from main.rs
+This might very well be the first language which has no sign of statement termination, no semicolons, no newlines, nothing.
+
+Here is a small hello world program:
 ```
-let x = 90
-ezout x
+ezout 'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd', '\n'
 ```
 
-## TODO-CODE
-* structs
-* Pointers + Arrays + Strings + Dynamic Memory
+# Installation and Usage
+Its not done yet, please wait for the release. You can check out the stuff left [here](todo.md)
 
-## FIXME
-* position errors (Last line errors during lexing, position passed to errors)
+# Credits
+ezlang was inspired by several languages, including [brainfuck](https://esolangs.org/wiki/Brainfuck), [Rust](https://www.rust-lang.org/) and [C](https://en.wikipedia.org/wiki/The_C_Programming_Language)
+Thanks to Me for developing such a wonderful language.
 
-## TODO-NON-CODE
-* Docs
-* Extension
+If you have any questions, or would like to get in touch, join the [Discord server](https://discord.gg/q56jhCqc)!
