@@ -16,6 +16,6 @@ Documentation is still under way, you can have a look at it [here](docs/tableofc
 
 # Credits
 ezlang was inspired by several languages, including [brainfuck](https://esolangs.org/wiki/Brainfuck), [Rust](https://www.rust-lang.org/) and [C](https://en.wikipedia.org/wiki/The_C_Programming_Language).
-Thanks to Me for developing such a wonderful language.
+Thanks to Me for developing such a wonderful language. Documentation style was stolen from Samarium(whose docs were written by tetraxile) 
 
 If you have any questions, or would like to get in touch, join the [Discord server](https://discord.gg/q56jhCqc)!
