@@ -1,5 +1,7 @@
-[Back](00comments.md) | [Table of Contents](tableofcontents.md) | [Next](01integers.md)
+[Back](00basics.md) | [Table of Contents](tableofcontents.md) | [Next](02controlflow.md.md)
 ---                  | ---                                     | ---
+
+# Variables and Data Types
 
 # Variables
 
@@ -23,28 +25,28 @@ Note: All variables are mutable, and can be mutated
 # Data Types
 There are several data types available in ezlang. More will be added in the future
 The types available at present are the following:
-* int
-* char
-* bool
+* `int`
+* `char`
+* `bool`
 * References
 
 Pointers, Arrays, Strings and Structs are currently not available.
 
 ## int
-int is an 8-bit Integer. It ranges from 255 to -256, where -1 = 255. It is wraped on overflow and underflow. When printed, positive numbers will be printed, for example:
+`int` is an 8-bit Integer. It ranges from 255 to -256, where -1 = 255. It is wraped on overflow and underflow. When printed, positive numbers will be printed, for example:
 ```
 ezout -4
 ```
 will print 251.
 
 ## char
-char is another 8 bit value. It can be used to represent a single character.
+`char` is another 8 bit value. It can be used to represent a single character.
 ```
 let a = 'a'
 ```
 
 ## bool
-bool is a boolean value. It can either be `true` or `false`.
+`bool` is a boolean value. It can either be `true` or `false`.
 ```
 let a = true
 ```
@@ -61,3 +63,11 @@ ezout a, *b
 ```
 
 Note: All references are mutable
+
+# Type Conversion
+The `as` keyword can be used to convert types.
+```
+let a = ezin as int
+let b = 32 as char
+let c = 0 as bool
+```

@@ -1,7 +1,9 @@
 [Back](../README.md) | [Table of Contents](tableofcontents.md) | [Next](01variables.md)
 ---                  | ---                                     | ---
 
-# Comments
+# Basics
+
+## Comments
 Line comments are written using `//`
 ```
 // This is a line comment
@@ -14,7 +16,7 @@ This is a block comment
 */
 ```
 
-# Scopes
+## Scopes
 The language follows the notion of scopes. A scope can be declared using curly braces. All variables and functions declared inside a scope won't be avialable outside the scope.
 ```
 // global scope
@@ -29,7 +31,7 @@ ezout a // This will give an error, as `a` was dropped when the inner scope ende
 
 The program starts it's execution in the global scope.
 
-# Printing
+## Printing
 As you already would know, printing is done using the `ezout` keyword.
 ```
 ezout 23, 'a', true // This will print '23a1'
@@ -41,7 +43,7 @@ ezascii 32, 'a' // This will print ' a'
 
 The ezout and ezascii keywords don't print with a newline at the end, So you need to print a newline yourself to print a line.
 
-# Input
+## Input
 Input is done using the `ezin` keyword.
 
 ```
