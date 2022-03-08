@@ -4,7 +4,7 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq)]
 pub enum VarType {
     Variable(Type, Token),
-    Function(Token, Vec<Type>, Type),
+    Function(Token, Vec<Type>),
     Struct(Vec<Type>, Token),
 }
 
@@ -51,6 +51,31 @@ impl Scope {
                 self.defined.push(VarType::Struct(
                     fields.iter().map(|a| a.1.clone()).collect(),
                     token,
+                ));
+            }
+        } else {
+            unreachable!();
+        }
+        None
+    }
+
+    pub fn register_function(&mut self, func: Node) -> Option<Error> {
+        let pos = func.position();
+        if let Node::FuncDef(token, args, ..) = func {
+            if self
+                .defined
+                .iter()
+                .any(|a| matches!(a, VarType::Function(a, args1) if *a == token && args.len() == args1.len() && args1.iter().zip(args.iter()).all(|(a, (_, p))| a == p)))
+            {
+                return Some(Error::new(
+                    ErrorType::Redefinition,
+                    pos,
+                    format!("Struct {} already defined", token),
+                ));
+            } else {
+                self.defined.push(VarType::Function(
+                    token,
+                    args.iter().map(|a| a.1.clone()).collect(),
                 ));
             }
         } else {

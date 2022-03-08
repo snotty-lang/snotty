@@ -802,7 +802,44 @@ impl Parser {
     }
 
     fn expression(&mut self, scope: &mut Scope) -> ParseResult {
-        self.access_attr(scope)
+        let node = self.access_attr(scope)?;
+        if self.current_token.token_type == TokenType::TernaryIf {
+            self.advance();
+            let then_branch = self.expression(scope)?;
+            if self.current_token.token_type != TokenType::Colon {
+                return Err(Error::new(
+                    ErrorType::SyntaxError,
+                    self.current_token.position.clone(),
+                    format!("Expected ':', found {}", self.current_token),
+                ));
+            }
+            self.advance();
+            let else_branch = self.expression(scope)?;
+            let t = then_branch.get_type();
+            if t != else_branch.get_type() {
+                return Err(Error::new(
+                    ErrorType::TypeError,
+                    else_branch.position(),
+                    format!(
+                        "The types of the branches of the ternary if expression must be the same, found {} and {}",
+                        t, else_branch.get_type()
+                    ),
+                ));
+            }
+            let mut pos = node.position();
+            let end_pos = else_branch.position();
+            pos.end = end_pos.end;
+            pos.line_end = end_pos.line_end;
+            Ok(Node::Ternary(
+                Box::new(node),
+                Box::new(then_branch),
+                Box::new(else_branch),
+                t,
+                pos,
+            ))
+        } else {
+            Ok(node)
+        }
     }
 
     fn comparison(&mut self, scope: &mut Scope) -> ParseResult {
@@ -918,12 +955,49 @@ impl Parser {
     }
 
     fn const_expression(&mut self, scope: &mut Scope) -> ParseResult {
-        self.binary_op(
+        let node = self.binary_op(
             Self::const_comparison,
             vec![TokenType::LAnd, TokenType::LOr, TokenType::LXor],
             Self::const_comparison,
             scope,
-        )
+        )?;
+        if self.current_token.token_type == TokenType::TernaryIf {
+            self.advance();
+            let then_branch = self.const_expression(scope)?;
+            if self.current_token.token_type != TokenType::Colon {
+                return Err(Error::new(
+                    ErrorType::SyntaxError,
+                    self.current_token.position.clone(),
+                    format!("Expected ':', found {}", self.current_token),
+                ));
+            }
+            self.advance();
+            let else_branch = self.const_expression(scope)?;
+            let t = then_branch.get_type();
+            if t != else_branch.get_type() {
+                return Err(Error::new(
+                    ErrorType::TypeError,
+                    else_branch.position(),
+                    format!(
+                        "The types of the branches of the ternary if expression must be the same, found {} and {}",
+                        t, else_branch.get_type()
+                    ),
+                ));
+            }
+            let mut pos = node.position();
+            let end_pos = else_branch.position();
+            pos.end = end_pos.end;
+            pos.line_end = end_pos.line_end;
+            Ok(Node::Ternary(
+                Box::new(node),
+                Box::new(then_branch),
+                Box::new(else_branch),
+                t,
+                pos,
+            ))
+        } else {
+            Ok(node)
+        }
     }
 
     fn const_comparison(&mut self, scope: &mut Scope) -> ParseResult {
@@ -1177,42 +1251,6 @@ impl Parser {
             TokenType::Eol => {
                 self.advance();
                 Ok(Node::None(token.position))
-            }
-            TokenType::TernaryIf => {
-                self.advance();
-                let condition = self.expression(scope)?;
-                let then_branch = self.expression(scope)?;
-                if self.current_token.token_type != TokenType::Colon {
-                    return Err(Error::new(
-                        ErrorType::SyntaxError,
-                        self.current_token.position.clone(),
-                        format!("Expected ':', found {}", self.current_token),
-                    ));
-                }
-                self.advance();
-                let else_branch = self.expression(scope)?;
-                let t = then_branch.get_type();
-                if t != else_branch.get_type() {
-                    return Err(Error::new(
-                        ErrorType::TypeError,
-                        else_branch.position(),
-                        format!(
-                            "The types of the branches of the ternary if expression must be the same, found {} and {}",
-                            t, else_branch.get_type()
-                        ),
-                    ));
-                }
-                let mut pos = token.position;
-                let end_pos = else_branch.position();
-                pos.end = end_pos.end;
-                pos.line_end = end_pos.line_end;
-                Ok(Node::Ternary(
-                    Box::new(condition),
-                    Box::new(then_branch),
-                    Box::new(else_branch),
-                    t,
-                    pos,
-                ))
             }
             TokenType::Char(_) => {
                 self.advance();
