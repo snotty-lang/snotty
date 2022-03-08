@@ -1,9 +1,6 @@
-ez fib(n: int) -> int {
-    let result = 1
-    for (let i = 1: i <= n: i++) {
-        result *= i;
-    }
-    return result
-}
+let s = 89
+ez my() static s = 0
+ez your() {static p = 45 ezout p}
+ez his() static pu = 9
 
-ezout fib(3), '\n', ezin + 34
+your()

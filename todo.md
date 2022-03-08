@@ -8,6 +8,4 @@
 * static variables
 
 ## TODO-NON-CODE
-* Docs
 * Extension
-
