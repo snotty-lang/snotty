@@ -3,7 +3,9 @@
 * Pointers + Arrays + Strings + Dynamic Memory
 
 ## FIXME
-* position errors (Last line errors during lexing, position passed to errors)
+* positions (Last line errors during lexing, position passed to errors)
+* variable shdowing bug
+* static variables
 
 ## TODO-NON-CODE
 * Docs

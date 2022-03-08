@@ -6,4 +6,4 @@ ez fib(n: int) -> int {
     return result
 }
 
-ezout fib(3), '\n'
+ezout fib(3), '\n', ezin + 34

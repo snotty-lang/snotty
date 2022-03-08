@@ -2,5 +2,8 @@
 
 The following guide assumes that you are familiar with the basics of programming.
 
-- [Variables](00variables.md)
-  - [Static Variables](00variables.md#StaticVariables)
+* [Basics](00comments.md)
+* [Variables and Data Types](01variables.md)
+  - [Variables](01variables.md#Variables)
+  - [Data Types](01variables.md#DataTypes)
+
