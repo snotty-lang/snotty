@@ -1,4 +1,4 @@
-[Back](00basics.md) | [Table of Contents](tableofcontents.md) | [Next](02controlflow.md.md)
+[Back](00basics.md) | [Table of Contents](tableofcontents.md) | [Next](02controlflow.md)
 ---                  | ---                                     | ---
 
 # Variables and Data Types
@@ -28,6 +28,7 @@ The types available at present are the following:
 * `int`
 * `char`
 * `bool`
+* None
 * References
 
 Pointers, Arrays, Strings and Structs are currently not available.
@@ -50,6 +51,9 @@ let a = 'a'
 ```
 let a = true
 ```
+
+## None
+The None types takes up 0 bytes of memory. It is denoted using `;`
 
 ## References
 References are aliases to the variable. A `&x` will be the same as `x`, they would point to the same memory location and have the same value.

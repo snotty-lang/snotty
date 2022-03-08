@@ -1,5 +1,5 @@
-[Back](../README.md) | [Table of Contents](tableofcontents.md) | [Next](01variables.md)
----                  | ---                                     | ---
+[Table of Contents](tableofcontents.md) | [Next](01variables.md)
+---                                     | ---
 
 # Basics
 
