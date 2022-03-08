@@ -11,4 +11,4 @@ Quick start guide:
   - [While Loops](02controlflow.md##WhileLoops)
   - [For Loops](02controlflow.md##ForLoops)
 * [Preprocessor](03preprocessor.md)
-* [Functions] (04functions.md)
+* [Functions](04functions.md)
