@@ -5,7 +5,6 @@
 ## FIXME
 * positions (Last line errors during lexing, position passed to errors)
 * variable shdowing bug
-* static variables
 
 ## TODO-NON-CODE
 * Extension

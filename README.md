@@ -8,11 +8,11 @@ Here is a small hello world program:
 ezout 'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd', '\n'
 ```
 
-# Installation and Usage
+# Installation
 Its not done yet, please wait for the release. You can check out the stuff left [here](todo.md)
 
 # How to use
-Documentation is still under way, you can have a look at it [here](docs/tableofcontents.md)
+Documentation can be found [here](docs/tableofcontents.md)
 
 # Credits
 ezlang was inspired by several languages, including [Rust](https://www.rust-lang.org/) and [C](https://en.wikipedia.org/wiki/The_C_Programming_Language). The Documentation style was inspired by the docs of [Samarium](https://github.com/samarium-lang/Samarium/).

@@ -15,7 +15,6 @@ pub struct Scope {
     pub signatures: Vec<(Token, Vec<Type>, Type)>,
     pub unresolved_structs: Vec<Node>,
     pub defined: Vec<VarType>,
-    pub defined_static: Vec<(Type, Token)>,
     pub args: Option<Vec<(Token, Type)>>,
     pub scopes: Vec<Scope>,
     pub parent: Option<Box<Scope>>,
@@ -29,7 +28,6 @@ impl Scope {
             defined: vec![],
             scopes: vec![],
             args: None,
-            defined_static: vec![],
             parent: parent.map(|p| Box::new(p.clone())),
         }
     }
@@ -89,12 +87,9 @@ impl Scope {
     }
 
     pub fn register_variable(&mut self, assign_node: Node) {
-        if let Node::VarAssign(token, e, _) = assign_node {
+        if let Node::VarAssign(token, e, _) | Node::StaticVar(token, e) = assign_node {
             let t = e.get_type();
             self.defined.push(VarType::Variable(t, token));
-        } else if let Node::StaticVar(token, e) = assign_node {
-            let t = e.get_type();
-            self.defined_static.push((t, token));
         } else {
             unreachable!();
         }
@@ -114,12 +109,6 @@ impl Scope {
                     } else {
                         unreachable!();
                     }
-                } else if let Some((t, _)) = self
-                    .defined_static
-                    .iter()
-                    .find(|a| matches!(a, (_, n) if n == token))
-                {
-                    Ok(t.clone())
                 } else {
                     if self.args.is_some() {
                         if let Some(arg) =
@@ -193,12 +182,6 @@ impl Scope {
             } else {
                 unreachable!();
             }
-        } else if let Some((t, _)) = self
-            .defined_static
-            .iter()
-            .find(|a| matches!(a, (_, n) if n == token))
-        {
-            Ok(t.clone())
         } else {
             if self.args.is_some() {
                 if let Some(arg) = self.args.as_ref().unwrap().iter().find(|t| t.0 == *token) {
@@ -320,17 +303,6 @@ impl Scope {
         for node in self.unresolved_structs.clone() {
             self.access_struct(&node);
         }
-    }
-
-    pub fn has_static(&self, node: &Node) -> bool {
-        let token = if let Node::StaticVar(token, ..) = node {
-            token
-        } else {
-            unreachable!();
-        };
-        self.defined_static
-            .iter()
-            .any(|a| matches!(a, (_, n) if n == token))
     }
 }
 

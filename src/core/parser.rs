@@ -11,6 +11,7 @@ pub struct Parser {
     tokens: Vec<Token>,
     token_index: usize,
     current_token: Token,
+    statics: Vec<String>,
 }
 
 impl Parser {
@@ -137,10 +138,7 @@ impl Parser {
                 }
                 "static" => {
                     self.advance();
-                    let node = self.static_assignment(scope)?;
-                    if scope.has_static(&node) {
-                        return Ok((Node::None(node.position()), None));
-                    }
+                    let node = self.static_assignment()?;
                     scope.register_variable(node.clone());
                     Ok((node, None))
                 }
@@ -654,18 +652,46 @@ impl Parser {
         }
     }
 
-    fn find_signs(&mut self) -> Result<Vec<(Token, Vec<Type>, Type)>, Error> {
+    fn find_signs(&mut self) -> Result<(Vec<(Token, Vec<Type>, Type)>, Vec<String>), Error> {
         let mut signatures = vec![];
+        let mut statics = vec![];
         while self.current_token.token_type != TokenType::Eof {
             match self.current_token.token_type {
                 TokenType::Keyword(ref s) if s == "ez" => {
                     self.advance();
                     signatures.push(self.function_signature()?)
                 }
+                TokenType::Keyword(ref s) if s == "static" => {
+                    self.advance();
+                    let node = self.static_assignment()?;
+                    let ident = if let Node::StaticVar(
+                        Token {
+                            token_type: TokenType::Identifier(ident),
+                            ..
+                        },
+                        _,
+                    ) = node
+                    {
+                        ident
+                    } else {
+                        unreachable!()
+                    };
+                    if statics.contains(&ident) {
+                        return Err(Error::new(
+                            ErrorType::StaticVariableRedefinition,
+                            self.current_token.position.clone(),
+                            format!(
+                                "A static variable with the name of '{}' already defined",
+                                ident
+                            ),
+                        ));
+                    }
+                    statics.push(ident)
+                }
                 _ => self.advance(),
             }
         }
-        Ok(signatures)
+        Ok((signatures, statics))
     }
 
     fn assignment(&mut self, init: bool, scope: &mut Scope) -> ParseResult {
@@ -674,6 +700,18 @@ impl Parser {
             self.advance();
             match self.current_token.token_type {
                 TokenType::Assign if init => {
+                    if let TokenType::Identifier(ref ident) = token.token_type {
+                        if self.statics.contains(ident) {
+                            return Err(Error::new(
+                                ErrorType::StaticVariableRedefinition,
+                                token.position,
+                                format!(
+                                    "A static variable with the name of '{}' already defined",
+                                    ident
+                                ),
+                            ));
+                        }
+                    }
                     self.advance();
                     let expr = self.expression(scope)?;
                     let t = expr.get_type();
@@ -739,17 +777,14 @@ impl Parser {
         }
     }
 
-    fn static_assignment(&mut self, scope: &mut Scope) -> ParseResult {
+    fn static_assignment(&mut self) -> ParseResult {
         if let TokenType::Identifier(_) = self.current_token.token_type {
             let token = self.current_token.clone();
             self.advance();
             match self.current_token.token_type {
                 TokenType::Assign => {
                     self.advance();
-                    Ok(Node::StaticVar(
-                        token,
-                        Box::new(self.const_expression(scope)?),
-                    ))
+                    Ok(Node::StaticVar(token, Box::new(self.const_expression()?)))
                 }
                 _ => Err(Error::new(
                     ErrorType::SyntaxError,
@@ -954,16 +989,15 @@ impl Parser {
         self.binary_op(Self::convert, vec![TokenType::Pow], Self::convert, scope)
     }
 
-    fn const_expression(&mut self, scope: &mut Scope) -> ParseResult {
-        let node = self.binary_op(
+    fn const_expression(&mut self) -> ParseResult {
+        let node = self.const_binary_op(
             Self::const_comparison,
             vec![TokenType::LAnd, TokenType::LOr, TokenType::LXor],
             Self::const_comparison,
-            scope,
         )?;
         if self.current_token.token_type == TokenType::TernaryIf {
             self.advance();
-            let then_branch = self.const_expression(scope)?;
+            let then_branch = self.const_expression()?;
             if self.current_token.token_type != TokenType::Colon {
                 return Err(Error::new(
                     ErrorType::SyntaxError,
@@ -972,7 +1006,7 @@ impl Parser {
                 ));
             }
             self.advance();
-            let else_branch = self.const_expression(scope)?;
+            let else_branch = self.const_expression()?;
             let t = then_branch.get_type();
             if t != else_branch.get_type() {
                 return Err(Error::new(
@@ -1000,11 +1034,11 @@ impl Parser {
         }
     }
 
-    fn const_comparison(&mut self, scope: &mut Scope) -> ParseResult {
+    fn const_comparison(&mut self) -> ParseResult {
         if let TokenType::LNot = self.current_token.token_type {
             let token = self.current_token.clone();
             self.advance();
-            let node = self.comparison(scope)?;
+            let node = self.const_comparison()?;
             let t = match node.get_type().get_result_type_unary(&token) {
                 Some(t) => t,
                 None => {
@@ -1017,7 +1051,7 @@ impl Parser {
             };
             Ok(Node::UnaryOp(token, Box::new(node), t))
         } else {
-            self.binary_op(
+            self.const_binary_op(
                 Self::const_bitwise,
                 vec![
                     TokenType::Eq,
@@ -1028,13 +1062,12 @@ impl Parser {
                     TokenType::Ge,
                 ],
                 Self::const_bitwise,
-                scope,
             )
         }
     }
 
-    fn const_bitwise(&mut self, scope: &mut Scope) -> ParseResult {
-        self.binary_op(
+    fn const_bitwise(&mut self) -> ParseResult {
+        self.const_binary_op(
             Self::const_arithmetic,
             vec![
                 TokenType::BAnd,
@@ -1044,34 +1077,31 @@ impl Parser {
                 TokenType::Shr,
             ],
             Self::const_arithmetic,
-            scope,
         )
     }
 
-    fn const_arithmetic(&mut self, scope: &mut Scope) -> ParseResult {
-        self.binary_op(
+    fn const_arithmetic(&mut self) -> ParseResult {
+        self.const_binary_op(
             Self::const_term,
             vec![TokenType::Add, TokenType::Sub],
             Self::const_term,
-            scope,
         )
     }
 
-    fn const_term(&mut self, scope: &mut Scope) -> ParseResult {
-        self.binary_op(
+    fn const_term(&mut self) -> ParseResult {
+        self.const_binary_op(
             Self::const_factor,
             vec![TokenType::Mul, TokenType::Div, TokenType::Mod],
             Self::const_factor,
-            scope,
         )
     }
 
-    fn const_factor(&mut self, scope: &mut Scope) -> ParseResult {
+    fn const_factor(&mut self) -> ParseResult {
         let token = self.current_token.clone();
         match token.token_type {
             TokenType::Sub | TokenType::BNot | TokenType::Inc | TokenType::Dec => {
                 self.advance();
-                let node = self.factor(scope)?;
+                let node = self.const_factor()?;
                 let t = match node.get_type().get_result_type_unary(&token) {
                     Some(t) => t,
                     None => {
@@ -1085,7 +1115,7 @@ impl Parser {
                 Ok(Node::UnaryOp(token, Box::new(node), t))
             }
             _ => {
-                let node = self.const_power(scope)?;
+                let node = self.const_power()?;
                 let token = self.current_token.clone();
                 match token.token_type {
                     TokenType::Inc | TokenType::Dec => {
@@ -1108,13 +1138,8 @@ impl Parser {
         }
     }
 
-    fn const_power(&mut self, scope: &mut Scope) -> ParseResult {
-        self.binary_op(
-            Self::const_atom,
-            vec![TokenType::Pow],
-            Self::const_atom,
-            scope,
-        )
+    fn const_power(&mut self) -> ParseResult {
+        self.const_binary_op(Self::const_atom, vec![TokenType::Pow], Self::const_atom)
     }
 
     fn convert(&mut self, scope: &mut Scope) -> ParseResult {
@@ -1426,7 +1451,7 @@ impl Parser {
         }
     }
 
-    fn const_atom(&mut self, scope: &mut Scope) -> ParseResult {
+    fn const_atom(&mut self) -> ParseResult {
         let token = self.current_token.clone();
         match token.token_type {
             TokenType::Keyword(ref keyword) => match keyword.as_ref() {
@@ -1465,7 +1490,7 @@ impl Parser {
                     self.advance();
                     return Ok(Node::None(pos));
                 }
-                let node = self.const_expression(scope)?;
+                let node = self.const_expression()?;
                 if self.current_token.token_type != TokenType::RParen {
                     return Err(Error::new(
                         ErrorType::SyntaxError,
@@ -1696,6 +1721,39 @@ impl Parser {
         }
         Ok(left)
     }
+
+    fn const_binary_op(
+        &mut self,
+        func1: fn(&mut Self) -> ParseResult,
+        ops: Vec<TokenType>,
+        func2: fn(&mut Self) -> ParseResult,
+    ) -> ParseResult {
+        let mut left = func1(self)?;
+        let mut token_type = self.current_token.token_type.clone();
+        while ops.contains(&token_type) {
+            let op = self.current_token.clone();
+            self.advance();
+            let right = func2(self)?;
+            let t = match left.get_type().get_result_type(&right.get_type(), &op) {
+                Some(t) => t,
+                None => {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        op.position.clone(),
+                        format!(
+                            "Cannot apply operator {} to types {} and {}",
+                            op,
+                            left.get_type(),
+                            right.get_type()
+                        ),
+                    ))
+                }
+            };
+            left = Node::BinaryOp(op, Box::new(left), Box::new(right), t);
+            token_type = self.current_token.token_type.clone();
+        }
+        Ok(left)
+    }
 }
 
 /// Parses the given vector of tokens into an AST.
@@ -1709,11 +1767,13 @@ pub fn parse(tokens: Vec<Token>) -> Result<(Node, Vec<Node>), Error> {
         tokens,
         token_index: 0,
         current_token: token,
+        statics: vec![],
     };
-    obj.clone()
-        .find_signs()?
+    let (signs, statics) = obj.clone().find_signs()?;
+    signs
         .iter()
         .for_each(|s| global.register_signature(s.clone()));
+    obj.statics = statics;
     let mut ast = obj.statements(TokenType::Eof, true, &mut global)?.0;
     if let Some(err) = check_undefined(&mut global) {
         return Err(err);
@@ -1727,7 +1787,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<(Node, Vec<Node>), Error> {
     if let Some(err) = check_numbers(&ast) {
         return Err(err);
     }
-    let statics = get_static_types(&mut ast);
+    let statics = get_static(&mut ast);
     if let Some(err) = expand_inline(&mut ast, vec![]) {
         return Err(err);
     }
@@ -2305,7 +2365,7 @@ fn check_recursive(node: &Node, stack: &mut Vec<Token>) -> Option<Error> {
     }
 }
 
-fn get_static_types(ast: &mut Node) -> Vec<Node> {
+fn get_static(ast: &mut Node) -> Vec<Node> {
     find_static(ast)
         .unwrap_or_default()
         .iter()

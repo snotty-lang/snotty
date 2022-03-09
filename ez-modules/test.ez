@@ -1,4 +1,3 @@
-let s = 89
 ez my() static s = 0
 ez your() {static p = 45 ezout p}
 ez his() static pu = 9

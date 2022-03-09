@@ -2,13 +2,14 @@ use std::collections::HashMap;
 
 use crate::utils::{
     Error, ErrorType, Instruction, Instructions, Memory, Node, TokenType, Val, ValNumber, ValType,
-    POINTER_SIZE,
+    POINTER_SIZE, Token,
 };
 
 /// Generates the Intermediate 3-address code from the AST
 pub struct CodeGenerator {
     instructions: Instructions,
     ret: Vec<(usize, usize)>,
+    statics: HashMap<String, Val>,
 }
 
 impl CodeGenerator {
@@ -768,7 +769,6 @@ impl CodeGenerator {
                         (None, memory.last_memory_index),
                     );
                 }
-                println!("EXPAND:: {:?}", memory);
                 Ok(Val::Index(mem, t))
             }
 
@@ -830,11 +830,8 @@ impl CodeGenerator {
                 })
             }
 
-            Node::StaticVar(var1, expr) => {
-                let t = ValType::from_parse_type(&expr.get_type());
-                if let TokenType::Identifier(ref var) = var1.token_type {
-                    vars.insert(var.clone(), Val::Index(memory.get_static(t.get_size()), t));
-                }
+            Node::StaticVar(Token {token_type: TokenType::Identifier(ident), ..}, _) => {
+                vars.insert(ident.clone(), self.statics.get(ident).cloned().unwrap());
                 Ok(Val::None)
             }
 
@@ -846,36 +843,38 @@ impl CodeGenerator {
 
             Node::Pointer(_, _) => todo!(),
 
-            Node::Call(..) | Node::FuncDef(..) => unreachable!(),
+            _ => unreachable!(),
         }
     }
 
     fn make_static(
         &mut self,
-        node: &Node,
+        node: Node,
         vars: &mut HashMap<String, Val>,
         memory: &mut Memory,
     ) -> Result<Val, Error> {
         match node {
-            Node::StaticVar(_, expr) => {
-                match self.make_instruction(expr, vars, memory)? {
+            Node::StaticVar(Token { token_type: TokenType::Identifier(ident), .. }, expr) => {
+                match self.make_instruction(&expr, vars, memory)? {
                     Val::Index(_, ValType::Ref(_)) | Val::Ref(..) => (),
                     Val::Index(index, type_) => {
                         let size = type_.get_size();
-                        let mem = memory.allocate_static(size);
+                        let mem = memory.allocate(size);
                         self.instructions.push(
-                            Instruction::Copy(Val::Index(index, type_)),
+                            Instruction::Copy(Val::Index(index, type_.clone())),
                             (Some((mem, size)), memory.last_memory_index),
                         );
+                        self.statics.insert(ident, Val::Index(mem, type_));
                     }
                     val => {
                         let v = val.r#type();
                         let size = val.get_size();
-                        let mem = memory.allocate_static(v.get_size());
+                        let mem = memory.allocate(v.get_size());
                         self.instructions.push(
                             Instruction::Copy(val),
                             (Some((mem, size)), memory.last_memory_index),
                         );
+                        self.statics.insert(ident, Val::Index(mem, v));
                     }
                 }
                 Ok(Val::None)
@@ -890,22 +889,12 @@ pub fn generate_code(ast: Node, statics: Vec<Node>) -> Result<Instructions, Erro
     let mut obj = CodeGenerator {
         instructions: Instructions::new(),
         ret: vec![],
+        statics: HashMap::new(),
     };
     let mut vars = HashMap::new();
-    let mut memory = Memory::new(
-        statics
-            .iter()
-            .map(|t| {
-                if let Node::StaticVar(_, expr) = t {
-                    ValType::from_parse_type(&expr.get_type()).get_size()
-                } else {
-                    unreachable!()
-                }
-            })
-            .sum(),
-    );
+    let mut memory = Memory::new();
     for node in statics {
-        obj.make_static(&node, &mut vars, &mut memory)?;
+        obj.make_static(node, &mut vars, &mut memory)?;
     }
     obj.make_instruction(&ast, &mut vars, &mut memory)?;
     Ok(obj.instructions)
