@@ -1,5 +1,7 @@
-ez my() static s = 0
-ez your() {static p = 45 ezout p}
-ez his() static pu = 9
+struct MyStruct {
+    a: int,
+    b: int,
+    c: int,
+}
 
-your()
+let s = MyStruct { a: 1, b: 2, c: 3 };

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::utils::{
-    Error, ErrorType, Instruction, Instructions, Memory, Node, TokenType, Val, ValNumber, ValType,
-    POINTER_SIZE, Token,
+    Error, ErrorType, Instruction, Instructions, Memory, Node, Token, TokenType, Val, ValNumber,
+    ValType, POINTER_SIZE,
 };
 
 /// Generates the Intermediate 3-address code from the AST
@@ -830,7 +830,13 @@ impl CodeGenerator {
                 })
             }
 
-            Node::StaticVar(Token {token_type: TokenType::Identifier(ident), ..}, _) => {
+            Node::StaticVar(
+                Token {
+                    token_type: TokenType::Identifier(ident),
+                    ..
+                },
+                _,
+            ) => {
                 vars.insert(ident.clone(), self.statics.get(ident).cloned().unwrap());
                 Ok(Val::None)
             }
@@ -854,7 +860,13 @@ impl CodeGenerator {
         memory: &mut Memory,
     ) -> Result<Val, Error> {
         match node {
-            Node::StaticVar(Token { token_type: TokenType::Identifier(ident), .. }, expr) => {
+            Node::StaticVar(
+                Token {
+                    token_type: TokenType::Identifier(ident),
+                    ..
+                },
+                expr,
+            ) => {
                 match self.make_instruction(&expr, vars, memory)? {
                     Val::Index(_, ValType::Ref(_)) | Val::Ref(..) => (),
                     Val::Index(index, type_) => {

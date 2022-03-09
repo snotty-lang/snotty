@@ -337,7 +337,7 @@ impl Parser {
                 let token = self.current_token.clone();
                 self.advance();
                 self.advance();
-                let index = self.expression(scope)?;
+                let index = self.const_expression()?;
                 if self.current_token.token_type != TokenType::RSquare {
                     return Err(Error::new(
                         ErrorType::SyntaxError,
@@ -526,6 +526,13 @@ impl Parser {
                     let mut fields = vec![];
                     if let TokenType::Identifier(_) = self.current_token.token_type {
                         let field = self.current_token.clone();
+                        if fields.iter().any(|(f, _)| *f == field) {
+                            return Err(Error::new(
+                                ErrorType::Redefinition,
+                                field.position,
+                                format!("field name '{}' is already used", field.token_type),
+                            ));
+                        }
                         self.advance();
                         if self.current_token.token_type != TokenType::Colon {
                             return Err(Error::new(
@@ -539,6 +546,9 @@ impl Parser {
                         fields.push((field, field_type));
                         while self.current_token.token_type == TokenType::Comma {
                             self.advance();
+                            if self.current_token.token_type == TokenType::RCurly {
+                                break;
+                            }
                             if !matches!(self.current_token.token_type, TokenType::Identifier(_)) {
                                 return Err(Error::new(
                                     ErrorType::SyntaxError,
@@ -678,7 +688,7 @@ impl Parser {
                     };
                     if statics.contains(&ident) {
                         return Err(Error::new(
-                            ErrorType::StaticVariableRedefinition,
+                            ErrorType::Redefinition,
                             self.current_token.position.clone(),
                             format!(
                                 "A static variable with the name of '{}' already defined",
@@ -703,7 +713,7 @@ impl Parser {
                     if let TokenType::Identifier(ref ident) = token.token_type {
                         if self.statics.contains(ident) {
                             return Err(Error::new(
-                                ErrorType::StaticVariableRedefinition,
+                                ErrorType::Redefinition,
                                 token.position,
                                 format!(
                                     "A static variable with the name of '{}' already defined",
@@ -801,43 +811,13 @@ impl Parser {
         }
     }
 
-    fn access_attr(&mut self, scope: &mut Scope) -> ParseResult {
-        let mut left = self.binary_op(
+    fn expression(&mut self, scope: &mut Scope) -> ParseResult {
+        let node = self.binary_op(
             Self::comparison,
             vec![TokenType::LAnd, TokenType::LOr, TokenType::LXor],
             Self::comparison,
             scope,
         )?;
-        while self.current_token.token_type == TokenType::Dot {
-            self.advance();
-            if !matches!(self.current_token.token_type, TokenType::Identifier(_)) {
-                return Err(Error::new(
-                    ErrorType::SyntaxError,
-                    self.current_token.position.clone(),
-                    "Expected identifier".to_string(),
-                ));
-            }
-            let t = if let Some(t) = left.get_type().has_attr(&self.current_token) {
-                t
-            } else {
-                return Err(Error::new(
-                    ErrorType::TypeError,
-                    self.current_token.position.clone(),
-                    format!(
-                        "Cannot access attribute {} on type {}",
-                        self.current_token,
-                        left.get_type()
-                    ),
-                ));
-            };
-            left = Node::AttrAccess(Box::new(left), self.current_token.clone(), t);
-            self.advance();
-        }
-        Ok(left)
-    }
-
-    fn expression(&mut self, scope: &mut Scope) -> ParseResult {
-        let node = self.access_attr(scope)?;
         if self.current_token.token_type == TokenType::TernaryIf {
             self.advance();
             let then_branch = self.expression(scope)?;
@@ -1143,7 +1123,7 @@ impl Parser {
     }
 
     fn convert(&mut self, scope: &mut Scope) -> ParseResult {
-        let mut left = self.call(scope)?;
+        let mut left = self.access_attr(scope)?;
         let mut token_type = self.current_token.token_type.clone();
         while let TokenType::Keyword(ref s) = token_type {
             if s != "as" {
@@ -1161,6 +1141,36 @@ impl Parser {
             };
             left.convert(right);
             token_type = self.current_token.token_type.clone();
+        }
+        Ok(left)
+    }
+
+    fn access_attr(&mut self, scope: &mut Scope) -> ParseResult {
+        let mut left = self.call(scope)?;
+        while self.current_token.token_type == TokenType::Dot {
+            self.advance();
+            if !matches!(self.current_token.token_type, TokenType::Identifier(_)) {
+                return Err(Error::new(
+                    ErrorType::SyntaxError,
+                    self.current_token.position.clone(),
+                    "Expected identifier".to_string(),
+                ));
+            }
+            let t = if let Some(t) = left.get_type().has_attr(&self.current_token) {
+                t
+            } else {
+                return Err(Error::new(
+                    ErrorType::TypeError,
+                    self.current_token.position.clone(),
+                    format!(
+                        "Cannot access attribute {} on type {}",
+                        self.current_token,
+                        left.get_type()
+                    ),
+                ));
+            };
+            left = Node::AttrAccess(Box::new(left), self.current_token.clone(), t);
+            self.advance();
         }
         Ok(left)
     }
@@ -1285,7 +1295,7 @@ impl Parser {
                 self.advance();
                 if let TokenType::LSquare = self.current_token.token_type {
                     self.advance();
-                    let index = self.expression(scope)?;
+                    let index = self.const_expression()?;
                     if self.current_token.token_type != TokenType::RSquare {
                         return Err(Error::new(
                             ErrorType::SyntaxError,

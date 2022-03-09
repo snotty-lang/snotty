@@ -1,11 +1,11 @@
-use super::{Error, ErrorType, Node, Token, Type};
+use super::{Error, ErrorType, Node, Token, TokenType, Type};
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum VarType {
     Variable(Type, Token),
     Function(Token, Vec<Type>),
-    Struct(Vec<Type>, Token),
+    Struct(Vec<(Token, Type)>, Token),
 }
 
 /// Scope struct
@@ -46,10 +46,7 @@ impl Scope {
                     format!("Struct {} already defined", token),
                 ));
             } else {
-                self.defined.push(VarType::Struct(
-                    fields.iter().map(|a| a.1.clone()).collect(),
-                    token,
-                ));
+                self.defined.push(VarType::Struct(fields, token));
             }
         } else {
             unreachable!();
@@ -297,6 +294,34 @@ impl Scope {
         } else if self.unresolved_structs.contains(node) {
             self.unresolved_structs.retain(|n| n != node);
         }
+    }
+
+    pub fn get_fields_by_token(&mut self, token: &Token) -> Option<&Vec<(Token, Type)>> {
+        match token.token_type {
+            TokenType::Identifier(ref t) => {
+                if let Some(VarType::Struct(x, _)) = self.defined.iter().find(|a| {
+                    if let VarType::Struct(
+                        _,
+                        Token {
+                            token_type: TokenType::Identifier(ref name),
+                            ..
+                        },
+                    ) = a
+                    {
+                        name == t
+                    } else {
+                        false
+                    }
+                }) {
+                    return Some(x);
+                }
+            }
+            _ => unreachable!(),
+        }
+        if let Some(ref mut parent) = self.parent {
+            return parent.get_fields_by_token(token);
+        }
+        None
     }
 
     pub fn refresh(&mut self) {

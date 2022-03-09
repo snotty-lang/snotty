@@ -15,7 +15,6 @@ pub enum ErrorType {
     FileNotFound,
     Redefinition,
     RecursionError,
-    StaticVariableRedefinition,
 }
 
 /// An error that can occur during the compilation of the source code.
