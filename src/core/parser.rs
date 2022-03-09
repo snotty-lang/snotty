@@ -363,7 +363,7 @@ impl Parser {
                         None => {
                             return Err(Error::new(
                                 ErrorType::TypeError,
-                                self.current_token.position.clone(),
+                                op.position.clone(),
                                 format!(
                                     "Cannot apply operator {} to {} and {}",
                                     op,
@@ -400,7 +400,7 @@ impl Parser {
                     if node.get_type() != right.get_type() {
                         return Err(Error::new(
                             ErrorType::TypeError,
-                            self.current_token.position.clone(),
+                            right.position(),
                             format!("Cannot assign {} to {}", right.get_type(), node.get_type()),
                         ));
                     }
@@ -422,7 +422,7 @@ impl Parser {
                         None => {
                             return Err(Error::new(
                                 ErrorType::TypeError,
-                                self.current_token.position.clone(),
+                                right.position(),
                                 format!(
                                     "Cannot apply operator {} to types {} and {}",
                                     op,
@@ -435,7 +435,7 @@ impl Parser {
                     if rt != t {
                         return Err(Error::new(
                             ErrorType::TypeError,
-                            self.current_token.position.clone(),
+                            right.position(),
                             format!("Cannot assign {} to {}", right.get_type(), t),
                         ));
                     }
@@ -481,7 +481,7 @@ impl Parser {
                         None => {
                             return Err(Error::new(
                                 ErrorType::TypeError,
-                                self.current_token.position.clone(),
+                                op.position.clone(),
                                 format!(
                                     "Cannot apply operator {} to types {} and {}",
                                     op,
@@ -724,7 +724,7 @@ impl Parser {
                     if node.get_type() != t {
                         return Err(Error::new(
                             ErrorType::TypeError,
-                            self.current_token.position.clone(),
+                            node.position(),
                             format!("Cannot assign {} to {}", t, node.get_type()),
                         ));
                     }
@@ -740,7 +740,7 @@ impl Parser {
                         None => {
                             return Err(Error::new(
                                 ErrorType::TypeError,
-                                self.current_token.position.clone(),
+                                right.position(),
                                 format!("Cannot assign {} to {}", right.get_type(), t),
                             ))
                         }
@@ -748,7 +748,7 @@ impl Parser {
                     if rt != t {
                         return Err(Error::new(
                             ErrorType::TypeError,
-                            self.current_token.position.clone(),
+                            right.position(),
                             format!("Cannot assign {} to {}", right.get_type(), t),
                         ));
                     }
@@ -886,9 +886,9 @@ impl Parser {
                 Some(t) => t,
                 None => {
                     return Err(Error::new(
-                        ErrorType::SyntaxError,
-                        self.current_token.position.clone(),
-                        format!("Expected a boolean, found {}", node.get_type()),
+                        ErrorType::TypeError,
+                        node.position(),
+                        format!("Cannot apply Logical Not to {}", node.get_type()),
                     ))
                 }
             };
@@ -954,8 +954,8 @@ impl Parser {
                     None => {
                         return Err(Error::new(
                             ErrorType::TypeError,
-                            self.current_token.position.clone(),
-                            format!("Expected a number, found {}", node.get_type()),
+                            node.position(),
+                            format!("Cannot ++/-- type {}", node.get_type()),
                         ))
                     }
                 };
@@ -972,8 +972,8 @@ impl Parser {
                             None => {
                                 return Err(Error::new(
                                     ErrorType::TypeError,
-                                    self.current_token.position.clone(),
-                                    format!("Expected a number, found {}", node.get_type()),
+                                    node.position(),
+                                    format!("Cannot ++/-- type {}", node.get_type()),
                                 ))
                             }
                         };
@@ -1108,7 +1108,7 @@ impl Parser {
                         return Err(Error::new(
                             ErrorType::TypeError,
                             self.current_token.position.clone(),
-                            format!("Expected a number, found {}", node.get_type()),
+                            format!("Cannot ++/--/~ or negate type {}", node.get_type()),
                         ))
                     }
                 };
@@ -1126,7 +1126,7 @@ impl Parser {
                                 return Err(Error::new(
                                     ErrorType::TypeError,
                                     self.current_token.position.clone(),
-                                    format!("Expected a number, found {}", node.get_type()),
+                                    format!("Cannot ++/-- type {}", node.get_type()),
                                 ))
                             }
                         };
