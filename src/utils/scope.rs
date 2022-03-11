@@ -13,7 +13,7 @@ pub enum VarType {
 #[derive(Debug, Clone)]
 pub struct Scope {
     pub signatures: Vec<(Token, Vec<Type>, Type)>,
-    pub unresolved_structs: Vec<Node>,
+    pub structs: Vec<(Token, Vec<(Token, Type)>)>,
     pub defined: Vec<VarType>,
     pub args: Option<Vec<(Token, Type)>>,
     pub scopes: Vec<Scope>,
@@ -23,7 +23,7 @@ pub struct Scope {
 impl Scope {
     pub fn new(parent: Option<&Scope>) -> Self {
         Self {
-            unresolved_structs: vec![],
+            structs: vec![],
             signatures: vec![],
             defined: vec![],
             scopes: vec![],
@@ -81,6 +81,10 @@ impl Scope {
 
     pub fn register_signature(&mut self, func: (Token, Vec<Type>, Type)) {
         self.signatures.push(func);
+    }
+
+    pub fn register_struct_premature(&mut self, struct_: (Token, Vec<(Token, Type)>)) {
+        self.structs.push(struct_);
     }
 
     pub fn register_variable(&mut self, assign_node: Node) {
@@ -263,36 +267,38 @@ impl Scope {
         }
     }
 
-    pub fn access_struct(&mut self, node: &Node) {
-        let mut found = false;
+    pub fn access_struct(&mut self, node: &Node) -> Result<Vec<(Token, Type)>, Error> {
         match &node {
-            Node::StructConstructor(token1, args1, _) => {
-                if self.defined.iter().any(|a| {
-                    if let VarType::Struct(fields, name) = a {
-                        name == token1 && args1.len() == fields.len()
-                    } else {
-                        false
+            Node::StructConstructor(token1, _, _) => {
+                if let Some(a) = self.structs.iter().find(|a| a.0 == *token1) {
+                    Ok(a.1.clone())
+                } else {
+                    if let Some(ref mut parent) = self.parent {
+                        return parent.access_struct(node);
                     }
-                }) {
-                    found = true;
+                    Err(Error::new(
+                        ErrorType::UndefinedStruct,
+                        token1.position.clone(),
+                        format!("Struct {} is not defined", token1),
+                    ))
                 }
             }
             _ => unreachable!(),
         }
-        if !found {
-            if self.parent.is_some() {
-                let parent = self.parent.as_mut().unwrap();
-                let old = parent.unresolved_structs.len();
-                parent.access_struct(node);
-                if parent.unresolved_structs.len() <= old {
-                    return self.unresolved_structs.retain(|n| n != node);
-                }
+    }
+
+    pub fn access_struct_by_token(&mut self, token: &Token) -> Result<Vec<(Token, Type)>, Error> {
+        if let Some(a) = self.structs.iter().find(|a| a.0 == *token) {
+            Ok(a.1.clone())
+        } else {
+            if let Some(ref mut parent) = self.parent {
+                return parent.access_struct_by_token(token);
             }
-            if !self.unresolved_structs.contains(node) {
-                self.unresolved_structs.push(node.clone())
-            }
-        } else if self.unresolved_structs.contains(node) {
-            self.unresolved_structs.retain(|n| n != node);
+            Err(Error::new(
+                ErrorType::UndefinedStruct,
+                token.position.clone(),
+                format!("Struct {} is not defined", token),
+            ))
         }
     }
 
@@ -322,12 +328,6 @@ impl Scope {
             return parent.get_fields_by_token(token);
         }
         None
-    }
-
-    pub fn refresh(&mut self) {
-        for node in self.unresolved_structs.clone() {
-            self.access_struct(&node);
-        }
     }
 }
 

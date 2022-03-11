@@ -4,6 +4,8 @@ use crate::utils::{
 
 /// A result type for parsing
 type ParseResult = Result<Node, Error>;
+type Signatures = Vec<(Token, Vec<Type>, Type)>;
+type Structs = Vec<(Token, Vec<(Token, Type)>)>;
 
 /// Parses the List of Tokens into an AST
 #[derive(Clone)]
@@ -662,14 +664,32 @@ impl Parser {
         }
     }
 
-    fn find_signs(&mut self) -> Result<(Vec<(Token, Vec<Type>, Type)>, Vec<String>), Error> {
+    fn find_signs(&mut self) -> Result<(Signatures, Vec<String>, Structs), Error> {
         let mut signatures = vec![];
         let mut statics = vec![];
+        let mut structs = vec![];
         while self.current_token.token_type != TokenType::Eof {
             match self.current_token.token_type {
                 TokenType::Keyword(ref s) if s == "ez" => {
                     self.advance();
                     signatures.push(self.function_signature()?)
+                }
+                TokenType::Keyword(ref s) if s == "struct" => {
+                    self.advance();
+                    let node = self.struct_definition()?;
+                    let (token, fields) = if let Node::Struct(token, fields, _) = node {
+                        (token, fields)
+                    } else {
+                        unreachable!()
+                    };
+                    if structs.iter().any(|(i, _)| *i == token) {
+                        return Err(Error::new(
+                            ErrorType::Redefinition,
+                            self.current_token.position.clone(),
+                            format!("A struct with the name of {} already exists", token),
+                        ));
+                    }
+                    structs.push((token, fields))
                 }
                 TokenType::Keyword(ref s) if s == "static" => {
                     self.advance();
@@ -691,7 +711,7 @@ impl Parser {
                             ErrorType::Redefinition,
                             self.current_token.position.clone(),
                             format!(
-                                "A static variable with the name of '{}' already defined",
+                                "A static variable with the name of '{}' already exists",
                                 ident
                             ),
                         ));
@@ -701,7 +721,7 @@ impl Parser {
                 _ => self.advance(),
             }
         }
-        Ok((signatures, statics))
+        Ok((signatures, statics, structs))
     }
 
     fn assignment(&mut self, init: bool, scope: &mut Scope) -> ParseResult {
@@ -1247,7 +1267,7 @@ impl Parser {
                 pos.end = self.current_token.position.end;
                 pos.line_end = self.current_token.position.line_end;
                 let node = Node::StructConstructor(atom, fields, pos);
-                scope.access_struct(&node);
+                scope.access_struct(&node)?;
                 return Ok(node);
             } else {
                 self.token_index -= 1;
@@ -1779,15 +1799,15 @@ pub fn parse(tokens: Vec<Token>) -> Result<(Node, Vec<Node>), Error> {
         current_token: token,
         statics: vec![],
     };
-    let (signs, statics) = obj.clone().find_signs()?;
+    let (signs, statics, structs) = obj.clone().find_signs()?;
     signs
         .iter()
         .for_each(|s| global.register_signature(s.clone()));
+    structs
+        .iter()
+        .for_each(|s| global.register_struct_premature(s.clone()));
     obj.statics = statics;
     let mut ast = obj.statements(TokenType::Eof, true, &mut global)?.0;
-    if let Some(err) = check_undefined(&mut global) {
-        return Err(err);
-    }
     if let Some(err) = keyword_checks(&ast) {
         return Err(err);
     }
@@ -1802,45 +1822,6 @@ pub fn parse(tokens: Vec<Token>) -> Result<(Node, Vec<Node>), Error> {
         return Err(err);
     }
     Ok((ast, statics))
-}
-
-fn check_functions(scope: &mut Scope) -> Option<Token> {
-    if let Some(Node::StructConstructor(name, ..)) = scope.unresolved_structs.pop() {
-        return Some(name);
-    }
-    for child in &mut scope.scopes {
-        if let Some(err) = check_functions(child) {
-            return Some(err);
-        }
-    }
-    None
-}
-
-fn refresh(scope: &mut Scope, parent: Scope) {
-    scope.parent = Some(Box::new(parent));
-    scope.refresh();
-    let clone = scope.clone();
-    for child in scope.scopes.iter_mut() {
-        refresh(child, clone.clone());
-    }
-}
-
-/// Checks for undefined functions and variables.
-fn check_undefined(global: &mut Scope) -> Option<Error> {
-    let clone = global.clone();
-    for child in global.scopes.iter_mut() {
-        refresh(child, clone.clone());
-    }
-
-    if let Some(name) = check_functions(global) {
-        return Some(Error::new(
-            ErrorType::UndefinedStruct,
-            name.position.clone(),
-            format!("Struct {} is not defined", name),
-        ));
-    }
-
-    None
 }
 
 /// Checks for invalid placement and use of keywords
