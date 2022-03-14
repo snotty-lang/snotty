@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::utils::{
     Error, ErrorType, Instruction, Instructions, Memory, Node, Token, TokenType, Val, ValNumber,
-    ValType, POINTER_SIZE,
+    ValType, Variables, POINTER_SIZE,
 };
 
 /// Generates the Intermediate 3-address code from the AST
@@ -16,7 +16,7 @@ impl CodeGenerator {
     fn make_instruction(
         &mut self,
         node: &Node,
-        vars: &mut HashMap<String, Val>,
+        vars: &mut Variables,
         memory: &mut Memory,
     ) -> Result<Val, Error> {
         match node {
@@ -276,9 +276,11 @@ impl CodeGenerator {
 
             Node::Statements(statements, ..) => {
                 let mut new = memory.clone();
+                let mut new_vars = Variables::new_from_parent(vars.clone());
                 for statement in statements {
-                    self.make_instruction(statement, vars, &mut new)?;
+                    self.make_instruction(statement, &mut new_vars, &mut new)?;
                 }
+                *vars = *new_vars.super_vars.unwrap();
                 if new.last_memory_index > memory.last_memory_index {
                     self.instructions.push(
                         Instruction::Clear(memory.last_memory_index, new.last_memory_index),
@@ -856,7 +858,7 @@ impl CodeGenerator {
     fn make_static(
         &mut self,
         node: Node,
-        vars: &mut HashMap<String, Val>,
+        vars: &mut Variables,
         memory: &mut Memory,
     ) -> Result<Val, Error> {
         match node {
@@ -903,7 +905,7 @@ pub fn generate_code(ast: Node, statics: Vec<Node>) -> Result<Instructions, Erro
         ret: vec![],
         statics: HashMap::new(),
     };
-    let mut vars = HashMap::new();
+    let mut vars = Variables::new();
     let mut memory = Memory::new();
     for node in statics {
         obj.make_static(node, &mut vars, &mut memory)?;

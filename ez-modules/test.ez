@@ -1,7 +1,12 @@
-struct MyStruct {
-    a: int,
-    b: int,
-    c: int,
+let x = 9
+let b = &x
+{
+    let y = 10
+    let b = &y
+    ezout *b, '\n'
 }
 
-let s = MyStruct { a: 1, b: 2, c: 3 };
+ezout *b, '\n'
+let z = 56
+ezout *b, '\n'
+
