@@ -3,4 +3,4 @@ output
 ezlang
 brainfuck
 output
-output.*
+.vscode

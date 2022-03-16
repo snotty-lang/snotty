@@ -7,3 +7,6 @@
 
 ## TODO-NON-CODE
 * Extension
+
+## TODO-LATER
+* Enums

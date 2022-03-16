@@ -426,12 +426,12 @@ pub fn transpile(code: &Instructions) -> String {
             Instruction::Ref(mem) => {
                 bf_code.push_str(&">".repeat(*mem));
             }
-            Instruction::DerefRef(Val::Index(mem, _)) => {
+            Instruction::DerefRef(Val::Index(mem, _) | Val::Ref(mem, _)) => {
                 goto(&mut bf_code, &mut location, *mem);
                 copy(&mut bf_code, location, start, location, free_idx);
                 goto(&mut bf_code, &mut location, start);
             }
-            Instruction::DerefAssignRef(Val::Index(mem, _), assign) => {
+            Instruction::DerefAssignRef(Val::Index(mem, _) | Val::Ref(mem, _), assign) => {
                 goto(&mut bf_code, &mut location, *mem);
                 goto_add!(assign, &mut bf_code, &mut location, {
                     copy(&mut bf_code, location, *mem, location, free_idx);
@@ -439,7 +439,11 @@ pub fn transpile(code: &Instructions) -> String {
                 goto(&mut bf_code, &mut location, start);
             }
             Instruction::DerefAssign(_, _) => todo!(),
-            Instruction::Deref(_) => todo!(),
+            Instruction::Deref(Val::Index(mem, _)) => {
+                goto(&mut bf_code, &mut location, *mem);
+                copy(&mut bf_code, location, start, location, free_idx);
+                goto(&mut bf_code, &mut location, start);
+            }
             Instruction::Shr(_, _) => todo!(),
             Instruction::BAnd(_, _) => todo!(),
             Instruction::BOr(_, _) => todo!(),
@@ -490,10 +494,7 @@ macro_rules! goto_add {
                 goto($bf_code, $current, *index);
                 $block
             }
-            Val::Pointer(ptr, _) => {
-                goto($bf_code, $current, *ptr);
-                $block
-            }
+            Val::Pointer(_) => panic!("Trying to add to a pointer"),
             Val::None => {
                 $bf_code.push_str("[-]");
             }
@@ -528,10 +529,7 @@ macro_rules! goto_add {
                 goto($bf_code, $current, *index);
                 $block
             }
-            Val::Pointer(ptr, _) => {
-                goto($bf_code, $current, *ptr);
-                $block
-            }
+            Val::Pointer(_) => panic!("Trying to add to a pointer"),
             Val::None => {
                 $bf_code.push_str("[-]");
                 $block2

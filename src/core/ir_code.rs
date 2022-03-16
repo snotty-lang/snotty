@@ -281,12 +281,12 @@ impl CodeGenerator {
                     self.make_instruction(statement, &mut new_vars, &mut new)?;
                 }
                 *vars = *new_vars.super_vars.unwrap();
-                if new.last_memory_index > memory.last_memory_index {
-                    self.instructions.push(
-                        Instruction::Clear(memory.last_memory_index, new.last_memory_index),
-                        (None, memory.last_memory_index),
-                    );
-                }
+                // if new.last_memory_index > memory.last_memory_index {
+                //     self.instructions.push(
+                //         Instruction::Clear(memory.last_memory_index, new.last_memory_index),
+                //         (None, memory.last_memory_index),
+                //     );
+                // }
                 Ok(Val::None)
             }
 
@@ -428,7 +428,7 @@ impl CodeGenerator {
                     ));
                 }
                 let arr_type = match &arr {
-                    Val::Pointer(_, t) => t.clone(),
+                    Val::Pointer(t) => t.clone(),
                     Val::Index(_, t) => t.clone(),
                     _ => {
                         return Err(Error::new(
@@ -765,12 +765,12 @@ impl CodeGenerator {
                     self.make_instruction(statement, &mut new_vars, &mut new)?;
                 }
                 self.ret.pop().unwrap();
-                if new.last_memory_index > memory.last_memory_index {
-                    self.instructions.push(
-                        Instruction::Clear(memory.last_memory_index, new.last_memory_index),
-                        (None, memory.last_memory_index),
-                    );
-                }
+                // if new.last_memory_index > memory.last_memory_index {
+                //     self.instructions.push(
+                //         Instruction::Clear(memory.last_memory_index, new.last_memory_index),
+                //         (None, memory.last_memory_index),
+                //     );
+                // }
                 Ok(Val::Index(mem, t))
             }
 
@@ -826,7 +826,7 @@ impl CodeGenerator {
                         ValType::Number => Val::Num((n as i16 - 128) as i8),
                         _ => unreachable!(),
                     },
-                    Val::Ref(n, t) => Val::Pointer(n, t),
+                    Val::Ref(_, t) => Val::Pointer(t),
                     Val::Index(n, _) => Val::Index(n, t),
                     _ => unreachable!("{val} {t}"),
                 })
@@ -849,7 +849,9 @@ impl CodeGenerator {
 
             Node::StructConstructor(_, _, _) => todo!(),
 
-            Node::Pointer(_, _) => todo!(),
+            Node::Pointer(expr, _) => Ok(Val::Pointer(
+                self.make_instruction(expr, vars, memory)?.r#type(),
+            )),
 
             _ => unreachable!(),
         }

@@ -1,12 +1,3 @@
-let x = 9
-let b = &x
-{
-    let y = 10
-    let b = &y
-    ezout *b, '\n'
-}
-
-ezout *b, '\n'
-let z = 56
-ezout *b, '\n'
-
+let y = 23
+let x = *point y
+ezout *(x + 2)
