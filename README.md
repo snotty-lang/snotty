@@ -1,5 +1,5 @@
 # ezlang
-ezlang is a strong and statically typed, compiled language. And yes, it gets compiled to, not machine code, but brainfuck
+ezlang is a strong and statically typed, compiled language. And yes, it gets compiled to, not machine code, but brainfuck++
 
 This might very well be the first language which has no sign of statement termination, no semicolons, no newlines, nothing.
 
