@@ -155,7 +155,7 @@ pub enum Val {
     /// A reference.
     Ref(usize, ValType),
     /// A pointer.
-    Pointer(ValType),
+    Pointer(usize, ValType),
     /// A Char
     Char(u8),
 }
@@ -178,21 +178,21 @@ impl Val {
             Val::Num(_) => ValType::Number,
             Val::Bool(_) => ValType::Boolean,
             Val::Index(_, t) => t.clone(),
-            Val::Pointer(t) => ValType::Pointer(Box::new(t.clone())),
+            Val::Pointer(_, t) => ValType::Pointer(Box::new(t.clone())),
             Val::None => ValType::None,
             Val::Ref(_, t) => ValType::Ref(Box::new(t.clone())),
         }
     }
 
-    // pub fn to_ptr(&self) -> Option<usize> {
-    //     match self {
-    //         Val::Pointer(ptr, _) => Some(*ptr),
-    //         Val::Num(num) => Some(*num as usize),
-    //         Val::Index(num, ValType::Number) => Some(*num),
-    //         Val::Index(ptr, ValType::Pointer(..)) => Some(*ptr),
-    //         _ => None,
-    //     }
-    // }
+    pub fn to_ptr(&self) -> Option<usize> {
+        match self {
+            Val::Pointer(ptr, _) => Some(*ptr),
+            Val::Num(num) => Some(*num as usize),
+            Val::Index(num, ValType::Number) => Some(*num),
+            Val::Index(ptr, ValType::Pointer(..)) => Some(*ptr),
+            _ => None,
+        }
+    }
 
     pub fn get_size(&self) -> usize {
         self.r#type().get_size()
@@ -322,7 +322,7 @@ impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Val::Char(c) => write!(f, "{}", *c as char),
-            Val::Pointer(_) => write!(f, "Pointer"),
+            Val::Pointer(mem, _) => write!(f, "*{}", mem),
             Val::None => write!(f, ";"),
             Val::Bool(b) => write!(f, "{}", b),
             Val::Num(num) => write!(f, "{}", num),
@@ -336,7 +336,7 @@ impl fmt::Debug for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Val::Char(c) => write!(f, "{:?}", *c as char),
-            Val::Pointer(_) => write!(f, "Pointer"),
+            Val::Pointer(mem, _) => write!(f, "*{}", mem),
             Val::None => write!(f, "()"),
             Val::Bool(b) => write!(f, "{}", b),
             Val::Num(num) => write!(f, "{}", num),

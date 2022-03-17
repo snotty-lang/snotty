@@ -428,7 +428,7 @@ impl CodeGenerator {
                     ));
                 }
                 let arr_type = match &arr {
-                    Val::Pointer(t) => t.clone(),
+                    Val::Pointer(_, t) => t.clone(),
                     Val::Index(_, t) => t.clone(),
                     _ => {
                         return Err(Error::new(
@@ -541,17 +541,15 @@ impl CodeGenerator {
 
             Node::Ref(val1, ..) => {
                 let val = self.make_instruction(val1, vars, memory)?;
-                let mem = if let Val::Index(mem, _) = val {
-                    mem
+                if let Val::Index(n, t) | Val::Pointer(n, t) | Val::Ref(n, t) = val {
+                    Ok(Val::Ref(n, t))
                 } else {
-                    return Err(Error::new(
+                    Err(Error::new(
                         ErrorType::TypeError,
                         val1.position(),
                         format!("Cannot reference a {}", val.r#type()),
-                    ));
-                };
-                let t = val.r#type();
-                Ok(Val::Ref(mem, t))
+                    ))
+                }
             }
 
             Node::Deref(val1, ..) => {
@@ -826,7 +824,7 @@ impl CodeGenerator {
                         ValType::Number => Val::Num((n as i16 - 128) as i8),
                         _ => unreachable!(),
                     },
-                    Val::Ref(_, t) => Val::Pointer(t),
+                    Val::Ref(n, t) => Val::Pointer(n, t),
                     Val::Index(n, _) => Val::Index(n, t),
                     _ => unreachable!("{val} {t}"),
                 })
@@ -849,9 +847,18 @@ impl CodeGenerator {
 
             Node::StructConstructor(_, _, _) => todo!(),
 
-            Node::Pointer(expr, _) => Ok(Val::Pointer(
-                self.make_instruction(expr, vars, memory)?.r#type(),
-            )),
+            Node::Pointer(expr, _) => {
+                let val = self.make_instruction(expr, vars, memory)?;
+                if let Val::Index(n, t) | Val::Pointer(n, t) | Val::Ref(n, t) = val {
+                    Ok(Val::Pointer(n + 2usize.pow(15), t))
+                } else {
+                    Err(Error::new(
+                        ErrorType::TypeError,
+                        expr.position(),
+                        format!("Can't take the address of {:?}", val.r#type()),
+                    ))
+                }
+            }
 
             _ => unreachable!(),
         }

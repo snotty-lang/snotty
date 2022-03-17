@@ -1,3 +1,10 @@
-let y = 23
-let x = *point y
-ezout *(x + 2)
+let y = 76
+let x = 6
+let y = *point x
+let z = (y + 2)
+ezout y, ' ', x, '\n'
+ezout *y, '\n'
+ezout *z, '\n'
+ezout z, '\n'
+ezout *y, '\n'
+ezout y, ' ', x, '\n'
