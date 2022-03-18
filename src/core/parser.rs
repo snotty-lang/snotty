@@ -339,7 +339,7 @@ impl Parser {
                 let token = self.current_token.clone();
                 self.advance();
                 self.advance();
-                let index = self.const_expression()?;
+                let index = self.expression(scope)?;
                 if self.current_token.token_type != TokenType::RSquare {
                     return Err(Error::new(
                         ErrorType::SyntaxError,
@@ -1315,7 +1315,7 @@ impl Parser {
                 self.advance();
                 if let TokenType::LSquare = self.current_token.token_type {
                     self.advance();
-                    let index = self.const_expression()?;
+                    let index = self.expression(scope)?;
                     if self.current_token.token_type != TokenType::RSquare {
                         return Err(Error::new(
                             ErrorType::SyntaxError,
@@ -1416,7 +1416,7 @@ impl Parser {
                         return Err(Error::new(
                             ErrorType::TypeError,
                             e.position(),
-                            format!("Expected a reference type, found {}", e.get_type()),
+                            format!("Expected a reference or a pointer, found {}", e.get_type()),
                         ));
                     };
                     Ok(Node::Deref(Box::new(e), t, pos))
@@ -1436,7 +1436,7 @@ impl Parser {
                             return Err(Error::new(
                                 ErrorType::TypeError,
                                 e.position(),
-                                format!("Expected a reference type, found {}", e.get_type()),
+                                format!("Expected a reference or a pointer, found {}", a),
                             ));
                         },
                         *a,
@@ -1445,7 +1445,7 @@ impl Parser {
                     return Err(Error::new(
                         ErrorType::TypeError,
                         e.position(),
-                        format!("Expected a reference type, found {}", e.get_type()),
+                        format!("Expected a reference or a pointer, found {}", e.get_type()),
                     ));
                 };
                 let node = Node::Deref(Box::new(e), a, pos.clone());

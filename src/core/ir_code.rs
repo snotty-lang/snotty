@@ -429,7 +429,7 @@ impl CodeGenerator {
                 }
                 let arr_type = match &arr {
                     Val::Pointer(_, t) => t.clone(),
-                    Val::Index(_, t) => t.clone(),
+                    Val::Index(_, ValType::Pointer(t)) => (**t).clone(),
                     _ => {
                         return Err(Error::new(
                             ErrorType::TypeError,
@@ -483,50 +483,20 @@ impl CodeGenerator {
                 Ok(Val::None)
             }
 
-            Node::Array(elements, ..) => {
-                let mut type_ = None;
-                let mut pointer = vec![];
+            Node::Array(elements, t, _) => {
+                let type_ = ValType::from_parse_type(t);
+                let size = type_.get_size();
+                let mem = memory.allocate(size * elements.len());
+                let mut current = mem;
                 for element1 in elements {
                     let element = self.make_instruction(element1, vars, memory)?;
-                    if let Some(t) = &type_ {
-                        if *t != element.r#type() {
-                            return Err(Error::new(
-                                ErrorType::TypeError,
-                                element1.position(),
-                                format!(
-                                    "Array elements have different types, expected type {}, found type {}",
-                                    t,
-                                    element.r#type()
-                                ),
-                            ));
-                        }
-                    } else {
-                        type_ = Some(element.r#type());
-                    }
-                    let size = element.get_size();
-                    let mem = memory.allocate(size);
                     self.instructions.push(
                         Instruction::Copy(element),
-                        (Some((mem, size)), memory.last_memory_index),
+                        (Some((current, size)), memory.last_memory_index),
                     );
-                    pointer.push(mem);
+                    current += size;
                 }
-                let type_ = type_.unwrap_or(ValType::None);
-                let mem = memory.allocate(POINTER_SIZE * pointer.len());
-                let mut current_mem = mem;
-                for p in pointer {
-                    self.instructions.push(
-                        Instruction::Copy(Val::Index(p, ValType::Pointer(Box::new(type_.clone())))),
-                        (Some((current_mem, POINTER_SIZE)), memory.last_memory_index),
-                    );
-                    current_mem += POINTER_SIZE;
-                }
-                let new_mem = memory.allocate(POINTER_SIZE);
-                self.instructions.push(
-                    Instruction::Ref(mem),
-                    (Some((new_mem, POINTER_SIZE)), memory.last_memory_index),
-                );
-                Ok(Val::Index(new_mem, ValType::Pointer(Box::new(type_))))
+                Ok(Val::Pointer(mem, type_.clone()))
             }
 
             Node::Return(val, ..) => {
@@ -602,11 +572,14 @@ impl CodeGenerator {
                             (None, memory.last_memory_index),
                         );
                     } else {
-                        return Err(Error::new(
-                            ErrorType::TypeError,
-                            val1.position(),
-                            format!("Cannot dereference a {}", val.r#type()),
-                        ));
+                        println!(
+                            "{}",
+                            Error::new(
+                                ErrorType::TypeError,
+                                val1.position(),
+                                format!("Cannot dereference a {}", val.r#type()),
+                            )
+                        );
                     }
                 } else {
                     unreachable!()
@@ -791,15 +764,7 @@ impl CodeGenerator {
                     Instruction::Copy(Val::Char(0)),
                     (Some((current_mem, POINTER_SIZE)), memory.last_memory_index),
                 );
-                let new_mem = memory.allocate(POINTER_SIZE);
-                self.instructions.push(
-                    Instruction::Ref(mem),
-                    (Some((new_mem, POINTER_SIZE)), memory.last_memory_index),
-                );
-                Ok(Val::Index(
-                    new_mem,
-                    ValType::Pointer(Box::new(ValType::Char)),
-                ))
+                Ok(Val::Pointer(mem, ValType::Char))
             }
 
             Node::Converted(n, t) => {
@@ -850,12 +815,12 @@ impl CodeGenerator {
             Node::Pointer(expr, _) => {
                 let val = self.make_instruction(expr, vars, memory)?;
                 if let Val::Index(n, t) | Val::Pointer(n, t) | Val::Ref(n, t) = val {
-                    Ok(Val::Pointer(n + 2usize.pow(15), t))
+                    Ok(Val::Pointer(n, t))
                 } else {
                     Err(Error::new(
                         ErrorType::TypeError,
                         expr.position(),
-                        format!("Can't take the address of {:?}", val.r#type()),
+                        format!("Cannot take the address of {}", val.r#type()),
                     ))
                 }
             }

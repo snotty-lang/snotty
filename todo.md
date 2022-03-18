@@ -1,6 +1,7 @@
 ## TODO-CODE
 * structs
-* Pointers + Arrays + Strings + Dynamic Memory
+* Dynamic Memory
+* Pointer Arithmetic
 
 ## FIXME
 * variable shdowing bug in expanded functions

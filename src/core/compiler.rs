@@ -3,7 +3,7 @@ use crate::utils::{Instruction, Instructions, Val, POINTER_SIZE};
 /// Compiles the 3-address code into brainfuck code.
 pub fn transpile(code: &Instructions) -> String {
     use crate::goto_add;
-    let mut location = 0;
+    let mut location = 2usize.pow(15);
     let mut bf_code = String::new();
     for (assign, instruction) in &code.0 {
         let free_idx = assign.1;
@@ -51,11 +51,19 @@ pub fn transpile(code: &Instructions) -> String {
             }
             Instruction::Inc(val) => {
                 goto_add!(val, &mut bf_code, &mut location, {});
-                bf_code.push('+');
+                bf_code.push_str(match val.get_size() {
+                    1 => "+",
+                    2 => "+[>>+>+<<<-]>>>[-<<<+>>>]<[->-<]+>[<->[-]]<[>+>>+<<<-]>>>[-<<<+>>>]<<[<<+>>[-]]<<<",
+                    _ => todo!(),
+                });
             }
             Instruction::Dec(val) => {
                 goto_add!(val, &mut bf_code, &mut location, {});
-                bf_code.push('-');
+                bf_code.push_str(match val.get_size() {
+                    1 => "-",
+                    2 => "[>>+>+<<<-]>>>[-<<<+>>>][-]<[->-<]+>[<->[-]]>>[-]<<[-]<[>+>>+<<<-]>>>[-<<<+>>>]<<[<<->>[-]]<<<-",
+                    _ => todo!(),
+                });
             }
             Instruction::Neg(val) => {
                 goto_add!(val, &mut bf_code, &mut location, {
@@ -465,7 +473,48 @@ pub fn transpile(code: &Instructions) -> String {
                 });
                 goto(&mut bf_code, &mut location, start);
             }
-            Instruction::DerefAssign(_, _) => todo!(),
+            Instruction::DerefAssign(val, assign) => {
+                goto_add!(val, &mut bf_code, &mut location, {});
+                copy(
+                    &mut bf_code,
+                    location,
+                    free_idx,
+                    location,
+                    free_idx + POINTER_SIZE,
+                    POINTER_SIZE,
+                );
+                goto(&mut bf_code, &mut location, free_idx);
+                bf_code.push('!');
+                goto_add!(assign, &mut bf_code, &mut location, {
+                    let start = location;
+                    for i in 0..size {
+                        bf_code.push_str(&format!("{}[-]$", ">".repeat(i)));
+                        location = 2usize.pow(15);
+                        goto(&mut bf_code, &mut location, free_idx + POINTER_SIZE + i);
+                        bf_code.push_str("[-]");
+                        goto(&mut bf_code, &mut location, free_idx);
+                        bf_code.push_str(&format!("!{}[$", ">".repeat(i)));
+                        location = 2usize.pow(15);
+                        goto(&mut bf_code, &mut location, start + i);
+                        bf_code.push('+');
+                        goto(&mut bf_code, &mut location, free_idx + POINTER_SIZE + i);
+                        bf_code.push('+');
+                        goto(&mut bf_code, &mut location, free_idx);
+                        bf_code.push_str(&format!("!{}-]$", ">".repeat(i)));
+                        location = 2usize.pow(15);
+                        goto(&mut bf_code, &mut location, free_idx + POINTER_SIZE + i);
+                        bf_code.push_str("[-");
+                        goto(&mut bf_code, &mut location, free_idx);
+                        bf_code.push_str(&format!("!{}+$", ">".repeat(i)));
+                        location = 2usize.pow(15);
+                        goto(&mut bf_code, &mut location, free_idx + POINTER_SIZE + i);
+                        bf_code.push(']');
+                    }
+                });
+                bf_code.push('$');
+                location = 2usize.pow(15);
+                goto(&mut bf_code, &mut location, start);
+            }
             Instruction::Deref(val) => {
                 goto_add!(val, &mut bf_code, &mut location, {});
                 copy(
@@ -482,20 +531,20 @@ pub fn transpile(code: &Instructions) -> String {
                     goto(&mut bf_code, &mut location, start + i);
                     bf_code.push_str("[-]");
                     goto(&mut bf_code, &mut location, free_idx);
-                    bf_code.push_str("![$");
-                    location = 0;
+                    bf_code.push_str(&format!("!{}[-$", ">".repeat(i)));
+                    location = 2usize.pow(15);
                     goto(&mut bf_code, &mut location, start + i);
                     bf_code.push('+');
                     goto(&mut bf_code, &mut location, free_idx + POINTER_SIZE + i);
                     bf_code.push('+');
                     goto(&mut bf_code, &mut location, free_idx);
-                    bf_code.push_str("!-]$");
-                    location = 0;
+                    bf_code.push_str(&format!("!{}]$", ">".repeat(i)));
+                    location = 2usize.pow(15);
                     goto(&mut bf_code, &mut location, free_idx + POINTER_SIZE + i);
                     bf_code.push_str("[-");
                     goto(&mut bf_code, &mut location, free_idx);
-                    bf_code.push_str("!+$");
-                    location = 0;
+                    bf_code.push_str(&format!("!{}+$", ">".repeat(i)));
+                    location = 2usize.pow(15);
                     goto(&mut bf_code, &mut location, free_idx + POINTER_SIZE + i);
                     bf_code.push(']');
                 }

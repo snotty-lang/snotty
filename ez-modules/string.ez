@@ -1,7 +1,3 @@
-let y = "Hello"
-ezout strlen(y)
-
-
 ez strlen(string: *char) -> int {
     let i =0
     while (*string != '\0') {

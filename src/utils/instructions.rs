@@ -270,9 +270,9 @@ impl ValType {
                     None
                 }
             }
-            Self::Pointer(t) => {
+            Self::Pointer(_) => {
                 if let TokenType::Inc | TokenType::Dec = op.token_type {
-                    Some(Self::Pointer(t.clone()))
+                    Some(Self::None)
                 } else {
                     None
                 }

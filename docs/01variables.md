@@ -30,8 +30,9 @@ The types available at present are the following:
 * `bool`
 * None
 * References
-
-Pointers, Arrays, Strings and Structs are currently not available.
+* Pointers
+* Arrays
+* Strings
 
 ## int
 `int` is an 8-bit Integer. It ranges from 255 to -256, where -1 = 255. It is wraped on overflow and underflow. When printed, positive numbers will be printed, for example:
@@ -67,6 +68,29 @@ ezout a, *b
 ```
 
 Note: All references are mutable
+
+## Pointers
+Pointers are the same as pointers in other languages. They are 16bit long. They are denoted with a `*`. They can be created using the `point` keyword.
+
+```
+let a = 6
+let b = *point b
+```
+
+## Arrays
+Arrays are continous blocks of memory. There is no array type, arrays are used using pointers
+
+```
+let array = [0, 1, 2, 5]
+ezout array[1]
+```
+
+## Strings
+Strings are array for chars. They are created using double quotes, and end with a null character.
+
+```
+let string = "Hello World!"
+```
 
 # Type Conversion
 The `as` keyword can be used to convert types.

@@ -10,7 +10,7 @@ pub struct Memory {
 impl Memory {
     pub fn new() -> Self {
         Memory {
-            last_memory_index: 0,
+            last_memory_index: 2usize.pow(15),
         }
     }
 
