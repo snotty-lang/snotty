@@ -45,4 +45,15 @@ ezout 34
 !endif
 ```
 
+## `!error`
+Raise a compiler error
+`!error <message>`
+
+
+```
+!ifdeclared I_SHOULD_NOT_EXIST
+!error "I_SHOULD_NOT_EXIST is declared"
+!endif
+```
+
 Useful for not including files twice

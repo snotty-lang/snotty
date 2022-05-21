@@ -1,12 +1,13 @@
 let y = "Hello"
-ezout strlen(y)
+ezout y
+print_str(y)
 
-
-ez strlen(string: *char) -> int {
-    let i =0
-    while (*string != '\0') {
-        i++
-        string++
-    }
-    return i
+ez print_str(str: *char) {
+    ezout str
+    ezout y
+    ezout y + 1
+    ezout str + 1
+    ezout *str
+    ezout '9'
+    ezout '\n'
 }

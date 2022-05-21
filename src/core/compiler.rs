@@ -51,19 +51,37 @@ pub fn transpile(code: &Instructions) -> String {
             }
             Instruction::Inc(val) => {
                 goto_add!(val, &mut bf_code, &mut location, {});
-                bf_code.push_str(match val.get_size() {
-                    1 => "+",
-                    2 => "+[>>+>+<<<-]>>>[-<<<+>>>]<[->-<]+>[<->[-]]<[>+>>+<<<-]>>>[-<<<+>>>]<<[<<+>>[-]]<<<",
+                match val.get_size() {
+                    1 => bf_code.push_str("+"),
+                    2 => {
+                        copy(
+                            &mut bf_code,
+                            location,
+                            free_idx,
+                            location,
+                            free_idx + 2,
+                            2,
+                        );
+                        bf_code.push_str("+[<+>>>+<<-]<[>+<-]+>>>[<<<->>>[-]]<<<[->>+<<]>");
+                        copy(
+                            &mut bf_code,
+                            location,
+                            start,
+                            location,
+                            free_idx + 2,
+                            2,
+                        );
+                    },
                     _ => todo!(),
-                });
+                }
             }
             Instruction::Dec(val) => {
                 goto_add!(val, &mut bf_code, &mut location, {});
-                bf_code.push_str(match val.get_size() {
-                    1 => "-",
-                    2 => "[>>+>+<<<-]>>>[-<<<+>>>][-]<[->-<]+>[<->[-]]>>[-]<<[-]<[>+>>+<<<-]>>>[-<<<+>>>]<<[<<->>[-]]<<<-",
+                match val.get_size() {
+                    1 => bf_code.push_str("-"),
+                    2 => {"[>>+>+<<<-]>>>[-<<<+>>>][-]<[->-<]+>[<->[-]]>>[-]<<[-]<[>+>>+<<<-]>>>[-<<<+>>>]<<[<<->>[-]]<<<-";},
                     _ => todo!(),
-                });
+                };
             }
             Instruction::Neg(val) => {
                 goto_add!(val, &mut bf_code, &mut location, {

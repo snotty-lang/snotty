@@ -1,4 +1,5 @@
 use std::{fmt, rc::Rc};
+use std::error::Error as stdError;
 
 /// An enum to specify the type of the error.
 #[derive(Debug, Clone)]
@@ -15,6 +16,7 @@ pub enum ErrorType {
     FileNotFound,
     Redefinition,
     RecursionError,
+    PreprocessorError,
 }
 
 /// An error that can occur during the compilation of the source code.
@@ -50,6 +52,8 @@ impl fmt::Display for Error {
         )
     }
 }
+
+impl stdError for Error {}
 
 /// A position in the source code.
 #[derive(Debug, Clone, PartialEq)]

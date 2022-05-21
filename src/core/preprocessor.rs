@@ -187,6 +187,31 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                         ));
                     }
                 }
+                "error" => {
+                    let msg = match tokens.get(i + 1).cloned() {
+                        None => {
+                            return Err(Error::new(
+                                ErrorType::SyntaxError,
+                                tokens[i].position.clone(),
+                                "Expected an error message after `error`".to_owned(),
+                            ))
+                        }
+                        Some(t) => match t.token_type {
+                            TokenType::String(s) => s,
+                            _ => {
+                                return Err(Error::new(
+                                    ErrorType::SyntaxError,
+                                    t.position.clone(),
+                                    "Expected an error message after `error`".to_owned(),
+                                ))
+                            }
+                        },
+                    };
+                    tokens.drain(i..=i + 1);
+                    if matches!(ifs.last(), Some(None) | None) {
+                        return Err(Error::new(ErrorType::PreprocessorError, tokens[i].position.clone(), msg));
+                    }
+                }
                 _ => unreachable!(),
             }
         } else {

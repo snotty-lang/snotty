@@ -7,8 +7,8 @@ pub const KEYWORDS: [&str; 19] = [
     "char", "while", "for", "struct", "let", "static", "as", "point",
 ];
 
-pub const PREPROCESSOR_STATEMENTS: [&str; 6] =
-    ["use", "replace", "declare", "ifdeclared", "else", "endif"];
+pub const PREPROCESSOR_STATEMENTS: [&str; 7] =
+    ["use", "replace", "declare", "ifdeclared", "else", "endif", "error"];
 
 pub const BOOLEAN_OPERATORS: [TokenType; 6] = [
     TokenType::Neq,
