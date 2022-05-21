@@ -1195,19 +1195,24 @@ impl Parser {
                     "Expected identifier".to_string(),
                 ));
             }
-            let t = if let Some(t) = left.get_type().has_attr(&self.current_token) {
-                t
-            } else {
-                return Err(Error::new(
-                    ErrorType::TypeError,
-                    self.current_token.position.clone(),
-                    format!(
-                        "Cannot access attribute {} on type {}",
-                        self.current_token,
-                        left.get_type()
-                    ),
-                ));
-            };
+
+            let t = left.get_type();
+
+            if let Type::Struct(ref t) = t {
+                let t = scope.access_struct_by_token(t)?;
+                if !t.iter().any(|(t, _)| *t == self.current_token) {
+                    return Err(Error::new(
+                        ErrorType::TypeError,
+                        self.current_token.position.clone(),
+                        format!(
+                            "Cannot access attribute {} on type {}",
+                            self.current_token,
+                            left.get_type()
+                        ),
+                    ));
+                }
+            }
+
             left = Node::AttrAccess(Box::new(left), self.current_token.clone(), t);
             self.advance();
         }

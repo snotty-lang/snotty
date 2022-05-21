@@ -269,9 +269,20 @@ impl Scope {
 
     pub fn access_struct(&mut self, node: &Node) -> Result<Vec<(Token, Type)>, Error> {
         match &node {
-            Node::StructConstructor(token1, _, _) => {
-                if let Some(a) = self.structs.iter().find(|a| a.0 == *token1) {
-                    Ok(a.1.clone())
+            Node::StructConstructor(token1, attrs1, _) => {
+                if let Some((_, attrs)) = self.structs.iter().find(|a| a.0 == *token1) {
+                    if attrs.len() != attrs1.len()
+                        || !attrs
+                            .iter()
+                            .all(|(t, _)| attrs1.iter().any(|(t1, _)| t1 == t))
+                    {
+                        return Err(Error::new(
+                            ErrorType::TypeError,
+                            token1.position.clone(),
+                            format!("All fields of struct {} are not filled", token1,),
+                        ));
+                    }
+                    Ok(attrs.clone())
                 } else {
                     if let Some(ref mut parent) = self.parent {
                         return parent.access_struct(node);

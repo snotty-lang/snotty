@@ -91,13 +91,6 @@ impl Type {
             _ => false,
         }
     }
-
-    pub fn has_attr(&self, _attr: &Token) -> Option<Type> {
-        match self {
-            Type::Char => Some(Type::Char),
-            _ => None,
-        }
-    }
 }
 
 impl Display for Type {

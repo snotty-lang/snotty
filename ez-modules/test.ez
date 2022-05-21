@@ -5,3 +5,5 @@ struct Hi {
     c: char,
     d: struct Why,
 }
+
+let h = Hi {b: 1, d: Why {}};
