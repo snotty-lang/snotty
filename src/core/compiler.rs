@@ -54,24 +54,10 @@ pub fn transpile(code: &Instructions) -> String {
                 match val.get_size() {
                     1 => bf_code.push_str("+"),
                     2 => {
-                        copy(
-                            &mut bf_code,
-                            location,
-                            free_idx,
-                            location,
-                            free_idx + 2,
-                            2,
-                        );
+                        copy(&mut bf_code, location, free_idx, location, free_idx + 2, 2);
                         bf_code.push_str("+[<+>>>+<<-]<[>+<-]+>>>[<<<->>>[-]]<<<[->>+<<]>");
-                        copy(
-                            &mut bf_code,
-                            location,
-                            start,
-                            location,
-                            free_idx + 2,
-                            2,
-                        );
-                    },
+                        copy(&mut bf_code, location, start, location, free_idx + 2, 2);
+                    }
                     _ => todo!(),
                 }
             }
@@ -79,7 +65,9 @@ pub fn transpile(code: &Instructions) -> String {
                 goto_add!(val, &mut bf_code, &mut location, {});
                 match val.get_size() {
                     1 => bf_code.push_str("-"),
-                    2 => {"[>>+>+<<<-]>>>[-<<<+>>>][-]<[->-<]+>[<->[-]]>>[-]<<[-]<[>+>>+<<<-]>>>[-<<<+>>>]<<[<<->>[-]]<<<-";},
+                    2 => {
+                        "[>>+>+<<<-]>>>[-<<<+>>>][-]<[->-<]+>[<->[-]]>>[-]<<[-]<[>+>>+<<<-]>>>[-<<<+>>>]<<[<<->>[-]]<<<-";
+                    }
                     _ => todo!(),
                 };
             }

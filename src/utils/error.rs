@@ -1,5 +1,5 @@
-use std::{fmt, rc::Rc};
 use std::error::Error as stdError;
+use std::{fmt, rc::Rc};
 
 /// An enum to specify the type of the error.
 #[derive(Debug, Clone)]

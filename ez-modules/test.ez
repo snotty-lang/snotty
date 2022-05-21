@@ -1,13 +1,7 @@
-let y = "Hello"
-ezout y
-print_str(y)
+struct Why;
 
-ez print_str(str: *char) {
-    ezout str
-    ezout y
-    ezout y + 1
-    ezout str + 1
-    ezout *str
-    ezout '9'
-    ezout '\n'
+struct Hi {
+    b: int,
+    c: char,
+    d: struct Why,
 }

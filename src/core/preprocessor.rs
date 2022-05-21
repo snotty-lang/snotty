@@ -209,7 +209,11 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                     };
                     tokens.drain(i..=i + 1);
                     if matches!(ifs.last(), Some(None) | None) {
-                        return Err(Error::new(ErrorType::PreprocessorError, tokens[i].position.clone(), msg));
+                        return Err(Error::new(
+                            ErrorType::PreprocessorError,
+                            tokens[i].position.clone(),
+                            msg,
+                        ));
                     }
                 }
                 _ => unreachable!(),

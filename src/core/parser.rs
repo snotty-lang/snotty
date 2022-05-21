@@ -315,7 +315,7 @@ impl Parser {
                 }
                 "struct" => {
                     self.advance();
-                    let node = self.struct_definition()?;
+                    let node = self.struct_definition(&mut Some(scope))?;
                     scope.register_struct(node.clone());
                     Ok((node, None))
                 }
@@ -511,7 +511,7 @@ impl Parser {
         }
     }
 
-    fn struct_definition(&mut self) -> ParseResult {
+    fn struct_definition(&mut self, scope: &mut Option<&mut Scope>) -> ParseResult {
         if let TokenType::Identifier(_) = self.current_token.token_type {
             let name = self.current_token.clone();
             let mut pos = name.position.clone();
@@ -544,7 +544,7 @@ impl Parser {
                             ));
                         }
                         self.advance();
-                        let field_type = self.make_type()?;
+                        let field_type = self.make_type(scope)?;
                         fields.push((field, field_type));
                         while self.current_token.token_type == TokenType::Comma {
                             self.advance();
@@ -568,7 +568,7 @@ impl Parser {
                                 ));
                             }
                             self.advance();
-                            let field_type = self.make_type()?;
+                            let field_type = self.make_type(scope)?;
                             fields.push((field, field_type));
                         }
                         if self.current_token.token_type != TokenType::RCurly {
@@ -611,7 +611,7 @@ impl Parser {
         }
     }
 
-    fn make_type(&mut self) -> Result<Type, Error> {
+    fn make_type(&mut self, scope: &mut Option<&mut Scope>) -> Result<Type, Error> {
         match self.current_token.token_type {
             TokenType::Keyword(ref keyword) => match keyword.as_ref() {
                 "int" => {
@@ -626,6 +626,23 @@ impl Parser {
                     self.advance();
                     Ok(Type::Char)
                 }
+                "struct" => {
+                    self.advance();
+                    if let TokenType::Identifier(_) = self.current_token.token_type {
+                        let name = self.current_token.clone();
+                        if let Some(scope) = scope {
+                            scope.access_struct_by_token(&self.current_token)?;
+                        }
+                        self.advance();
+                        Ok(Type::Struct(name))
+                    } else {
+                        Err(Error::new(
+                            ErrorType::SyntaxError,
+                            self.current_token.position.clone(),
+                            "Expected struct name".to_string(),
+                        ))
+                    }
+                }
                 _ => Err(Error::new(
                     ErrorType::SyntaxError,
                     self.current_token.position.clone(),
@@ -634,22 +651,22 @@ impl Parser {
             },
             TokenType::BAnd => {
                 self.advance();
-                Ok(Type::Ref(Box::new(self.make_type()?)))
+                Ok(Type::Ref(Box::new(self.make_type(scope)?)))
             }
             TokenType::LAnd => {
                 self.advance();
                 Ok(Type::Ref(Box::new({
-                    Type::Ref(Box::new(self.make_type()?))
+                    Type::Ref(Box::new(self.make_type(scope)?))
                 })))
             }
             TokenType::Mul => {
                 self.advance();
-                Ok(Type::Pointer(Box::new(self.make_type()?)))
+                Ok(Type::Pointer(Box::new(self.make_type(scope)?)))
             }
             TokenType::Pow => {
                 self.advance();
                 Ok(Type::Pointer(Box::new({
-                    Type::Pointer(Box::new(self.make_type()?))
+                    Type::Pointer(Box::new(self.make_type(scope)?))
                 })))
             }
             TokenType::Eol => {
@@ -665,6 +682,7 @@ impl Parser {
     }
 
     fn find_signs(&mut self) -> Result<(Signatures, Vec<String>, Structs), Error> {
+        let mut scope = Scope::new(None);
         let mut signatures = vec![];
         let mut statics = vec![];
         let mut structs = vec![];
@@ -672,11 +690,11 @@ impl Parser {
             match self.current_token.token_type {
                 TokenType::Keyword(ref s) if s == "ez" => {
                     self.advance();
-                    signatures.push(self.function_signature()?)
+                    signatures.push(self.function_signature(&mut None)?)
                 }
                 TokenType::Keyword(ref s) if s == "struct" => {
                     self.advance();
-                    let node = self.struct_definition()?;
+                    let node = self.struct_definition(&mut None)?;
                     let (token, fields) = if let Node::Struct(token, fields, _) = node {
                         (token, fields)
                     } else {
@@ -689,6 +707,7 @@ impl Parser {
                             format!("A struct with the name of {} already exists", token),
                         ));
                     }
+                    scope.register_struct_premature((token.clone(), fields.clone()));
                     structs.push((token, fields))
                 }
                 TokenType::Keyword(ref s) if s == "static" => {
@@ -1151,7 +1170,7 @@ impl Parser {
             }
             let op = self.current_token.clone();
             self.advance();
-            let right = self.make_type()?;
+            let right = self.make_type(&mut Some(scope))?;
             if !left.get_type().can_be_converted(&right) {
                 return Err(Error::new(
                     ErrorType::TypeError,
@@ -1570,7 +1589,7 @@ impl Parser {
                 ));
             }
             self.advance();
-            let t = self.make_type()?;
+            let t = self.make_type(&mut Some(scope))?;
             params.push((p, t));
             while self.current_token.token_type == TokenType::Comma {
                 self.advance();
@@ -1585,7 +1604,7 @@ impl Parser {
                         ));
                     }
                     self.advance();
-                    let t = self.make_type()?;
+                    let t = self.make_type(&mut Some(scope))?;
                     params.push((p, t));
                 } else {
                     return Err(Error::new(
@@ -1613,7 +1632,7 @@ impl Parser {
 
         let ret = if self.current_token.token_type == TokenType::Arrow {
             self.advance();
-            self.make_type()?
+            self.make_type(&mut Some(scope))?
         } else {
             Type::None
         };
@@ -1639,7 +1658,10 @@ impl Parser {
         Ok(Node::FuncDef(name, params, Box::new(stmt), ret, pos))
     }
 
-    fn function_signature(&mut self) -> Result<(Token, Vec<Type>, Type), Error> {
+    fn function_signature(
+        &mut self,
+        scope: &mut Option<&mut Scope>,
+    ) -> Result<(Token, Vec<Type>, Type), Error> {
         let name = if let TokenType::Identifier(_) = self.current_token.token_type {
             self.current_token.clone()
         } else {
@@ -1669,7 +1691,7 @@ impl Parser {
                 ));
             }
             self.advance();
-            let t = self.make_type()?;
+            let t = self.make_type(scope)?;
             params.push(t);
             while self.current_token.token_type == TokenType::Comma {
                 self.advance();
@@ -1683,7 +1705,7 @@ impl Parser {
                         ));
                     }
                     self.advance();
-                    let t = self.make_type()?;
+                    let t = self.make_type(scope)?;
                     params.push(t);
                 } else {
                     return Err(Error::new(
@@ -1711,7 +1733,7 @@ impl Parser {
 
         let ret = if self.current_token.token_type == TokenType::Arrow {
             self.advance();
-            self.make_type()?
+            self.make_type(scope)?
         } else {
             Type::None
         };
