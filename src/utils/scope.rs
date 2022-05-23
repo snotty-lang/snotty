@@ -282,6 +282,34 @@ impl Scope {
                             format!("All fields of struct {} are not filled", token1,),
                         ));
                     }
+                    if let Some((t, a, b)) = attrs
+                        .iter()
+                        .map(|(t, a)| {
+                            if let Some((_, b)) = attrs1.iter().find(|(t1, _)| t1 == t) {
+                                if *a != b.get_type() {
+                                    Some((t, a, b))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                        .find(Option::is_some)
+                        .flatten()
+                    {
+                        return Err(Error::new(
+                            ErrorType::TypeError,
+                            t.position.clone(),
+                            format!(
+                                "Field {} of struct {} has type {}, but the type passed is {}",
+                                t,
+                                token1,
+                                a,
+                                b.get_type()
+                            ),
+                        ));
+                    }
                     Ok(attrs.clone())
                 } else {
                     if let Some(ref mut parent) = self.parent {

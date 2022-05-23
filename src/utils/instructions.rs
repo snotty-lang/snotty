@@ -207,6 +207,7 @@ pub enum ValType {
     Boolean,
     Ref(Box<ValType>),
     Pointer(Box<ValType>),
+    Struct(Token, Vec<(Token, ValType)>, usize),
 }
 
 impl ValType {
@@ -301,6 +302,7 @@ impl ValType {
             Self::Boolean => 1,
             Self::Pointer(..) => POINTER_SIZE,
             Self::Ref(t) => t.get_size(),
+            Self::Struct(.., s) => *s,
         }
     }
 }
@@ -314,6 +316,7 @@ impl fmt::Display for ValType {
             Self::None => write!(f, ";"),
             Self::Number => write!(f, "integer"),
             Self::Boolean => write!(f, "bool"),
+            Self::Struct(t, ..) => write!(f, "struct {}", t),
         }
     }
 }

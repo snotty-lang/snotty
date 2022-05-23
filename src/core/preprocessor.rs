@@ -201,7 +201,7 @@ pub fn preprocess(mut tokens: Vec<Token>) -> Result<Vec<Token>, Error> {
                             _ => {
                                 return Err(Error::new(
                                     ErrorType::SyntaxError,
-                                    t.position.clone(),
+                                    t.position,
                                     "Expected an error message after `error`".to_owned(),
                                 ))
                             }

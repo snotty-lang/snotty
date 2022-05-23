@@ -1,9 +1,8 @@
-struct Why;
-
 struct Hi {
     b: int,
     c: char,
-    d: struct Why,
+    d: char,
 }
 
-let h = Hi {b: 1, d: Why {}};
+//let h = Hi {b: 1, d: Why {}, c: 'c'};
+//h.b + 2

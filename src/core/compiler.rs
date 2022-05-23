@@ -52,7 +52,7 @@ pub fn transpile(code: &Instructions) -> String {
             Instruction::Inc(val) => {
                 goto_add!(val, &mut bf_code, &mut location, {});
                 match val.get_size() {
-                    1 => bf_code.push_str("+"),
+                    1 => bf_code.push('+'),
                     2 => {
                         copy(&mut bf_code, location, free_idx, location, free_idx + 2, 2);
                         bf_code.push_str("+[<+>>>+<<-]<[>+<-]+>>>[<<<->>>[-]]<<<[->>+<<]>");
@@ -64,7 +64,7 @@ pub fn transpile(code: &Instructions) -> String {
             Instruction::Dec(val) => {
                 goto_add!(val, &mut bf_code, &mut location, {});
                 match val.get_size() {
-                    1 => bf_code.push_str("-"),
+                    1 => bf_code.push('-'),
                     2 => {
                         "[>>+>+<<<-]>>>[-<<<+>>>][-]<[->-<]+>[<->[-]]>>[-]<<[-]<[>+>>+<<<-]>>>[-<<<+>>>]<<[<<->>[-]]<<<-";
                     }
@@ -562,7 +562,7 @@ pub fn transpile(code: &Instructions) -> String {
             Instruction::BXor(_, _) => todo!(),
             _ => unreachable!(),
         }
-        bf_code.push_str("\n");
+        bf_code.push_str("\n|");
     }
     bf_code
 }

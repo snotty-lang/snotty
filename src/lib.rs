@@ -53,9 +53,9 @@ pub fn run(contents: &str, filename: String) -> Result<String, Error> {
     //         .map(|x| x.to_string())
     //         .collect::<Vec<String>>()
     // );
-    let (ast, statics) = parser::parse(tokens)?;
+    let (ast, statics, structs) = parser::parse(tokens)?;
     println!("{}\n", ast);
-    let code = ir_code::generate_code(ast, statics).unwrap();
+    let code = ir_code::generate_code(ast, statics, structs)?;
     println!("{}", code);
     // let code = evaluate::evaluate(&code);
     // let code = ir_optimizer::optimize(&code);

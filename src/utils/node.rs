@@ -8,7 +8,7 @@ pub enum Type {
     Boolean,
     None,
     Char,
-    Struct(Token),
+    Struct(Token, Vec<(Token, Type)>),
     Ref(Box<Type>),
     Pointer(Box<Type>),
 }
@@ -101,7 +101,7 @@ impl Display for Type {
             Type::None => write!(f, "()"),
             Type::Char => write!(f, "char"),
             Type::Ref(t) => write!(f, "&{}", t),
-            Type::Struct(s) => write!(f, "struct {}", s),
+            Type::Struct(s, _) => write!(f, "struct {}", s),
             Type::Pointer(t) => write!(f, "*point {}", t),
         }
     }
@@ -246,7 +246,10 @@ impl Node {
 
     pub fn get_type(&self) -> Type {
         match self {
-            Node::StructConstructor(t, ..) => Type::Struct(t.clone()),
+            Node::StructConstructor(t, f, _) => Type::Struct(
+                t.clone(),
+                f.iter().map(|(t, n)| (t.clone(), n.get_type())).collect(),
+            ),
             Node::Array(_, ty, _) => Type::Pointer(Box::new(ty.clone())),
             Node::Return(a, _) => a.get_type(),
             Node::String(_) => Type::Pointer(Box::new(Type::Char)),
@@ -286,6 +289,14 @@ impl Node {
     pub fn convert(&mut self, t: Type) {
         *self = Node::Converted(Box::new(self.clone()), t);
     }
+
+    pub fn struct_from_def(&self) -> Option<Type> {
+        if let Node::Struct(t, f, _) = self {
+            Some(Type::Struct(t.clone(), f.clone()))
+        } else {
+            None
+        }
+    }
 }
 
 impl fmt::Display for Node {
@@ -305,7 +316,7 @@ impl fmt::Display for Node {
             Node::Struct(name, fields, _) => {
                 write!(f, "struct {} {{", name)?;
                 for (name, ty) in fields {
-                    write!(f, " {}: {:?},", name, ty)?;
+                    write!(f, " {}: {},", name, ty)?;
                 }
                 write!(f, "}}")
             }

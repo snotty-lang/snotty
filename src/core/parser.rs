@@ -630,11 +630,12 @@ impl Parser {
                     self.advance();
                     if let TokenType::Identifier(_) = self.current_token.token_type {
                         let name = self.current_token.clone();
+                        let mut fields = vec![];
                         if let Some(scope) = scope {
-                            scope.access_struct_by_token(&self.current_token)?;
+                            fields = scope.access_struct_by_token(&self.current_token)?;
                         }
                         self.advance();
-                        Ok(Type::Struct(name))
+                        Ok(Type::Struct(name, fields))
                     } else {
                         Err(Error::new(
                             ErrorType::SyntaxError,
@@ -1196,11 +1197,14 @@ impl Parser {
                 ));
             }
 
-            let t = left.get_type();
-
-            if let Type::Struct(ref t) = t {
-                let t = scope.access_struct_by_token(t)?;
-                if !t.iter().any(|(t, _)| *t == self.current_token) {
+            let t = if let Type::Struct(ref t, _) = left.get_type() {
+                if let Some((_, t)) = scope
+                    .access_struct_by_token(t)?
+                    .iter()
+                    .find(|(t, _)| *t == self.current_token)
+                {
+                    t.clone()
+                } else {
                     return Err(Error::new(
                         ErrorType::TypeError,
                         self.current_token.position.clone(),
@@ -1211,7 +1215,9 @@ impl Parser {
                         ),
                     ));
                 }
-            }
+            } else {
+                unreachable!()
+            };
 
             left = Node::AttrAccess(Box::new(left), self.current_token.clone(), t);
             self.advance();
@@ -1817,7 +1823,7 @@ impl Parser {
 /// Returns the root node of the AST.
 /// # Errors
 /// If the tokens cannot be parsed into an AST, an error is returned.
-pub fn parse(tokens: Vec<Token>) -> Result<(Node, Vec<Node>), Error> {
+pub fn parse(tokens: Vec<Token>) -> Result<(Node, Vec<Node>, Vec<Node>), Error> {
     let token = tokens[0].clone();
     let mut global = Scope::new(None);
     let mut obj = Parser {
@@ -1844,11 +1850,18 @@ pub fn parse(tokens: Vec<Token>) -> Result<(Node, Vec<Node>), Error> {
     if let Some(err) = check_numbers(&ast) {
         return Err(err);
     }
-    let statics = get_static(&mut ast);
+    let statics = get_static(&ast);
+    let structs = get_structs(&ast);
+    for struct_ in &structs {
+        if let Some(err) = check_recursive_struct(&struct_.struct_from_def().unwrap(), &mut vec![])
+        {
+            return Err(err);
+        }
+    }
     if let Some(err) = expand_inline(&mut ast, vec![]) {
         return Err(err);
     }
-    Ok((ast, statics))
+    Ok((ast, statics, structs))
 }
 
 /// Checks for invalid placement and use of keywords
@@ -2383,7 +2396,32 @@ fn check_recursive(node: &Node, stack: &mut Vec<Token>) -> Option<Error> {
     }
 }
 
-fn get_static(ast: &mut Node) -> Vec<Node> {
+fn check_recursive_struct(struct_: &Type, stack: &mut Vec<Token>) -> Option<Error> {
+    if let Type::Struct(token, fields) = struct_ {
+        stack.push(token.clone());
+        for (_, ty) in fields {
+            if let Type::Struct(t, ..) = ty {
+                if stack.contains(t) {
+                    return Some(Error::new(
+                        ErrorType::TypeError,
+                        token.position.clone(),
+                        format!(
+                            "Struct {} is recursive and it's size cannot be known at compile time",
+                            token
+                        ),
+                    ));
+                }
+                check_recursive_struct(ty, stack)?;
+            }
+        }
+        stack.pop();
+        None
+    } else {
+        unreachable!("{}", struct_)
+    }
+}
+
+fn get_static(ast: &Node) -> Vec<Node> {
     find_static(ast)
         .unwrap_or_default()
         .iter()
@@ -2391,11 +2429,11 @@ fn get_static(ast: &mut Node) -> Vec<Node> {
         .collect::<Vec<_>>()
 }
 
-fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
+fn find_static(node: &Node) -> Option<Vec<&Node>> {
     match node {
         Node::Statements(nodes, ..) => {
             let mut new = vec![];
-            for node in nodes.iter_mut().rev() {
+            for node in nodes.iter().rev() {
                 if let Some(ref mut i) = find_static(node) {
                     new.append(i);
                 }
@@ -2470,6 +2508,96 @@ fn find_static(node: &mut Node) -> Option<Vec<&mut Node>> {
         }
         Node::Expanded(_, _) => unreachable!(),
         Node::StaticVar(..) => Some(vec![node]),
+    }
+}
+
+fn get_structs(ast: &Node) -> Vec<Node> {
+    find_structs(ast)
+        .unwrap_or_default()
+        .iter()
+        .map(|n| (*n).clone())
+        .collect::<Vec<_>>()
+}
+
+fn find_structs(node: &Node) -> Option<Vec<&Node>> {
+    match node {
+        Node::Statements(nodes, ..) => {
+            let mut new = vec![];
+            for node in nodes.iter().rev() {
+                if let Some(ref mut i) = find_structs(node) {
+                    new.append(i);
+                }
+            }
+            Some(new)
+        }
+        Node::StructConstructor(_, n, _) => {
+            for (_, n) in n {
+                if let a @ Some(_) = find_structs(n) {
+                    return a;
+                }
+            }
+            None
+        }
+        Node::Call(_, n, ..) | Node::Print(n, _) | Node::Array(n, ..) | Node::Ascii(n, _) => {
+            for n in n {
+                if let a @ Some(_) = find_structs(n) {
+                    return a;
+                }
+            }
+            None
+        }
+        Node::Struct(..) => Some(vec![node]),
+        Node::IndexAssign(_, n1, n2)
+        | Node::DerefAssign(n1, n2, _)
+        | Node::If(n1, n2, None, _)
+        | Node::While(n1, n2, _)
+        | Node::BinaryOp(_, n1, n2, _) => {
+            if let a @ Some(_) = find_structs(n1) {
+                return a;
+            }
+            find_structs(n2)
+        }
+        Node::Number(_) => None,
+        Node::Boolean(_) => None,
+        Node::Index(_, n, ..)
+        | Node::Ref(n, ..)
+        | Node::Pointer(n, ..)
+        | Node::Deref(n, ..)
+        | Node::Return(n, ..)
+        | Node::UnaryOp(_, n, _)
+        | Node::StaticVar(_, n)
+        | Node::Converted(n, _)
+        | Node::VarAssign(_, n, _)
+        | Node::AttrAccess(n, ..)
+        | Node::FuncDef(_, _, n, _, _)
+        | Node::VarReassign(_, n) => find_structs(n),
+        Node::VarAccess(..) => None,
+        Node::String(_) => None,
+        Node::Input(..) => None,
+        Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
+            if let a @ Some(_) = find_structs(n1) {
+                return a;
+            }
+            if let a @ Some(_) = find_structs(n2) {
+                return a;
+            }
+            find_structs(n3)
+        }
+        Node::None(_) => None,
+        Node::Char(_) => None,
+        Node::For(n1, n2, n3, n4, _) => {
+            if let a @ Some(_) = find_structs(n1) {
+                return a;
+            }
+            if let a @ Some(_) = find_structs(n2) {
+                return a;
+            }
+            if let a @ Some(_) = find_structs(n3) {
+                return a;
+            }
+            find_structs(n4)
+        }
+        Node::Expanded(_, _) => unreachable!(),
     }
 }
 
