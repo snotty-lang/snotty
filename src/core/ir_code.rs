@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::utils::{
-    Error, ErrorType, Instruction, Instructions, Memory, Node, Token, TokenType, Type, Val,
+    Error, ErrorType, Instruction, Instructions, Memory, Node, Token, TokenType, Val,
     ValNumber, ValType, Variables, POINTER_SIZE,
 };
 
@@ -881,7 +881,9 @@ pub fn generate_code(
 ) -> Result<Instructions, Error> {
     let mut structs_valtype = vec![];
     for struct_ in structs {
-        structs_valtype.push(get_struct_valtype(&struct_.struct_from_def().unwrap()));
+        structs_valtype.push(ValType::from_parse_type(
+            &struct_.struct_from_def().unwrap(),
+        ));
     }
 
     let mut obj = CodeGenerator {
@@ -898,27 +900,4 @@ pub fn generate_code(
 
     obj.make_instruction(&ast, &mut vars, &mut memory)?;
     Ok(obj.instructions)
-}
-
-fn get_struct_valtype(struct_: &Type) -> ValType {
-    if let Type::Struct(token, fields) = struct_ {
-        let mut size = 0;
-        for (_, ty) in fields {
-            size += match ty {
-                s @ Type::Struct(..) => get_struct_valtype(s).get_size(),
-                t => ValType::from_parse_type(t).get_size(),
-            };
-        }
-        println!("SIZEOF {} = {}", token, size);
-        ValType::Struct(
-            token.clone(),
-            fields
-                .iter()
-                .map(|(t, ty)| (t.clone(), ValType::from_parse_type(ty)))
-                .collect(),
-            size,
-        )
-    } else {
-        unreachable!("{}", struct_)
-    }
 }

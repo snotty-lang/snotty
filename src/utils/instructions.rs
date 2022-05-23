@@ -289,7 +289,24 @@ impl ValType {
             Type::Boolean => Self::Boolean,
             Type::Ref(t) => Self::Ref(Box::new(Self::from_parse_type(t))),
             Type::None => Self::None,
-            Type::Struct(..) => todo!(),
+            Type::Struct(token, fields) => {
+                let mut size = 0;
+                for (_, ty) in fields {
+                    size += match ty {
+                        s @ Type::Struct(..) => Self::from_parse_type(s).get_size(),
+                        t => ValType::from_parse_type(t).get_size(),
+                    };
+                }
+                println!("SIZEOF {} = {}", token, size);
+                ValType::Struct(
+                    token.clone(),
+                    fields
+                        .iter()
+                        .map(|(t, ty)| (t.clone(), ValType::from_parse_type(ty)))
+                        .collect(),
+                    size,
+                )
+            }
             Type::Pointer(t) => Self::Pointer(Box::new(Self::from_parse_type(t))),
         }
     }
