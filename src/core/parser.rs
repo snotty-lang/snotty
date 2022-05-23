@@ -1833,9 +1833,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<(Node, Vec<Node>, Vec<Node>), Error> 
         statics: vec![],
     };
     let (signs, statics, structs) = obj.clone().find_signs()?;
-    signs
-        .iter()
-        .for_each(|s| global.register_signature(s.clone()));
+    signs.into_iter().for_each(|s| global.register_signature(s));
     structs
         .iter()
         .for_each(|s| global.register_struct_premature(s.clone()));
@@ -1851,7 +1849,12 @@ pub fn parse(tokens: Vec<Token>) -> Result<(Node, Vec<Node>, Vec<Node>), Error> 
         return Err(err);
     }
     let statics = get_static(&ast);
-    let structs = get_structs(&ast);
+    for struct_ in &mut get_structs(&ast, ScopeDepth::None) {
+        if let Some(err) = check_undefined_struct(struct_, vec![]) {
+            return Err(err);
+        }
+    }
+    let structs = get_structs(&ast, ScopeDepth::Infinite);
     for struct_ in &structs {
         if let Some(err) = check_recursive_struct(&struct_.struct_from_def().unwrap(), &mut vec![])
         {
@@ -2021,6 +2024,12 @@ fn expand_inline(ast: &mut Node, mut functions: Vec<Node>) -> Option<Error> {
             if let Node::FuncDef(_, _, f, ..) = f {
                 if let err @ Some(_) = expand_inline(f, functions.clone()) {
                     return err;
+                }
+            } else if let Node::Statements(nodes, ..) = f {
+                for node in nodes {
+                    if let err @ Some(_) = expand_inline(node, functions.clone()) {
+                        return err;
+                    }
                 }
             }
             functions[i + len] = (*f).clone();
@@ -2210,17 +2219,7 @@ fn insert_function(node: &mut Node, functions: &[Node]) -> Option<Error> {
 
 fn find_functions(node: &mut Node) -> Option<Vec<&mut Node>> {
     match node {
-        Node::FuncDef(..) => Some(vec![node]),
-
-        Node::Statements(nodes, ..) => {
-            let mut new = vec![];
-            for node in nodes.iter_mut().rev() {
-                if let Some(ref mut i) = find_functions(node) {
-                    new.append(i);
-                }
-            }
-            Some(new)
-        }
+        Node::FuncDef(..) | Node::Statements(..) => Some(vec![node]),
         Node::StructConstructor(_, n, _) => {
             for (_, n) in n {
                 if let a @ Some(_) = find_functions(n) {
@@ -2511,20 +2510,23 @@ fn find_static(node: &Node) -> Option<Vec<&Node>> {
     }
 }
 
-fn get_structs(ast: &Node) -> Vec<Node> {
-    find_structs(ast)
+fn get_structs(ast: &Node, depth: ScopeDepth) -> Vec<Node> {
+    find_structs(ast, depth)
         .unwrap_or_default()
         .iter()
         .map(|n| (*n).clone())
         .collect::<Vec<_>>()
 }
 
-fn find_structs(node: &Node) -> Option<Vec<&Node>> {
+fn find_structs(node: &Node, depth: ScopeDepth) -> Option<Vec<&Node>> {
     match node {
-        Node::Statements(nodes, ..) => {
+        Node::Statements(nodes, ..) if depth != ScopeDepth::Once => {
+            if depth == ScopeDepth::None {
+                return None;
+            }
             let mut new = vec![];
             for node in nodes.iter().rev() {
-                if let Some(ref mut i) = find_structs(node) {
+                if let Some(ref mut i) = find_structs(node, depth.degrade()) {
                     new.append(i);
                 }
             }
@@ -2532,7 +2534,7 @@ fn find_structs(node: &Node) -> Option<Vec<&Node>> {
         }
         Node::StructConstructor(_, n, _) => {
             for (_, n) in n {
-                if let a @ Some(_) = find_structs(n) {
+                if let a @ Some(_) = find_structs(n, depth) {
                     return a;
                 }
             }
@@ -2540,22 +2542,22 @@ fn find_structs(node: &Node) -> Option<Vec<&Node>> {
         }
         Node::Call(_, n, ..) | Node::Print(n, _) | Node::Array(n, ..) | Node::Ascii(n, _) => {
             for n in n {
-                if let a @ Some(_) = find_structs(n) {
+                if let a @ Some(_) = find_structs(n, depth) {
                     return a;
                 }
             }
             None
         }
-        Node::Struct(..) => Some(vec![node]),
+        Node::Struct(..) | Node::Statements(..) => Some(vec![node]),
         Node::IndexAssign(_, n1, n2)
         | Node::DerefAssign(n1, n2, _)
         | Node::If(n1, n2, None, _)
         | Node::While(n1, n2, _)
         | Node::BinaryOp(_, n1, n2, _) => {
-            if let a @ Some(_) = find_structs(n1) {
+            if let a @ Some(_) = find_structs(n1, depth) {
                 return a;
             }
-            find_structs(n2)
+            find_structs(n2, depth)
         }
         Node::Number(_) => None,
         Node::Boolean(_) => None,
@@ -2570,32 +2572,142 @@ fn find_structs(node: &Node) -> Option<Vec<&Node>> {
         | Node::VarAssign(_, n, _)
         | Node::AttrAccess(n, ..)
         | Node::FuncDef(_, _, n, _, _)
-        | Node::VarReassign(_, n) => find_structs(n),
+        | Node::VarReassign(_, n) => find_structs(n, depth),
         Node::VarAccess(..) => None,
         Node::String(_) => None,
         Node::Input(..) => None,
         Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
-            if let a @ Some(_) = find_structs(n1) {
+            if let a @ Some(_) = find_structs(n1, depth) {
                 return a;
             }
-            if let a @ Some(_) = find_structs(n2) {
+            if let a @ Some(_) = find_structs(n2, depth) {
                 return a;
             }
-            find_structs(n3)
+            find_structs(n3, depth)
         }
         Node::None(_) => None,
         Node::Char(_) => None,
         Node::For(n1, n2, n3, n4, _) => {
-            if let a @ Some(_) = find_structs(n1) {
+            if let a @ Some(_) = find_structs(n1, depth) {
                 return a;
             }
-            if let a @ Some(_) = find_structs(n2) {
+            if let a @ Some(_) = find_structs(n2, depth) {
                 return a;
             }
-            if let a @ Some(_) = find_structs(n3) {
+            if let a @ Some(_) = find_structs(n3, depth) {
                 return a;
             }
-            find_structs(n4)
+            find_structs(n4, depth)
+        }
+        Node::Expanded(_, _) => unreachable!(),
+    }
+}
+
+fn check_undefined_struct(ast: &Node, mut structs: Vec<Node>) -> Option<Error> {
+    if let Some(structs2) = find_structs(ast, ScopeDepth::None) {
+        structs.extend(structs2.iter().map(|f| (*f).clone()));
+    }
+    if let Some(structs2) = find_structs(ast, ScopeDepth::Once) {
+        for f in structs2.iter() {
+            if let Node::StructConstructor(_, f, ..) = f {
+                for (_, f) in f {
+                    if let a @ Some(_) = check_undefined_struct(f, structs.clone()) {
+                        return a;
+                    }
+                }
+            } else if let Node::Statements(nodes, ..) = f {
+                for node in nodes {
+                    if let err @ Some(_) = check_undefined_struct(node, structs.clone()) {
+                        return err;
+                    }
+                }
+            }
+        }
+    }
+    check_undefined_struct_(ast, &structs)
+}
+
+fn check_undefined_struct_(node: &Node, structs: &[Node]) -> Option<Error> {
+    match node {
+        Node::StructConstructor(name, ..) => {
+            if !structs.iter().any(|s| match s {
+                Node::Struct(n, ..) => n == name,
+                _ => false,
+            }) {
+                return Some(Error::new(
+                    ErrorType::UndefinedStruct,
+                    name.position.clone(),
+                    format!("Struct {} is not defined", name),
+                ));
+            };
+            None
+        }
+        Node::Statements(nodes, ..) => {
+            for node in nodes.iter().rev() {
+                if let a @ Some(_) = check_undefined_struct_(node, structs) {
+                    return a;
+                }
+            }
+            None
+        }
+        Node::Call(_, n, ..) | Node::Print(n, _) | Node::Array(n, ..) | Node::Ascii(n, _) => {
+            for n in n {
+                if let a @ Some(_) = check_undefined_struct_(n, structs) {
+                    return a;
+                }
+            }
+            None
+        }
+        Node::Struct(..) => None,
+        Node::IndexAssign(_, n1, n2)
+        | Node::DerefAssign(n1, n2, _)
+        | Node::If(n1, n2, None, _)
+        | Node::While(n1, n2, _)
+        | Node::BinaryOp(_, n1, n2, _) => {
+            if let a @ Some(_) = check_undefined_struct_(n1, structs) {
+                return a;
+            }
+            check_undefined_struct_(n2, structs)
+        }
+        Node::Number(_) => None,
+        Node::Boolean(_) => None,
+        Node::Index(_, n, ..)
+        | Node::Ref(n, ..)
+        | Node::Deref(n, ..)
+        | Node::Pointer(n, ..)
+        | Node::Return(n, ..)
+        | Node::Converted(n, _)
+        | Node::FuncDef(_, _, n, ..)
+        | Node::AttrAccess(n, ..)
+        | Node::StaticVar(_, n)
+        | Node::UnaryOp(_, n, _)
+        | Node::VarAssign(_, n, _)
+        | Node::VarReassign(_, n) => check_undefined_struct_(n, structs),
+        Node::VarAccess(..) => None,
+        Node::String(_) => None,
+        Node::Input(..) => None,
+        Node::Ternary(n1, n2, n3, ..) | Node::If(n1, n2, Some(n3), _) => {
+            if let a @ Some(_) = check_undefined_struct_(n1, structs) {
+                return a;
+            }
+            if let a @ Some(_) = check_undefined_struct_(n2, structs) {
+                return a;
+            }
+            check_undefined_struct_(n3, structs)
+        }
+        Node::None(_) => None,
+        Node::Char(_) => None,
+        Node::For(n1, n2, n3, n4, _) => {
+            if let a @ Some(_) = check_undefined_struct_(n1, structs) {
+                return a;
+            }
+            if let a @ Some(_) = check_undefined_struct_(n2, structs) {
+                return a;
+            }
+            if let a @ Some(_) = check_undefined_struct_(n3, structs) {
+                return a;
+            }
+            check_undefined_struct_(n4, structs)
         }
         Node::Expanded(_, _) => unreachable!(),
     }
@@ -2747,5 +2859,21 @@ fn check_numbers(node: &Node) -> Option<Error> {
         Node::Char(..) => None,
         Node::Array(..) => None,
         Node::Expanded(..) => unreachable!(),
+    }
+}
+
+#[derive(PartialEq, Copy, Clone)]
+enum ScopeDepth {
+    None,
+    Infinite,
+    Once,
+}
+
+impl ScopeDepth {
+    fn degrade(&self) -> Self {
+        match self {
+            ScopeDepth::Infinite => ScopeDepth::Infinite,
+            _ => ScopeDepth::None,
+        }
     }
 }

@@ -242,8 +242,7 @@ impl Scope {
     pub fn access_function(&mut self, node: &Node) -> Result<Type, Error> {
         match &node {
             Node::Call(token1, args1, ..) => {
-                if let Some(a) = self.signatures.iter().find(|a| {
-                    let (name, args, _) = a;
+                if let Some(a) = self.signatures.iter().find(|(name, args, _)| {
                     name == token1
                         && args.len() == args1.len()
                         && args1

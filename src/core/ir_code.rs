@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::utils::{
-    Error, ErrorType, Instruction, Instructions, Memory, Node, Token, TokenType, Val,
-    ValNumber, ValType, Variables, POINTER_SIZE,
+    Error, ErrorType, Instruction, Instructions, Memory, Node, Token, TokenType, Val, ValNumber,
+    ValType, Variables, POINTER_SIZE,
 };
 
 /// Generates the Intermediate 3-address code from the AST

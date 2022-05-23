@@ -1,8 +1,2 @@
-struct Hi {
-    b: int,
-    c: char,
-    d: char,
-}
-
-//let h = Hi {b: 1, d: Why {}, c: 'c'};
-//h.b + 2
+{struct Hi;}
+Hi {}

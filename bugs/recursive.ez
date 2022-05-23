@@ -1,0 +1,9 @@
+ez goo() {
+    ez yoo() {
+        goo()
+    }
+    ez goo() {}
+    yoo()
+}
+
+// This doesnt compile, even though it should
