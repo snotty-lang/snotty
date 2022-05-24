@@ -1,7 +1,6 @@
 target
-output
-ezlang
 brainfuck
 output
 .vscode
 output.bf
+_.*
