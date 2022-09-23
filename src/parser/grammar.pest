@@ -1,0 +1,160 @@
+// ascii pointer FIXME
+
+program = _{ SOI ~ stmt* ~ EOI }
+COMMENT = _{ "\\\\" ~ (!NEWLINE ~ ANY)* ~ NEWLINE | "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
+WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+
+stmt = {
+    assign
+    | reassign
+    | static_assign
+    | print
+    | if_stmt
+    | while_stmt
+    | for_stmt
+    | function
+    | databox
+    | return_stmt
+    | expr
+    | scope
+}
+scope = { "{" ~ stmt* ~ "}" }
+
+ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+boolean = { "true" | "false" }
+none = { ";" }
+string = ${ "\"" ~ string_inner ~ "\"" }
+string_inner = @{ string_letter* }
+string_letter = {
+    !("\"" | "\\") ~ ANY
+    | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "'" )
+    | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
+}
+char = ${ "'" ~ char_letter ~ "'" }
+char_letter = {
+    !("'" | "\\") ~ ANY
+    | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "'" )
+    | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
+}
+number = @{
+    "-"?
+    ~ ("0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*)
+}
+array = { "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }
+
+kind = { "bool" | "int" | "char" | ";" | "&" ~ kind | ident }
+value = _{
+    number
+    | boolean
+    | none
+    // | string
+    | char
+    // | array
+    | ident
+}
+expr = {
+    | binop_expr
+    | unop_expr
+    | type_cast
+    | ternary
+    | call
+    // | attr_access
+    | increment
+    | decrement
+    // | index
+    | "(" ~ expr ~ ")"
+    | databox_expr
+    | value
+}
+
+binop_expr = { value ~ binop ~ expr }
+unop_expr = { unop ~ expr }
+ternary = { "?" ~ expr ~ "?" ~ expr ~ ":" ~ expr }
+type_cast = { "<" ~ kind ~ ">" ~ expr }
+call = { value ~ "(" ~ (expr ~ ("," ~ expr)*)? ~ ")" }  // FIXME: change value to expr
+// attr_access = { value ~ "." ~ ident }  // FIXME: change 1st value to expr
+// index = { value ~ "[" ~ expr ~ "]" }  // FIXME: change value to expr
+increment = { value ~ "++" }  // FIXME: change value to expr
+decrement = { value ~ "--" }  // FIXME: change value to expr
+databox_expr = {
+    ident ~ "{"
+        ~ (ident ~ ":" ~ expr
+        ~ ("," ~ ident ~ ":" ~ expr)*)?
+    ~ "}"
+}
+
+binop = {(
+    "+"
+    | "-"
+    | "*"
+    | "/"
+    | "%"
+    | "|"
+    | "^"
+    | "&"
+    | "**"
+    | "&&"
+    | "||"
+    | ">>"
+    | "<<"
+    | "=="
+    | "!="
+    | ">="
+    | "<="
+    | ">"
+    | "<"
+)}
+unop = {(
+    "&"
+    | "-"
+    | "~"
+    | "!"
+    | "*"
+)}
+
+assign = { "let" ~ ident ~ (":" ~ kind)? ~ "=" ~ expr }
+reassign = {
+    ident
+    ~ ("="
+        | "+="
+        | "-="
+        | "/="
+        | "%="
+        | "**="
+        | ">>="
+        | "<<="
+        | "&="
+        | "|="
+        | "^="
+    )
+    ~ expr
+}
+static_assign = { "static" ~ ident ~ (":" ~ kind)? ~ "=" ~ expr }
+print = { "print" ~ expr }
+if_stmt = {
+    "if" ~ expr ~ stmt
+    ~ ("else"
+    ~   stmt
+    )?
+}
+while_stmt = { "while" ~ expr ~ stmt }
+for_stmt = {
+    "for" ~ "(" 
+    ~    stmt ~ ":" ~ expr ~ ":" ~ stmt 
+    ~ ")" ~ stmt
+}
+function = {
+    "ez" ~ ident ~ "(" 
+    ~ (ident ~ ":" ~ kind
+    ~ ("," ~ ident ~ ":" ~ kind)*)? 
+    ~ ")"
+    ~ ("->" ~ kind)?
+    ~ stmt
+}
+return_stmt = { "return" ~ expr }
+databox = {
+    "ezdata" ~ ident ~ "{"
+        ~ (ident ~ ":" ~ kind
+        ~ ("," ~ ident ~ ":" ~ kind)*)?
+    ~ "}"
+}
