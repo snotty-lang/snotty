@@ -78,7 +78,7 @@ impl ValueKind {
             }
             Rule::ident => memory
                 .get(pair.as_str())
-                .ok_or_else(|| Error::UndefinedReference(pair))
+                .ok_or(Error::UndefinedReference(pair))
                 .and_then(|(p, k)| {
                     if !matches!(p.as_rule(), Rule::expr | Rule::function) {
                         Ok(k.clone())
@@ -116,7 +116,7 @@ impl ValueKind {
                 while let Some(next) = iter.peek() {
                     match next.as_rule() {
                         Rule::ident => {
-                            drop(iter.next().unwrap().as_str());
+                            drop(iter.next());
                             params.push(ValueKind::from_pair(iter.next().unwrap(), memory)?);
                         }
                         Rule::kind => {
