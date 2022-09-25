@@ -133,7 +133,7 @@ static_assign = { "static" ~ ident ~ (":" ~ kind)? ~ "=" ~ expr }
 print = { "print" ~ expr }
 if_stmt = {
     "if" ~ expr ~ stmt
-    ~ ("else"
+    ~ ("otherwise"
     ~   stmt
     )?
 }
