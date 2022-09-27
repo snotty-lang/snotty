@@ -1,3 +1,4 @@
 let i: int = 9
 for (let i = 0: true: i++) print i
 while (false) print 2
+*<int>&'c'

@@ -1,4 +1,4 @@
-// ascii pointer FIXME
+// pointer FIXME
 
 program = _{ SOI ~ stmt* ~ EOI }
 COMMENT = _{ "\\\\" ~ (!NEWLINE ~ ANY)* ~ NEWLINE | "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
@@ -47,9 +47,9 @@ value = _{
     number
     | boolean
     | none
-    // | string
+    | string  // TODO
     | char
-    // | array
+    | array  // TODO
     | ident
 }
 expr = {
@@ -58,10 +58,10 @@ expr = {
     | type_cast
     | ternary
     | call
-    // | attr_access
+    | attr_access  // TODO
     | increment
     | decrement
-    // | index
+    | index  // TODO
     | "(" ~ expr ~ ")"
     | databox_expr
     | value
@@ -70,12 +70,12 @@ expr = {
 binop_expr = { value ~ binop ~ expr }
 unop_expr = { unop ~ expr }
 ternary = { "?" ~ expr ~ "?" ~ expr ~ ":" ~ expr }
-type_cast = { "<" ~ kind ~ ">" ~ expr }
-call = { value ~ "(" ~ (expr ~ ("," ~ expr)*)? ~ ")" }  // FIXME: change value to expr
-// attr_access = { value ~ "." ~ ident }  // FIXME: change 1st value to expr
-// index = { value ~ "[" ~ expr ~ "]" }  // FIXME: change value to expr
-increment = { value ~ "++" }  // FIXME: change value to expr
-decrement = { value ~ "--" }  // FIXME: change value to expr
+type_cast = { "<" ~ expr ~ "|" ~ kind ~ ">" }
+call = { value ~ "(" ~ (expr ~ ("," ~ expr)*)? ~ ")" }  //! FIXME: change value to expr
+attr_access = { value ~ "." ~ ident }  //! FIXME: change 1st value to expr
+index = { value ~ "[" ~ expr ~ "]" }  //! FIXME: change value to expr
+increment = { value ~ "++" }  //! FIXME: change value to expr
+decrement = { value ~ "--" }  //! FIXME: change value to expr
 databox_expr = {
     ident ~ "{"
         ~ (ident ~ ":" ~ expr
@@ -107,7 +107,6 @@ binop = {(
 unop = {(
     "&"
     | "-"
-    | "~"
     | "!"
     | "*"
 )}

@@ -8,7 +8,7 @@ pub enum Value {
     Num(u8),
     Bool(bool),
     None,
-    Ref(usize, ValueKind),
+    Ref(Box<Value>),
     Char(u8),
     Memory(usize, ValueKind),
 }
@@ -20,7 +20,7 @@ impl Value {
             Value::Num(_) => ValueKind::Number,
             Value::Bool(_) => ValueKind::Boolean,
             Value::None => ValueKind::None,
-            Value::Ref(_, t) => ValueKind::Ref(Box::new(t.clone())),
+            Value::Ref(val) => ValueKind::Ref(Box::new(val.kind())),
             Value::Memory(_, t) => t.clone(),
         }
     }
@@ -76,6 +76,7 @@ impl ValueKind {
                         _ => unreachable!(),
                     }
                 }
+                println!("{}", ret_kind);
                 // Ok(ValueKind::Function(
                 //     scope.code.borrow().len(),
                 //     params,
@@ -90,7 +91,7 @@ impl ValueKind {
                 while iter.next().is_some() {
                     fields.push(ValueKind::from_pair(iter.next().unwrap(), scope)?);
                 }
-                // Ok(ValueKind::DataBox(scope.code.borrow().len(), fields))
+                // Ok(ValueKind::DataBox(scope.code.borrow().len(), fields));
                 todo!()
             }
             Rule::kind => {
@@ -151,7 +152,7 @@ impl fmt::Display for Value {
             Value::None => write!(f, ";"),
             Value::Bool(b) => write!(f, "{}", b),
             Value::Num(num) => write!(f, "{}", num),
-            Value::Ref(ptr, _) => write!(f, "&{}", ptr),
+            Value::Ref(ptr) => write!(f, "&{}", ptr),
             Value::Memory(mem, _) => write!(f, "<{}>", mem),
         }
     }
