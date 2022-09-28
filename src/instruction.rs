@@ -1,4 +1,4 @@
-use crate::value::{Value, ValueKind};
+use crate::value::{Kind, Value};
 use std::fmt;
 
 #[derive(Debug, Clone)]
@@ -31,6 +31,8 @@ pub enum Instruction {
     Neq(Value, Value, usize),
     Lt(Value, Value, usize),
     Le(Value, Value, usize),
+    Gt(Value, Value, usize),
+    Ge(Value, Value, usize),
     Inc(Value),
     Dec(Value),
     Pow(Value, Value, usize),
@@ -43,7 +45,7 @@ pub enum Instruction {
 }
 
 impl Instruction {
-    pub fn kind(&self) -> ValueKind {
+    pub fn kind(&self) -> Kind {
         todo!()
     }
 }
@@ -78,6 +80,8 @@ impl fmt::Display for Instruction {
             Instruction::Neq(left, right, mem) => write!(f, "[{mem}] = {:?} != {:?}", left, right),
             Instruction::Lt(left, right, mem) => write!(f, "[{mem}] = {:?} < {:?}", left, right),
             Instruction::Le(left, right, mem) => write!(f, "[{mem}] = {:?} <= {:?}", left, right),
+            Instruction::Gt(left, right, mem) => write!(f, "[{mem}] = {:?} > {:?}", left, right),
+            Instruction::Ge(left, right, mem) => write!(f, "[{mem}] = {:?} >= {:?}", left, right),
             Instruction::Inc(val) => write!(f, "++{:?}", val),
             Instruction::Dec(val) => write!(f, "--{:?}", val),
             Instruction::Ref(val, mem) => write!(f, "[{mem}] = &[{}]", val),

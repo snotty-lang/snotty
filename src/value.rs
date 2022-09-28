@@ -6,21 +6,19 @@ use pest::iterators::Pair;
 #[derive(Clone, PartialEq)]
 pub enum Value {
     Byte(u8),
-    Bool(bool),
     None,
     Ref(Box<Value>),
-    Pointer(usize, ValueKind),
-    Memory(usize, ValueKind),
+    Pointer(usize, Kind),
+    Memory(usize, Kind),
 }
 
 impl Value {
-    pub fn kind(&self) -> ValueKind {
+    pub fn kind(&self) -> Kind {
         match self {
-            Value::Byte(_) => ValueKind::Byte,
-            Value::Bool(_) => ValueKind::Boolean,
-            Value::None => ValueKind::None,
-            Value::Ref(val) => ValueKind::Ref(Box::new(val.kind())),
-            Value::Pointer(_, t) => ValueKind::Pointer(Box::new(t.clone())),
+            Value::Byte(_) => Kind::Byte,
+            Value::None => Kind::None,
+            Value::Ref(val) => Kind::Ref(Box::new(val.kind())),
+            Value::Pointer(_, t) => Kind::Pointer(Box::new(t.clone())),
             Value::Memory(_, t) => t.clone(),
         }
     }
@@ -31,23 +29,21 @@ impl Value {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ValueKind {
+pub enum Kind {
     None,
     Byte,
-    Boolean,
-    Ref(Box<ValueKind>),
-    Pointer(Box<ValueKind>),
-    DataBox(usize, Vec<ValueKind>),
-    Function(usize, Vec<ValueKind>, Box<ValueKind>),
+    Ref(Box<Kind>),
+    Pointer(Box<Kind>),
+    DataBox(usize, Vec<Kind>),
+    Function(usize, Vec<Kind>, Box<Kind>),
 }
 
-impl ValueKind {
+impl Kind {
     pub fn from_pair<'a>(mut pair: Pair<'a, Rule>, scope: &Scope<'a>) -> Result<Self, Error> {
         match pair.as_rule() {
-            Rule::expr => ValueKind::from_pair(pair.into_inner().next().unwrap(), scope),
-            Rule::number => Ok(ValueKind::Byte),
-            Rule::boolean => Ok(ValueKind::Boolean),
-            Rule::none => Ok(ValueKind::None),
+            Rule::expr => Kind::from_pair(pair.into_inner().next().unwrap(), scope),
+            Rule::number | Rule::boolean | Rule::char => Ok(Kind::Byte),
+            Rule::none => Ok(Kind::None),
             // Rule::ident => scope
             //     .map
             //     .get(pair.as_str())
@@ -100,14 +96,13 @@ impl ValueKind {
                     pair.clone()
                 };
                 let mut kind = match kind.as_str().trim() {
-                    "byte" => ValueKind::Byte,
-                    "bool" => ValueKind::Boolean,
-                    ";" => ValueKind::None,
-                    _ => ValueKind::from_pair(kind, scope)?,
+                    "byte" => Kind::Byte,
+                    ";" => Kind::None,
+                    _ => Kind::from_pair(kind, scope)?,
                 };
 
                 while let Some(inner) = pair.into_inner().next() {
-                    kind = ValueKind::Ref(Box::new(kind));
+                    kind = Kind::Ref(Box::new(kind));
                     pair = inner;
                 }
                 Ok(kind)
@@ -118,27 +113,25 @@ impl ValueKind {
 
     pub fn get_size(&self) -> usize {
         match self {
-            ValueKind::None => 0,
-            ValueKind::Byte => std::mem::size_of::<u8>(),
-            ValueKind::Boolean => 1,
-            ValueKind::Ref(t) => t.get_size(),
-            ValueKind::DataBox(.., s) => s.iter().map(|t| t.get_size()).sum(),
-            ValueKind::Function(..) => 0,
-            ValueKind::Pointer(_) => 2,
+            Kind::None => 0,
+            Kind::Byte => 1,
+            Kind::Ref(t) => t.get_size(),
+            Kind::DataBox(.., s) => s.iter().map(|t| t.get_size()).sum(),
+            Kind::Function(..) => 0,
+            Kind::Pointer(_) => 2,
         }
     }
 }
 
-impl fmt::Display for ValueKind {
+impl fmt::Display for Kind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ValueKind::Ref(t) => write!(f, "&{}", t),
-            ValueKind::None => write!(f, ";"),
-            ValueKind::Byte => write!(f, "byte"),
-            ValueKind::Boolean => write!(f, "bool"),
-            ValueKind::DataBox(t, ..) => write!(f, "ez {{{}}}", t),
-            ValueKind::Function(t, ..) => write!(f, "ez ({})", t),
-            ValueKind::Pointer(t) => write!(f, "*{}", t),
+            Kind::Ref(t) => write!(f, "&{}", t),
+            Kind::None => write!(f, ";"),
+            Kind::Byte => write!(f, "byte"),
+            Kind::DataBox(t, ..) => write!(f, "ez {{{}}}", t),
+            Kind::Function(t, ..) => write!(f, "ez ({})", t),
+            Kind::Pointer(t) => write!(f, "*{}", t),
         }
     }
 }
@@ -147,7 +140,6 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::None => write!(f, ";"),
-            Value::Bool(b) => write!(f, "{}", b),
             Value::Byte(num) => write!(f, "{}", num),
             Value::Ref(ptr) => write!(f, "&{}", ptr),
             Value::Memory(mem, _) => write!(f, "<{}>", mem),

@@ -34,7 +34,7 @@ macro_rules! error {
 #[grammar = "src/parser/grammar.pest"]
 struct EzParser;
 
-pub fn parse<'a>(program: &'a str) -> Result<(), Box<dyn std::error::Error + 'a>> {
+pub fn parse(program: &str) -> Result<(), Error> {
     let program = EzParser::parse(Rule::program, program)?;
     let mut scope = Scope::new();
     for code in program {

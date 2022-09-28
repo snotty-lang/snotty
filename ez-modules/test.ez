@@ -1,1 +1,1 @@
-let x: byte = <&byte>*&-!0
+let x: &byte = <&byte>*&-!0

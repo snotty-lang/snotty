@@ -13,13 +13,11 @@ while_ = @{ "while" ~ n_ascii }
 otherwise = @{ "otherwise" ~ n_ascii }
 if_ = @{ "if" ~ n_ascii }
 out_ = @{ "out" ~ n_ascii }
-static_ = @{ "static_" ~ n_ascii }
 let_ = @{ "let" ~ n_ascii }
 
 stmt = {
     assign
     | reassign
-    | static_assign
     | out
     | if_stmt
     | while_stmt
@@ -111,7 +109,7 @@ expr = {
 }
 
 unop_expr = { unop ~ expr }
-ternary = { "?" ~ expr ~ ":" ~ expr ~ ":" ~ expr }
+ternary = { value ~ "?" ~ expr ~ ":" ~ expr }  //! FIXME: change value to expr
 type_cast = { "<" ~ kind ~ ">" ~ expr }
 databox_const = {  //! FIXME: change ident to expr
     (ident | databox_expr) ~ "{"
@@ -150,8 +148,6 @@ binop = {(
     | "^"
     | "&"
     | "**"
-    | "&&"
-    | "||"
     | ">>"
     | "<<"
     | "=="
@@ -185,7 +181,6 @@ reassign = {
     )
     ~ expr
 }
-static_assign = { static_ ~ ident ~ (":" ~ kind)? ~ "=" ~ expr }
 out = { out_ ~ expr }
 return_stmt = { return_ ~ expr }
 

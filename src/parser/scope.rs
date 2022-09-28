@@ -10,12 +10,11 @@ use crate::{
     error,
     instruction::Instruction,
     parser::{Error, Rule},
-    value::{Value, ValueKind},
+    value::{Kind, Value},
 };
 
 #[derive(Debug, Default)]
 pub struct Scope<'a> {
-    // pub(crate) kind: HashMap<&'a str, ValueKind>,
     pub(crate) map: HashMap<&'a str, Value>,
     code: Rc<RefCell<Vec<Instruction>>>,
     loc: usize,
@@ -60,7 +59,7 @@ impl<'a> Scope<'a> {
         match pair.as_rule() {
             Rule::expr => self.from_pair(pair.into_inner().next().unwrap()),
             Rule::number => Ok(Value::Byte(pair.as_str().parse().unwrap())),
-            Rule::boolean => Ok(Value::Bool(pair.as_str().parse().unwrap())),
+            Rule::boolean => Ok(Value::Byte((pair.as_str().trim() == "true").into())),
             Rule::none => Ok(Value::None),
             Rule::char => Ok(Value::Byte(pair.as_str().as_bytes()[0])),
             Rule::stmt => self.from_pair(pair.into_inner().next().unwrap()),
@@ -73,7 +72,7 @@ impl<'a> Scope<'a> {
             }
             Rule::type_cast => {
                 let mut iter = pair.clone().into_inner();
-                let kind = ValueKind::from_pair(iter.next().unwrap(), self)?;
+                let kind = Kind::from_pair(iter.next().unwrap(), self)?;
                 let expr = self.from_pair(iter.next().unwrap())?;
                 match (expr, kind) {
                     (expr, kind) if expr.kind() == kind => Ok(expr),
@@ -111,7 +110,7 @@ impl<'a> Scope<'a> {
                     },
                     "-" => {
                         let kind = expr.kind();
-                        if kind != ValueKind::Byte {
+                        if kind != Kind::Byte {
                             error!(R pair => format!("Cannot negate a <{}>", kind));
                         }
                         let loc = self.loc;
@@ -121,7 +120,7 @@ impl<'a> Scope<'a> {
                     }
                     "!" => {
                         let kind = expr.kind();
-                        if !matches!(kind, ValueKind::Boolean | ValueKind::Byte) {
+                        if kind != Kind::Byte {
                             error!(R pair => format!("Cannot not a <{}>", kind));
                         }
                         let loc = self.loc;
@@ -132,35 +131,159 @@ impl<'a> Scope<'a> {
                     _ => unreachable!(),
                 }
             }
-            // .and_then(|&val| {
-            //     if !matches!(p.as_rule(), Rule::expr) {
-            //         Ok(val)
-            //     } else {
-            //         Err(Error::TypeError(p.clone()))
-            //     }
-            // }),
-            // Rule::databox => {
-            //     let ident = pair.clone().into_inner().next().unwrap().as_str();
-            //     self.map.insert(
-            //         ident,
-            //         (pair.clone(), ValueKind::from_pair(pair, self)?),
-            //     );
-            //     Ok(Value::None)
-            // }
-            // Rule::function => {
-            //     let ident = pair.clone().into_inner().next().unwrap().as_str();
-            //     self.map.insert(
-            //         ident,
-            //         (pair.clone(), ValueKind::from_pair(pair, self)?),
-            //     );
-            //     Ok(Value::None)
-            // }
+            Rule::binop_expr => {
+                let mut iter = pair.clone().into_inner();
+                let left = self.from_pair(iter.next().unwrap())?;
+                let op = iter.next().unwrap();
+                let right = self.from_pair(iter.next().unwrap())?;
+                match (left.kind(), op.as_str(), right.kind()) {
+                    (Kind::Byte, "+", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::Add(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Byte, "-", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::Sub(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Byte, "*", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::Mul(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Byte, "/", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::Div(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Byte, "%", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::Mod(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Byte, "|", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::Or(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Byte, "^", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::Xor(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Byte, "&", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::And(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Byte, ">>", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::Shr(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Byte, "<<", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::Shl(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Byte, "**", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::Pow(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (a, "==", b) if a == b => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::Eq(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (a, "!=", b) if a == b => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::Neq(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Byte, "<", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::Lt(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Byte, "<=", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::Le(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Byte, ">", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::Gt(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Byte, ">=", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code
+                            .borrow_mut()
+                            .push(Instruction::Ge(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (l, op, r) => {
+                        error!(pair => format!("Cannot apply operator {} to a <{}> and a <{}>", op, l, r))
+                    }
+                }
+            }
             Rule::ternary => {
                 let mut iter = pair.clone().into_inner();
                 let cond_pair = iter.next().unwrap();
                 let cond = self.from_pair(cond_pair.clone())?;
-                if cond.kind() != ValueKind::Boolean {
-                    error!(R cond_pair => format!("Condition in a ternary expression must be a <bool>, and not a <{}>", cond.kind()));
+                if cond.kind() != Kind::Byte {
+                    error!(R cond_pair => format!("Condition in a ternary expression must be a <byte>, and not a <{}>", cond.kind()));
                 }
                 let then = self.from_pair(iter.next().unwrap())?;
                 let kind = then.kind();
@@ -180,31 +303,27 @@ impl<'a> Scope<'a> {
             }
             Rule::increment => {
                 let value = self.from_pair(pair.clone().into_inner().next().unwrap())?;
-                match value.kind() {
-                    ValueKind::Byte | ValueKind::Boolean => {
-                        self.code.borrow_mut().push(Instruction::Inc(value));
-                        Ok(Value::None)
-                    }
-                    k => error!(pair => format!("Cannot increment a <{}>", k)),
+                if value.kind() != Kind::Byte {
+                    error!(R pair => format!("Cannot increment a <{}>", value.kind()));
                 }
+                self.code.borrow_mut().push(Instruction::Inc(value));
+                Ok(Value::None)
             }
             Rule::decrement => {
                 let value = self.from_pair(pair.clone().into_inner().next().unwrap())?;
-                match value.kind() {
-                    ValueKind::Byte | ValueKind::Boolean => {
-                        self.code.borrow_mut().push(Instruction::Dec(value));
-                        Ok(Value::None)
-                    }
-                    k => error!(pair => format!("Cannot decrement a <{}>", k)),
+                if value.kind() != Kind::Byte {
+                    error!(R pair => format!("Cannot decrement a <{}>", value.kind()));
                 }
+                self.code.borrow_mut().push(Instruction::Dec(value));
+                Ok(Value::None)
             }
-            Rule::assign | Rule::static_assign => {
+            Rule::assign => {
                 let mut iter = pair.clone().into_inner();
-                drop(iter.next()); // TODO
+                drop(iter.next());
                 let ident = iter.next().unwrap().as_str();
                 let mut next = iter.next().unwrap();
                 let kind = if next.as_rule() == Rule::kind {
-                    let k = Some(ValueKind::from_pair(next, self)?);
+                    let k = Some(Kind::from_pair(next, self)?);
                     next = iter.next().unwrap();
                     k
                 } else {
@@ -216,7 +335,7 @@ impl<'a> Scope<'a> {
                 }
 
                 match value {
-                    Value::Memory(_, ValueKind::Ref(..)) => {
+                    Value::Memory(_, Kind::Ref(..)) => {
                         self.map.insert(ident, value);
                     }
                     Value::Memory(i, t) => {
@@ -229,10 +348,8 @@ impl<'a> Scope<'a> {
                     }
                     Value::Ref(val) => {
                         if let Value::Memory(i, _) = &*val {
-                            self.map.insert(
-                                ident,
-                                Value::Memory(*i, ValueKind::Ref(Box::new(val.kind()))),
-                            );
+                            self.map
+                                .insert(ident, Value::Memory(*i, Kind::Ref(Box::new(val.kind()))));
                         } else {
                             self.map
                                 .insert(ident, Value::Ref(Box::new(Value::Ref(val))));
@@ -263,7 +380,7 @@ impl<'a> Scope<'a> {
                 }
 
                 match value {
-                    Value::Memory(_, ValueKind::Ref(..)) => {
+                    Value::Memory(_, Kind::Ref(..)) => {
                         entry.insert(value);
                     }
                     Value::Memory(i, t) => {
@@ -276,7 +393,7 @@ impl<'a> Scope<'a> {
                     }
                     Value::Ref(val) => {
                         if let Value::Memory(i, _) = &*val {
-                            entry.insert(Value::Memory(*i, ValueKind::Ref(Box::new(val.kind()))));
+                            entry.insert(Value::Memory(*i, Kind::Ref(Box::new(val.kind()))));
                         } else {
                             entry.insert(Value::Ref(Box::new(Value::Ref(val))));
                         }
@@ -297,8 +414,8 @@ impl<'a> Scope<'a> {
                 drop(iter.next());
                 let cond_pair = iter.next().unwrap();
                 let cond = self.from_pair(cond_pair.clone())?;
-                if cond.kind() != ValueKind::Boolean {
-                    error!(R cond_pair => format!("Condition in an if statement must be a <bool>, and not a <{}>", cond.kind()));
+                if cond.kind() != Kind::Byte {
+                    error!(R cond_pair => format!("Condition in an if statement must be a <byte>, and not a <{}>", cond.kind()));
                 }
                 let then = iter.next().unwrap();
                 drop(iter.next());
@@ -326,13 +443,13 @@ impl<'a> Scope<'a> {
                 drop(iter.next());
                 let cond_pair = iter.next().unwrap();
                 let mut cond = self.from_pair(cond_pair.clone())?;
-                if cond.kind() != ValueKind::Boolean {
-                    error!(R cond_pair => format!("Condition in a while statement must be a <bool>, and not a <{}>", cond.kind()));
+                if cond.kind() != Kind::Byte {
+                    error!(R cond_pair => format!("Condition in a while statement must be a <byte>, and not a <{}>", cond.kind()));
                 }
                 let loc = self.loc;
                 self.loc += 1;
                 self.code.borrow_mut().push(Instruction::Copy(cond, loc));
-                cond = Value::Memory(loc, ValueKind::Boolean);
+                cond = Value::Memory(loc, Kind::Byte);
 
                 self.code
                     .borrow_mut()
@@ -360,14 +477,14 @@ impl<'a> Scope<'a> {
                 self.from_pair(init.clone())?;
 
                 let mut cond = self.from_pair(cond_pair.clone())?;
-                if cond.kind() != ValueKind::Boolean {
-                    error!(R cond_pair => format!("Condition in a for statement must be a <bool>, and not a <{}>", cond.kind()));
+                if cond.kind() != Kind::Byte {
+                    error!(R cond_pair => format!("Condition in a for statement must be a <byte>, and not a <{}>", cond.kind()));
                 }
 
                 let loc = self.loc;
                 self.loc += 1;
                 self.code.borrow_mut().push(Instruction::Copy(cond, loc));
-                cond = Value::Memory(loc, ValueKind::Boolean);
+                cond = Value::Memory(loc, Kind::Byte);
 
                 self.code
                     .borrow_mut()
@@ -388,18 +505,10 @@ impl<'a> Scope<'a> {
             Rule::out => {
                 let expr_pair = pair.clone().into_inner().nth(1).unwrap();
                 let expr = self.from_pair(expr_pair.clone())?;
-                match expr.kind() {
-                    ValueKind::Byte => self.code.borrow_mut().push(Instruction::Out(expr)),
-                    ValueKind::Boolean => {
-                        for &c in pair.as_str().as_bytes() {
-                            self.code
-                                .borrow_mut()
-                                .push(Instruction::Out(Value::Byte(c)))
-                        }
-                    }
-                    _ => {
-                        error!(R expr_pair => format!("Cannot write a <{}> to stdout", expr.kind()))
-                    }
+                if expr.kind() == Kind::Byte {
+                    self.code.borrow_mut().push(Instruction::Out(expr));
+                } else {
+                    error!(R expr_pair => format!("Cannot write a <{}> to stdout", expr.kind()))
                 }
                 Ok(Value::None)
             }
@@ -407,7 +516,7 @@ impl<'a> Scope<'a> {
                 let loc = self.loc;
                 self.loc += 1;
                 self.code.borrow_mut().push(Instruction::Input(loc));
-                Ok(Value::Memory(loc, ValueKind::Byte))
+                Ok(Value::Memory(loc, Kind::Byte))
             }
             _ => unreachable!("{pair}"),
         }
