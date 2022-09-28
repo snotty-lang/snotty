@@ -7,8 +7,9 @@ use std::{
 use pest::iterators::Pair;
 
 use crate::{
+    error,
     instruction::Instruction,
-    parser::{error::Error, Rule},
+    parser::{Error, Rule},
     value::{Value, ValueKind},
 };
 
@@ -37,7 +38,7 @@ impl<'a> Scope<'a> {
         }
     }
 
-    pub fn push(&mut self, pair: Pair<'a, Rule>) -> Result<(), Error<'a>> {
+    pub fn push(&mut self, pair: Pair<'a, Rule>) -> Result<(), Error> {
         match pair.as_rule() {
             Rule::EOI => Ok(()),
             Rule::stmt => self
@@ -55,7 +56,7 @@ impl<'a> Scope<'a> {
     }
 
     #[allow(clippy::wrong_self_convention)]
-    fn from_pair(&mut self, pair: Pair<'a, Rule>) -> Result<Value, Error<'a>> {
+    fn from_pair(&mut self, pair: Pair<'a, Rule>) -> Result<Value, Error> {
         match pair.as_rule() {
             Rule::expr => self.from_pair(pair.into_inner().next().unwrap()),
             Rule::number => Ok(Value::Byte(pair.as_str().parse().unwrap())),
@@ -79,19 +80,23 @@ impl<'a> Scope<'a> {
                     (Value::Memory(i, t1), t2) if t1.get_size() == t2.get_size() => {
                         Ok(Value::Memory(i, t2))
                     }
-                    _ => Err(Error::TypeError(pair)),
+                    (expr, kind) => {
+                        error!(pair => format!("Cannot cast a <{}> into a <{}>", expr.kind(), kind))
+                    }
                 }
             }
             Rule::ident => self
                 .map
-                .get(pair.as_str().trim())
-                .ok_or(Error::UndefinedReference(pair))
+                .get(pair.as_str())
+                .ok_or_else(
+                    || error!(E pair => format!("Cannot find {} in current scope", pair.as_str())),
+                )
                 .cloned(),
             Rule::unop_expr => {
                 let mut iter = pair.clone().into_inner();
                 let op = iter.next().unwrap();
                 let expr = self.from_pair(iter.next().unwrap())?;
-                match op.as_str().trim() {
+                match op.as_str() {
                     "&" => Ok(Value::Ref(Box::new(expr))),
                     "*" => match expr {
                         Value::Pointer(_, ref t) => {
@@ -102,12 +107,12 @@ impl<'a> Scope<'a> {
                             Ok(Value::Memory(loc, t))
                         }
                         Value::Ref(t) => Ok(*t),
-                        _ => Err(Error::TypeError(pair)),
+                        _ => error!(pair => format!("Cannot dereference a <{}>", expr.kind())),
                     },
                     "-" => {
                         let kind = expr.kind();
                         if kind != ValueKind::Byte {
-                            return Err(Error::TypeError(pair));
+                            error!(R pair => format!("Cannot negate a <{}>", kind));
                         }
                         let loc = self.loc;
                         self.loc += 1;
@@ -117,7 +122,7 @@ impl<'a> Scope<'a> {
                     "!" => {
                         let kind = expr.kind();
                         if !matches!(kind, ValueKind::Boolean | ValueKind::Byte) {
-                            return Err(Error::TypeError(pair));
+                            error!(R pair => format!("Cannot not a <{}>", kind));
                         }
                         let loc = self.loc;
                         self.loc += 1;
@@ -151,18 +156,18 @@ impl<'a> Scope<'a> {
             //     Ok(Value::None)
             // }
             Rule::ternary => {
-                let mut iter = pair.into_inner();
+                let mut iter = pair.clone().into_inner();
                 let cond_pair = iter.next().unwrap();
                 let cond = self.from_pair(cond_pair.clone())?;
                 if cond.kind() != ValueKind::Boolean {
-                    return Err(Error::TypeError(cond_pair));
+                    error!(R cond_pair => format!("Condition in a ternary expression must be a <bool>, and not a <{}>", cond.kind()));
                 }
                 let then = self.from_pair(iter.next().unwrap())?;
                 let kind = then.kind();
                 let otherwise_pair = iter.next().unwrap();
                 let otherwise = self.from_pair(otherwise_pair.clone())?;
                 if otherwise.kind() != kind {
-                    return Err(Error::TypeError(otherwise_pair));
+                    error!(R pair => format!("Both branches of the ternary expression don't match! One returns a <{}> while other returns a <{}>", kind, otherwise.kind()));
                 }
 
                 let loc = self.loc;
@@ -180,7 +185,7 @@ impl<'a> Scope<'a> {
                         self.code.borrow_mut().push(Instruction::Inc(value));
                         Ok(Value::None)
                     }
-                    _ => Err(Error::TypeError(pair)),
+                    k => error!(pair => format!("Cannot increment a <{}>", k)),
                 }
             }
             Rule::decrement => {
@@ -190,13 +195,13 @@ impl<'a> Scope<'a> {
                         self.code.borrow_mut().push(Instruction::Dec(value));
                         Ok(Value::None)
                     }
-                    _ => Err(Error::TypeError(pair)),
+                    k => error!(pair => format!("Cannot decrement a <{}>", k)),
                 }
             }
             Rule::assign | Rule::static_assign => {
                 let mut iter = pair.clone().into_inner();
                 drop(iter.next()); // TODO
-                let ident = iter.next().unwrap().as_str().trim();
+                let ident = iter.next().unwrap().as_str();
                 let mut next = iter.next().unwrap();
                 let kind = if next.as_rule() == Rule::kind {
                     let k = Some(ValueKind::from_pair(next, self)?);
@@ -206,8 +211,8 @@ impl<'a> Scope<'a> {
                     None
                 };
                 let value = self.from_pair(next)?;
-                if matches!(kind, Some(kind) if kind != value.kind()) {
-                    return Err(Error::TypeError(pair));
+                if matches!(kind, Some(ref kind) if *kind != value.kind()) {
+                    error!(R pair => format!("{} should be a <{}> but it is a <{}>", ident, kind.unwrap(), value.kind()));
                 }
 
                 match value {
@@ -248,13 +253,13 @@ impl<'a> Scope<'a> {
                 let mut iter = pair.clone().into_inner();
                 let ident = iter.next().unwrap();
                 let value = self.from_pair(iter.next().unwrap())?;
-                let mut entry = if let Entry::Occupied(e) = self.map.entry(ident.as_str().trim()) {
+                let mut entry = if let Entry::Occupied(e) = self.map.entry(ident.as_str()) {
                     e
                 } else {
-                    return Err(Error::UndefinedReference(ident));
+                    error!(R ident => format!("Cannot find {} in current scope", ident.as_str()));
                 };
                 if entry.get().kind() != value.kind() {
-                    return Err(Error::TypeError(pair));
+                    error!(R pair => format!("{} is a <{}> but is assigned to a <{}>", ident.as_str(), entry.get().kind(), value.kind()));
                 }
 
                 match value {
@@ -293,7 +298,7 @@ impl<'a> Scope<'a> {
                 let cond_pair = iter.next().unwrap();
                 let cond = self.from_pair(cond_pair.clone())?;
                 if cond.kind() != ValueKind::Boolean {
-                    return Err(Error::TypeError(cond_pair));
+                    error!(R cond_pair => format!("Condition in an if statement must be a <bool>, and not a <{}>", cond.kind()));
                 }
                 let then = iter.next().unwrap();
                 drop(iter.next());
@@ -306,14 +311,10 @@ impl<'a> Scope<'a> {
                     .borrow_mut()
                     .push(Instruction::If(cond, loc, is_otherwise));
 
-                if self.from_pair(then.clone())? != Value::None {
-                    return Err(Error::TypeError(then));
-                }
+                self.from_pair(then.clone())?;
                 if let Some(otherwise) = otherwise {
                     self.code.borrow_mut().push(Instruction::Else(loc));
-                    if self.from_pair(otherwise.clone())? != Value::None {
-                        return Err(Error::TypeError(otherwise));
-                    }
+                    self.from_pair(otherwise.clone())?;
                 }
                 self.code
                     .borrow_mut()
@@ -326,7 +327,7 @@ impl<'a> Scope<'a> {
                 let cond_pair = iter.next().unwrap();
                 let mut cond = self.from_pair(cond_pair.clone())?;
                 if cond.kind() != ValueKind::Boolean {
-                    return Err(Error::TypeError(cond_pair));
+                    error!(R cond_pair => format!("Condition in a while statement must be a <bool>, and not a <{}>", cond.kind()));
                 }
                 let loc = self.loc;
                 self.loc += 1;
@@ -338,9 +339,7 @@ impl<'a> Scope<'a> {
                     .push(Instruction::While(cond.clone()));
 
                 let stmt = iter.next().unwrap();
-                if self.from_pair(stmt.clone())? != Value::None {
-                    return Err(Error::TypeError(stmt));
-                }
+                self.from_pair(stmt.clone())?;
 
                 if let Value::Memory(i, _) = &cond {
                     let new_cond = self.from_pair(cond_pair)?;
@@ -358,13 +357,11 @@ impl<'a> Scope<'a> {
                 let step = iter.next().unwrap();
                 let body = iter.next().unwrap();
 
-                if self.from_pair(init.clone())? != Value::None {
-                    return Err(Error::TypeError(init));
-                }
+                self.from_pair(init.clone())?;
 
                 let mut cond = self.from_pair(cond_pair.clone())?;
                 if cond.kind() != ValueKind::Boolean {
-                    return Err(Error::TypeError(cond_pair));
+                    error!(R cond_pair => format!("Condition in a for statement must be a <bool>, and not a <{}>", cond.kind()));
                 }
 
                 let loc = self.loc;
@@ -376,12 +373,8 @@ impl<'a> Scope<'a> {
                     .borrow_mut()
                     .push(Instruction::While(cond.clone()));
 
-                if self.from_pair(body.clone())? != Value::None {
-                    return Err(Error::TypeError(body));
-                }
-                if self.from_pair(step.clone())? != Value::None {
-                    return Err(Error::TypeError(step));
-                }
+                self.from_pair(body.clone())?;
+                self.from_pair(step.clone())?;
 
                 if let Value::Memory(i, _) = &cond {
                     let new_cond = self.from_pair(cond_pair)?;
@@ -393,7 +386,8 @@ impl<'a> Scope<'a> {
                 Ok(Value::None)
             }
             Rule::out => {
-                let expr = self.from_pair(pair.clone().into_inner().nth(1).unwrap())?;
+                let expr_pair = pair.clone().into_inner().nth(1).unwrap();
+                let expr = self.from_pair(expr_pair.clone())?;
                 match expr.kind() {
                     ValueKind::Byte => self.code.borrow_mut().push(Instruction::Out(expr)),
                     ValueKind::Boolean => {
@@ -403,7 +397,9 @@ impl<'a> Scope<'a> {
                                 .push(Instruction::Out(Value::Byte(c)))
                         }
                     }
-                    _ => return Err(Error::TypeError(pair)),
+                    _ => {
+                        error!(R expr_pair => format!("Cannot write a <{}> to stdout", expr.kind()))
+                    }
                 }
                 Ok(Value::None)
             }

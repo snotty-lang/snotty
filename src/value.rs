@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::parser::{error::Error, scope::Scope, Rule};
+use crate::parser::{scope::Scope, Error, Rule};
 use pest::iterators::Pair;
 
 #[derive(Clone, PartialEq)]
@@ -42,7 +42,7 @@ pub enum ValueKind {
 }
 
 impl ValueKind {
-    pub fn from_pair<'a>(mut pair: Pair<'a, Rule>, scope: &Scope<'a>) -> Result<Self, Error<'a>> {
+    pub fn from_pair<'a>(mut pair: Pair<'a, Rule>, scope: &Scope<'a>) -> Result<Self, Error> {
         match pair.as_rule() {
             Rule::expr => ValueKind::from_pair(pair.into_inner().next().unwrap(), scope),
             Rule::number => Ok(ValueKind::Byte),
@@ -134,10 +134,10 @@ impl fmt::Display for ValueKind {
         match self {
             ValueKind::Ref(t) => write!(f, "&{}", t),
             ValueKind::None => write!(f, ";"),
-            ValueKind::Byte => write!(f, "integer"),
+            ValueKind::Byte => write!(f, "byte"),
             ValueKind::Boolean => write!(f, "bool"),
-            ValueKind::DataBox(t, ..) => write!(f, "databox {}", t),
-            ValueKind::Function(t, ..) => write!(f, "function {}", t),
+            ValueKind::DataBox(t, ..) => write!(f, "ez {{{}}}", t),
+            ValueKind::Function(t, ..) => write!(f, "ez ({})", t),
             ValueKind::Pointer(t) => write!(f, "*{}", t),
         }
     }
@@ -151,7 +151,7 @@ impl fmt::Display for Value {
             Value::Byte(num) => write!(f, "{}", num),
             Value::Ref(ptr) => write!(f, "&{}", ptr),
             Value::Memory(mem, _) => write!(f, "<{}>", mem),
-            Value::Pointer(v, t) => write!(f, "<*{}|{}>", t, v),
+            Value::Pointer(v, t) => write!(f, "<*{}>{{{}}}", t, v),
         }
     }
 }

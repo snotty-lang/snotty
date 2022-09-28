@@ -1,8 +1,9 @@
 // pointer FIXME
 
 program = _{ SOI ~ stmt* ~ EOI }
-COMMENT = _{ "\\\\" ~ (!NEWLINE ~ ANY)* ~ NEWLINE | "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
+COMMENT = _{ "\\\\" ~ (!NEWLINE ~ ASCII)* ~ NEWLINE | "/*" ~ (!"*/" ~ ASCII)* ~ "*/" }
 WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+ASCII = _{ '\u{00}'..'\u{7F}' }
 n_ascii = _{ !ASCII_ALPHANUMERIC }
 scope = { "{" ~ stmt* ~ "}" }
 return_ = @{ "return" ~ n_ascii }
@@ -69,13 +70,13 @@ input = { "in" ~ n_ascii }
 string = ${ "\"" ~ string_inner ~ "\"" }
 string_inner = @{ string_letter* }
 string_letter = {
-    !("\"" | "\\") ~ ANY
+    !("\"" | "\\") ~ ASCII
     | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "'" )
     | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
 }
 char = ${ "'" ~ char_letter ~ "'" }
 char_letter = {
-    !("'" | "\\") ~ ANY
+    !("'" | "\\") ~ ASCII
     | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "'" )
     | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
 }
@@ -86,9 +87,9 @@ value = _{
     number
     | boolean
     | none
-    | string  // TODO
+    | string
     | char
-    | array  // TODO
+    | array
     | input
     | ident
     | "(" ~ expr ~ ")"
