@@ -16,5 +16,6 @@ pub fn parse<'a>(program: &'a str) -> Result<(), Box<dyn std::error::Error + 'a>
         println!("{}", code);
         scope.push(code)?;
     }
+    println!("{:?}", scope.code());
     Ok(())
 }

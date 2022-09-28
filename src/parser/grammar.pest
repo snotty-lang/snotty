@@ -3,12 +3,23 @@
 program = _{ SOI ~ stmt* ~ EOI }
 COMMENT = _{ "\\\\" ~ (!NEWLINE ~ ANY)* ~ NEWLINE | "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
 WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+n_ascii = _{ !ASCII_ALPHANUMERIC }
+scope = { "{" ~ stmt* ~ "}" }
+return_ = @{ "return" ~ n_ascii }
+ez = @{ "ez" ~ n_ascii }
+for_ = @{ "for" ~ n_ascii }
+while_ = @{ "while" ~ n_ascii }
+otherwise = @{ "otherwise" ~ n_ascii }
+if_ = @{ "if" ~ n_ascii }
+out_ = @{ "out" ~ n_ascii }
+static_ = @{ "static_" ~ n_ascii }
+let_ = @{ "let" ~ n_ascii }
 
 stmt = {
     assign
     | reassign
     | static_assign
-    | print
+    | out
     | if_stmt
     | while_stmt
     | for_stmt
@@ -18,11 +29,43 @@ stmt = {
     | expr
     | scope
 }
-scope = { "{" ~ stmt* ~ "}" }
+keyword = {
+    ("byte"
+    | "bool"
+    | "let"
+    | "static"
+    | "return"
+    | "true"
+    | "false"
+    | "out"
+    | "while"
+    | "for"
+    | "if"
+    | "otherwise"
+    | "ez"
+    | "ezdata"
+    | "input") ~ n_ascii
+}
+kind = {
+    "bool" ~ n_ascii
+    | "byte" ~ n_ascii
+    | ";"
+    | "ez" ~ "(" ~ (kind ~ ("," ~ kind)*)? ~ ")" ~ ("->" ~ kind)?
+    | databox_expr
+    | "&" ~ kind
+    | ident
+}
 
-ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
-boolean = { "true" | "false" }
+ident = @{
+    !keyword
+    ~ (ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")*
+    | "_" ~ (ASCII_ALPHANUMERIC | "_")+)
+    | placeholder
+}
+placeholder = { "_" }
+boolean = { ("true" | "false") ~ n_ascii }
 none = { ";" }
+input = { "in" ~ n_ascii }
 string = ${ "\"" ~ string_inner ~ "\"" }
 string_inner = @{ string_letter* }
 string_letter = {
@@ -36,13 +79,9 @@ char_letter = {
     | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "'" )
     | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
 }
-number = @{
-    "-"?
-    ~ ("0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*)
-}
+number = @{"0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
 array = { "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }
 
-kind = { "bool" | "int" | "char" | ";" | "&" ~ kind | ident }
 value = _{
     number
     | boolean
@@ -50,36 +89,53 @@ value = _{
     | string  // TODO
     | char
     | array  // TODO
+    | input
     | ident
+    | "(" ~ expr ~ ")"
 }
 expr = {
-    | binop_expr
+    type_cast
     | unop_expr
-    | type_cast
     | ternary
-    | call
-    | attr_access  // TODO
+    | databox_const
+    | binop_expr
     | increment
     | decrement
-    | index  // TODO
-    | "(" ~ expr ~ ")"
+    | function_expr
     | databox_expr
+    | attr_access
+    | index
+    | call
     | value
 }
 
-binop_expr = { value ~ binop ~ expr }
 unop_expr = { unop ~ expr }
-ternary = { "?" ~ expr ~ "?" ~ expr ~ ":" ~ expr }
-type_cast = { "<" ~ expr ~ "|" ~ kind ~ ">" }
+ternary = { "?" ~ expr ~ ":" ~ expr ~ ":" ~ expr }
+type_cast = { "<" ~ kind ~ ">" ~ expr }
+databox_const = {  //! FIXME: change ident to expr
+    (ident | databox_expr) ~ "{"
+        ~ (ident ~ ":" ~ expr
+        ~ ("," ~ ident ~ ":" ~ expr)*)?
+    ~ "}"
+}
+binop_expr = { value ~ binop ~ expr }  //! FIXME: change value to expr
 call = { value ~ "(" ~ (expr ~ ("," ~ expr)*)? ~ ")" }  //! FIXME: change value to expr
 attr_access = { value ~ "." ~ ident }  //! FIXME: change 1st value to expr
 index = { value ~ "[" ~ expr ~ "]" }  //! FIXME: change value to expr
 increment = { value ~ "++" }  //! FIXME: change value to expr
 decrement = { value ~ "--" }  //! FIXME: change value to expr
+function_expr = {
+    "ez" ~ "(" 
+    ~ (ident ~ ":" ~ kind
+    ~ ("," ~ ident ~ ":" ~ kind)*)? 
+    ~ ")"
+    ~ ("->" ~ kind)?
+    ~ stmt
+}
 databox_expr = {
-    ident ~ "{"
-        ~ (ident ~ ":" ~ expr
-        ~ ("," ~ ident ~ ":" ~ expr)*)?
+    "ez" ~ "{"
+        ~ (ident ~ ":" ~ kind
+        ~ ("," ~ ident ~ ":" ~ kind)*)?
     ~ "}"
 }
 
@@ -111,7 +167,7 @@ unop = {(
     | "*"
 )}
 
-assign = { "let" ~ ident ~ (":" ~ kind)? ~ "=" ~ expr }
+assign = { let_ ~ ident ~ (":" ~ kind)? ~ "=" ~ expr }
 reassign = {
     ident
     ~ ("="
@@ -128,31 +184,32 @@ reassign = {
     )
     ~ expr
 }
-static_assign = { "static" ~ ident ~ (":" ~ kind)? ~ "=" ~ expr }
-print = { "print" ~ expr }
+static_assign = { static_ ~ ident ~ (":" ~ kind)? ~ "=" ~ expr }
+out = { out_ ~ expr }
+return_stmt = { return_ ~ expr }
+
 if_stmt = {
-    "if" ~ expr ~ stmt
-    ~ ("otherwise"
+    if_ ~ expr ~ stmt
+    ~ (otherwise
     ~   stmt
     )?
 }
-while_stmt = { "while" ~ expr ~ stmt }
+while_stmt = { while_ ~ expr ~ stmt }
 for_stmt = {
-    "for" ~ "(" 
+    for_ ~ ":"
     ~    stmt ~ ":" ~ expr ~ ":" ~ stmt 
-    ~ ")" ~ stmt
+    ~ ":" ~ stmt
 }
 function = {
-    "ez" ~ ident ~ "(" 
+    ez ~ ident ~ "(" 
     ~ (ident ~ ":" ~ kind
     ~ ("," ~ ident ~ ":" ~ kind)*)? 
     ~ ")"
     ~ ("->" ~ kind)?
     ~ stmt
 }
-return_stmt = { "return" ~ expr }
 databox = {
-    "ezdata" ~ ident ~ "{"
+    ez ~ ident ~ "{"
         ~ (ident ~ ":" ~ kind
         ~ ("," ~ ident ~ ":" ~ kind)*)?
     ~ "}"

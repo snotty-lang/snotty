@@ -1,6 +1,7 @@
 use std::{
     cell::RefCell,
     collections::{hash_map::Entry, HashMap},
+    rc::Rc,
 };
 
 use pest::iterators::Pair;
@@ -15,7 +16,7 @@ use crate::{
 pub struct Scope<'a> {
     // pub(crate) kind: HashMap<&'a str, ValueKind>,
     pub(crate) map: HashMap<&'a str, Value>,
-    code: RefCell<Vec<Instruction>>,
+    code: Rc<RefCell<Vec<Instruction>>>,
     loc: usize,
 }
 
@@ -24,7 +25,11 @@ impl<'a> Scope<'a> {
         Self::default()
     }
 
-    pub fn new_from(memory: RefCell<Vec<Instruction>>) -> Scope<'a> {
+    pub fn code(self) -> Rc<RefCell<Vec<Instruction>>> {
+        self.code
+    }
+
+    pub fn new_from(memory: Rc<RefCell<Vec<Instruction>>>) -> Scope<'a> {
         Scope {
             map: HashMap::new(),
             code: memory,
@@ -50,16 +55,13 @@ impl<'a> Scope<'a> {
     }
 
     #[allow(clippy::wrong_self_convention)]
-    fn from_pair(&mut self, mut pair: Pair<'a, Rule>) -> Result<Value, Error<'a>> {
-        if pair.as_rule() == Rule::expr {
-            pair = pair.into_inner().next().unwrap();
-        }
+    fn from_pair(&mut self, pair: Pair<'a, Rule>) -> Result<Value, Error<'a>> {
         match pair.as_rule() {
             Rule::expr => self.from_pair(pair.into_inner().next().unwrap()),
-            Rule::number => Ok(Value::Num(pair.as_str().parse().unwrap())),
+            Rule::number => Ok(Value::Byte(pair.as_str().parse().unwrap())),
             Rule::boolean => Ok(Value::Bool(pair.as_str().parse().unwrap())),
             Rule::none => Ok(Value::None),
-            Rule::char => Ok(Value::Char(pair.as_str().as_bytes()[0])),
+            Rule::char => Ok(Value::Byte(pair.as_str().as_bytes()[0])),
             Rule::stmt => self.from_pair(pair.into_inner().next().unwrap()),
             Rule::scope => {
                 let mut new = Scope::new_from(self.code.clone());
@@ -70,8 +72,8 @@ impl<'a> Scope<'a> {
             }
             Rule::type_cast => {
                 let mut iter = pair.clone().into_inner();
-                let expr = self.from_pair(iter.next().unwrap())?;
                 let kind = ValueKind::from_pair(iter.next().unwrap(), self)?;
+                let expr = self.from_pair(iter.next().unwrap())?;
                 match (expr, kind) {
                     (expr, kind) if expr.kind() == kind => Ok(expr),
                     (Value::Memory(i, t1), t2) if t1.get_size() == t2.get_size() => {
@@ -82,9 +84,49 @@ impl<'a> Scope<'a> {
             }
             Rule::ident => self
                 .map
-                .get(pair.as_str())
+                .get(pair.as_str().trim())
                 .ok_or(Error::UndefinedReference(pair))
                 .cloned(),
+            Rule::unop_expr => {
+                let mut iter = pair.clone().into_inner();
+                let op = iter.next().unwrap();
+                let expr = self.from_pair(iter.next().unwrap())?;
+                match op.as_str().trim() {
+                    "&" => Ok(Value::Ref(Box::new(expr))),
+                    "*" => match expr {
+                        Value::Pointer(_, ref t) => {
+                            let loc = self.loc;
+                            self.loc += 1;
+                            let t = t.clone();
+                            self.code.borrow_mut().push(Instruction::Deref(expr, loc));
+                            Ok(Value::Memory(loc, t))
+                        }
+                        Value::Ref(t) => Ok(*t),
+                        _ => Err(Error::TypeError(pair)),
+                    },
+                    "-" => {
+                        let kind = expr.kind();
+                        if kind != ValueKind::Byte {
+                            return Err(Error::TypeError(pair));
+                        }
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code.borrow_mut().push(Instruction::Neg(expr, loc));
+                        Ok(Value::Memory(loc, kind))
+                    }
+                    "!" => {
+                        let kind = expr.kind();
+                        if !matches!(kind, ValueKind::Boolean | ValueKind::Byte) {
+                            return Err(Error::TypeError(pair));
+                        }
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.code.borrow_mut().push(Instruction::Not(expr, loc));
+                        Ok(Value::Memory(loc, kind))
+                    }
+                    _ => unreachable!(),
+                }
+            }
             // .and_then(|&val| {
             //     if !matches!(p.as_rule(), Rule::expr) {
             //         Ok(val)
@@ -134,7 +176,7 @@ impl<'a> Scope<'a> {
             Rule::increment => {
                 let value = self.from_pair(pair.clone().into_inner().next().unwrap())?;
                 match value.kind() {
-                    ValueKind::Number | ValueKind::Boolean | ValueKind::Char => {
+                    ValueKind::Byte | ValueKind::Boolean => {
                         self.code.borrow_mut().push(Instruction::Inc(value));
                         Ok(Value::None)
                     }
@@ -144,7 +186,7 @@ impl<'a> Scope<'a> {
             Rule::decrement => {
                 let value = self.from_pair(pair.clone().into_inner().next().unwrap())?;
                 match value.kind() {
-                    ValueKind::Number | ValueKind::Boolean | ValueKind::Char => {
+                    ValueKind::Byte | ValueKind::Boolean => {
                         self.code.borrow_mut().push(Instruction::Dec(value));
                         Ok(Value::None)
                     }
@@ -153,7 +195,8 @@ impl<'a> Scope<'a> {
             }
             Rule::assign | Rule::static_assign => {
                 let mut iter = pair.clone().into_inner();
-                let ident = iter.next().unwrap().as_str();
+                drop(iter.next()); // TODO
+                let ident = iter.next().unwrap().as_str().trim();
                 let mut next = iter.next().unwrap();
                 let kind = if next.as_rule() == Rule::kind {
                     let k = Some(ValueKind::from_pair(next, self)?);
@@ -205,7 +248,7 @@ impl<'a> Scope<'a> {
                 let mut iter = pair.clone().into_inner();
                 let ident = iter.next().unwrap();
                 let value = self.from_pair(iter.next().unwrap())?;
-                let mut entry = if let Entry::Occupied(e) = self.map.entry(ident.as_str()) {
+                let mut entry = if let Entry::Occupied(e) = self.map.entry(ident.as_str().trim()) {
                     e
                 } else {
                     return Err(Error::UndefinedReference(ident));
@@ -246,12 +289,14 @@ impl<'a> Scope<'a> {
             }
             Rule::if_stmt => {
                 let mut iter = pair.into_inner();
+                drop(iter.next());
                 let cond_pair = iter.next().unwrap();
                 let cond = self.from_pair(cond_pair.clone())?;
                 if cond.kind() != ValueKind::Boolean {
                     return Err(Error::TypeError(cond_pair));
                 }
                 let then = iter.next().unwrap();
+                drop(iter.next());
                 let otherwise = iter.next();
                 let is_otherwise = otherwise.is_some();
 
@@ -277,6 +322,7 @@ impl<'a> Scope<'a> {
             }
             Rule::while_stmt => {
                 let mut iter = pair.into_inner();
+                drop(iter.next());
                 let cond_pair = iter.next().unwrap();
                 let mut cond = self.from_pair(cond_pair.clone())?;
                 if cond.kind() != ValueKind::Boolean {
@@ -306,6 +352,7 @@ impl<'a> Scope<'a> {
             }
             Rule::for_stmt => {
                 let mut iter = pair.into_inner();
+                drop(iter.next());
                 let init = iter.next().unwrap();
                 let cond_pair = iter.next().unwrap();
                 let step = iter.next().unwrap();
@@ -345,23 +392,28 @@ impl<'a> Scope<'a> {
 
                 Ok(Value::None)
             }
-            Rule::print => {
-                let expr = self.from_pair(pair.clone().into_inner().next().unwrap())?;
+            Rule::out => {
+                let expr = self.from_pair(pair.clone().into_inner().nth(1).unwrap())?;
                 match expr.kind() {
-                    ValueKind::Char => self.code.borrow_mut().push(Instruction::Ascii(expr)),
-                    ValueKind::Number => self.code.borrow_mut().push(Instruction::Print(expr)),
+                    ValueKind::Byte => self.code.borrow_mut().push(Instruction::Out(expr)),
                     ValueKind::Boolean => {
                         for &c in pair.as_str().as_bytes() {
                             self.code
                                 .borrow_mut()
-                                .push(Instruction::Ascii(Value::Char(c)))
+                                .push(Instruction::Out(Value::Byte(c)))
                         }
                     }
                     _ => return Err(Error::TypeError(pair)),
                 }
                 Ok(Value::None)
             }
-            _ => unreachable!(),
+            Rule::input => {
+                let loc = self.loc;
+                self.loc += 1;
+                self.code.borrow_mut().push(Instruction::Input(loc));
+                Ok(Value::Memory(loc, ValueKind::Byte))
+            }
+            _ => unreachable!("{pair}"),
         }
     }
 }
