@@ -41,7 +41,7 @@ pub enum Kind {
 }
 
 impl Kind {
-    pub fn from_pair<'a>(mut pair: Pair<'a, Rule>, scope: &Analyzer<'a>) -> Result<Self, Error> {
+    pub fn from_pair<'a>(pair: Pair<'a, Rule>, scope: &Analyzer<'a>) -> Result<Self, Error> {
         match pair.as_rule() {
             Rule::expr => Kind::from_pair(pair.into_inner().next().unwrap(), scope),
             Rule::number | Rule::boolean | Rule::char => Ok(Kind::Byte),
@@ -91,24 +91,13 @@ impl Kind {
             //     // Ok(ValueKind::DataBox(scope.code.borrow().len(), fields));
             //     todo!()
             // }
-            Rule::kind => {
-                let kind = if let Some(kind) = pair.clone().into_inner().flatten().next() {
-                    kind
-                } else {
-                    pair.clone()
-                };
-                let mut kind = match kind.as_str().trim() {
-                    "byte" => Kind::Byte,
-                    ";" => Kind::None,
-                    _ => Kind::from_pair(kind, scope)?,
-                };
-
-                while let Some(inner) = pair.into_inner().next() {
-                    kind = Kind::Ref(Box::new(kind));
-                    pair = inner;
-                }
-                Ok(kind)
-            }
+            Rule::kind => Ok(match pair.as_str().trim().as_bytes() {
+                b"byte" => Kind::Byte,
+                b";" => Kind::None,
+                [b'&', ..] => Kind::Ref(Box::new(Kind::from_pair(pair.into_inner().next().unwrap(), scope)?)),
+                [b'*', ..] => Kind::Pointer(Box::new(Kind::from_pair(pair.into_inner().next().unwrap(), scope)?)),
+                _ => Kind::from_pair(pair, scope)?,
+            }),
             _ => unreachable!(),
         }
     }

@@ -45,6 +45,7 @@ kind = {
     | ";"
     | "ez" ~ "(" ~ (kind ~ ("," ~ kind)*)? ~ ")" ~ ("->" ~ kind)?
     | "&" ~ kind
+    | "*" ~ kind
     | ident
 }
 

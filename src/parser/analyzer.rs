@@ -94,32 +94,52 @@ impl<'a> Analyzer<'a> {
                 let mut iter = pair.clone().into_inner();
                 let kind = Kind::from_pair(iter.next().unwrap(), self)?;
                 let expr = self.analyze_pair(iter.next().unwrap())?;
+                let expr_kind = expr.kind();
 
-                fn cast(pair: Pair<Rule>, expr: Value, kind: Kind) -> Result<Value, Error> {
+                fn cast(
+                    expr: Value,
+                    kind: Kind,
+                    push: &mut impl FnMut(Value) -> usize,
+                ) -> Option<Value> {
                     match (expr, kind) {
-                        (expr, kind) if expr.kind() == kind => Ok(expr),
+                        (expr, kind) if expr.kind() == kind => Some(expr),
                         (Value::Memory(i, t1), t2) if t1.get_size() == t2.get_size() => {
-                            Ok(Value::Memory(i, t2))
+                            Some(Value::Memory(i, t2))
+                        }
+                        (Value::Ref(t), Kind::Pointer(kind)) if t.kind() == *kind => {
+                            let loc = match &*t {
+                                Value::Memory(i, _) => Some(*i),
+                                _ => None,
+                            };
+                            let val = cast(*t, *kind.clone(), push)?;
+                            Some(Value::Pointer(loc.unwrap_or_else(|| (push)(val)), *kind))
                         }
                         (Value::Ref(t), kind) if t.get_size() == kind.get_size() => {
-                            cast(pair, *t, kind)
+                            cast(*t, kind, push)
                         }
                         (expr, Kind::Ref(t)) if expr.get_size() == t.get_size() => {
-                            Ok(Value::Ref(Box::new(cast(pair, expr, *t)?)))
+                            Some(Value::Ref(Box::new(cast(expr, *t, push)?)))
                         }
                         (Value::Pointer(i, t1), Kind::Pointer(t2))
                             if t1.get_size() == t2.get_size() =>
                         {
-                            Ok(Value::Pointer(i, *t2))
+                            Some(Value::Pointer(i, *t2))
                         }
-                        (Value::Byte(i), Kind::Pointer(t)) => Ok(Value::Pointer(i as usize, *t)),
-                        (expr, kind) => {
-                            error!(pair => format!("Cannot cast a <{}> into a <{}>", expr.kind(), kind))
-                        }
+                        (Value::Byte(i), Kind::Pointer(t)) => Some(Value::Pointer(i as usize, *t)),
+                        _ => None,
                     }
                 }
 
-                cast(pair, expr, kind)
+                let push = &mut |val: Value| {
+                    let loc = self.loc;
+                    self.loc += 1;
+                    self.insert_instruction(Instruction::Copy(val, loc));
+                    loc
+                };
+
+                cast(expr, kind.clone(), push).ok_or_else(
+                    || error!(E pair => format!("Cannot cast a <{}> into a <{}>", expr_kind, kind)),
+                )
             }
             Rule::ident => self.get(pair.as_str()).ok_or_else(
                 || error!(E pair => format!("Cannot find {} in current scope", pair.as_str())),
@@ -163,6 +183,14 @@ impl<'a> Analyzer<'a> {
                             self.insert_instruction(Instruction::Deref(expr, loc));
                             Ok(Value::Memory(loc, t))
                         }
+                        Value::Memory(_, Kind::Pointer(ref t)) => {
+                            let loc = self.loc;
+                            self.loc += 1;
+                            let t = *t.clone();
+                            self.insert_instruction(Instruction::Deref(expr, loc));
+                            Ok(Value::Memory(loc, t))
+                        }
+                        Value::Memory(i, Kind::Ref(t)) => Ok(Value::Memory(i, *t)),
                         Value::Ref(t) => Ok(*t),
                         _ => error!(pair => format!("Cannot dereference a <{}>", expr.kind())),
                     },
@@ -412,8 +440,11 @@ impl<'a> Analyzer<'a> {
                             self.insert(ident, Value::Ref(Box::new(Value::Ref(val))));
                         }
                     }
-                    _ => {
-                        self.insert(ident, value);
+                    val => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.insert(ident, Value::Memory(loc, val.kind()));
+                        self.insert_instruction(Instruction::Copy(val, loc));
                     }
                 }
 
@@ -422,6 +453,7 @@ impl<'a> Analyzer<'a> {
             Rule::reassign => {
                 let mut iter = pair.clone().into_inner();
                 let ident = iter.next().unwrap();
+                let op = iter.next().unwrap(); // TODO
                 let value = self.analyze_pair(iter.next().unwrap())?;
                 let mut entry = if let Some(e) = self.map.iter_mut().rev().find_map(|map| match map
                     .entry(ident.as_str())
@@ -433,11 +465,12 @@ impl<'a> Analyzer<'a> {
                 } else {
                     error!(R ident => format!("Cannot find {} in current scope", ident.as_str()));
                 };
-                if entry.get().kind() != value.kind() {
+                let old = entry.get().clone();
+                if old.kind() != value.kind() {
                     error!(R pair => format!("{} is a <{}> but is assigned to a <{}>", ident.as_str(), entry.get().kind(), value.kind()));
                 }
 
-                match value {
+                match old {
                     Value::Memory(_, Kind::Ref(..)) => {
                         entry.insert(value);
                     }
@@ -447,16 +480,14 @@ impl<'a> Analyzer<'a> {
                         entry.insert(Value::Memory(loc, t.clone()));
                         self.insert_instruction(Instruction::Copy(Value::Memory(i, t), loc));
                     }
-                    Value::Ref(val) => {
-                        if let Value::Memory(i, _) = &*val {
+                    Value::Ref(ref val) => {
+                        if let Value::Memory(i, _) = &**val {
                             entry.insert(Value::Memory(*i, Kind::Ref(Box::new(val.kind()))));
                         } else {
-                            entry.insert(Value::Ref(Box::new(Value::Ref(val))));
+                            entry.insert(Value::Ref(Box::new(old)));
                         }
                     }
-                    _ => {
-                        entry.insert(value);
-                    }
+                    _ => unreachable!(),
                 }
 
                 Ok(Value::None)
@@ -546,6 +577,7 @@ impl<'a> Analyzer<'a> {
                         self.insert_instruction(Instruction::Copy(new_cond, *i));
                     }
                 }
+                self.insert_instruction(Instruction::EndWhile(cond));
                 Ok(Value::None)
             }
             Rule::for_stmt => {
@@ -579,7 +611,7 @@ impl<'a> Analyzer<'a> {
                         self.insert_instruction(Instruction::Copy(new_cond, *i));
                     }
                 }
-
+                self.insert_instruction(Instruction::EndWhile(cond));
                 Ok(Value::None)
             }
             Rule::out => {
