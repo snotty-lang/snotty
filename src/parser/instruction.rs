@@ -1,11 +1,11 @@
-use crate::value::{Kind, Value};
+use crate::parser::value::Value;
 use std::fmt;
 
 #[derive(Debug, Clone)]
 /// Last usize -> assign location
 pub enum Instruction {
     Deref(Value, usize),
-    DerefAssign(Value, Value),
+    DerefAssign(Value, usize, Value),
     While(Value),
     EndWhile(Value),
     If(Value, usize, bool),
@@ -40,17 +40,11 @@ pub enum Instruction {
     Ref(Value, usize),
 }
 
-impl Instruction {
-    pub fn kind(&self) -> Kind {
-        todo!()
-    }
-}
-
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Instruction::DerefAssign(val, expr) => {
-                write!(f, "{} = {}", val, expr)
+            Instruction::DerefAssign(val, derefs, expr) => {
+                write!(f, "{}{} = {}", "*".repeat(*derefs), val, expr)
             }
             Instruction::Clear(from, to) => write!(f, "clear {} - {}", from, to - 1),
             Instruction::While(cond) => write!(f, "WHILE {}", cond),
@@ -79,9 +73,7 @@ impl fmt::Display for Instruction {
             Instruction::Inc(val) => write!(f, "++{:?}", val),
             Instruction::Dec(val) => write!(f, "--{:?}", val),
             Instruction::Ref(val, mem) => write!(f, "[{mem}] = &[{}]", val),
-            Instruction::Deref(val, mem) => {
-                write!(f, "[{mem}] = *{:?}", val)
-            }
+            Instruction::Deref(val, mem) => write!(f, "[{mem}] = *{:?}", val),
             Instruction::If(cond, _, _) => write!(f, "IF {:?}", cond),
             Instruction::Else(_) => write!(f, "ELSE"),
             Instruction::EndIf(_, _) => write!(f, "ENDIF"),

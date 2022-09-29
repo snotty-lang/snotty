@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::parser::{scope::Scope, Error, Rule};
+use crate::parser::{analyzer::Analyzer, Error, Rule};
 use pest::iterators::Pair;
 
 #[derive(Clone, PartialEq)]
@@ -41,7 +41,7 @@ pub enum Kind {
 }
 
 impl Kind {
-    pub fn from_pair<'a>(mut pair: Pair<'a, Rule>, scope: &Scope<'a>) -> Result<Self, Error> {
+    pub fn from_pair<'a>(mut pair: Pair<'a, Rule>, scope: &Analyzer<'a>) -> Result<Self, Error> {
         match pair.as_rule() {
             Rule::expr => Kind::from_pair(pair.into_inner().next().unwrap(), scope),
             Rule::number | Rule::boolean | Rule::char => Ok(Kind::Byte),

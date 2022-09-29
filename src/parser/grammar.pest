@@ -27,9 +27,7 @@ stmt = {
 }
 keyword = {
     ("byte"
-    | "bool"
     | "let"
-    | "static"
     | "return"
     | "true"
     | "false"
@@ -39,7 +37,6 @@ keyword = {
     | "if"
     | "otherwise"
     | "ez"
-    | "ezdata"
     | "input") ~ !ASCII_ALPHANUMERIC
 }
 kind = {
@@ -47,7 +44,6 @@ kind = {
     | "byte" ~ !ASCII_ALPHANUMERIC
     | ";"
     | "ez" ~ "(" ~ (kind ~ ("," ~ kind)*)? ~ ")" ~ ("->" ~ kind)?
-    | databox_expr
     | "&" ~ kind
     | ident
 }
@@ -97,7 +93,6 @@ expr = {
     | increment
     | decrement
     | function_expr
-    | databox_expr
     | attr_access
     | index
     | call
@@ -105,10 +100,10 @@ expr = {
 }
 
 unop_expr = { unop ~ expr }
-ternary = { value ~ "?" ~ expr ~ ":" ~ expr }  //! FIXME: change value to expr
 type_cast = { "<" ~ kind ~ ">" ~ expr }
+ternary = { value ~ "?" ~ expr ~ ":" ~ expr }  //! FIXME: change value to expr
 databox_const = {  //! FIXME: change ident to expr
-    (ident | databox_expr) ~ "{"
+    ident ~ "{"
         ~ (ident ~ ":" ~ expr
         ~ ("," ~ ident ~ ":" ~ expr)*)?
     ~ "}"
@@ -126,12 +121,6 @@ function_expr = {
     ~ ")"
     ~ ("->" ~ kind)?
     ~ stmt
-}
-databox_expr = {
-    "ez" ~ "{"
-        ~ (ident ~ ":" ~ kind
-        ~ ("," ~ ident ~ ":" ~ kind)*)?
-    ~ "}"
 }
 
 binop = {(

@@ -1,13 +1,6 @@
-## TODO-CODE
-* structs
-* Dynamic Memory
-* Pointer Arithmetic
-
-## FIXME
-* variable shdowing bug in expanded functions
-
-## TODO-NON-CODE
-* Extension
-
-## TODO-LATER
-* Enums
+* Function + call + Inline
+* Databox + constructor + attr access
+* placeholder
+* index
+* pointer syntax + type casting
+* new name

@@ -2,3 +2,9 @@ let y = 3 + 1
 let x = <byte>&y
 y + 1
 x + 1
+{
+    y + 2
+    let x = 2 + 7
+    x + 3
+}
+x + 2

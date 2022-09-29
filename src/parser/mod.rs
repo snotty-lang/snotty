@@ -1,8 +1,10 @@
-pub mod scope;
+pub mod analyzer;
+pub mod instruction;
+pub mod value;
 
 use pest::{error::Error as PestError, Parser};
 
-use crate::parser::scope::Scope;
+use crate::parser::analyzer::Analyzer;
 
 pub type Error = PestError<Rule>;
 
@@ -36,7 +38,7 @@ struct EzParser;
 
 pub fn parse(program: &str) -> Result<(), Error> {
     let program = EzParser::parse(Rule::program, program)?;
-    let mut scope = Scope::new();
+    let mut scope = Analyzer::new();
     for code in program {
         scope.push(code)?;
     }
