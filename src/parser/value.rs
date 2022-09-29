@@ -43,9 +43,6 @@ pub enum Kind {
 impl Kind {
     pub fn from_pair<'a>(pair: Pair<'a, Rule>, scope: &Analyzer<'a>) -> Result<Self, Error> {
         match pair.as_rule() {
-            Rule::expr => Kind::from_pair(pair.into_inner().next().unwrap(), scope),
-            Rule::number | Rule::boolean | Rule::char => Ok(Kind::Byte),
-            Rule::none => Ok(Kind::None),
             // Rule::ident => scope
             //     .map
             //     .get(pair.as_str())
@@ -94,8 +91,14 @@ impl Kind {
             Rule::kind => Ok(match pair.as_str().trim().as_bytes() {
                 b"byte" => Kind::Byte,
                 b";" => Kind::None,
-                [b'&', ..] => Kind::Ref(Box::new(Kind::from_pair(pair.into_inner().next().unwrap(), scope)?)),
-                [b'*', ..] => Kind::Pointer(Box::new(Kind::from_pair(pair.into_inner().next().unwrap(), scope)?)),
+                [b'&', ..] => Kind::Ref(Box::new(Kind::from_pair(
+                    pair.into_inner().next().unwrap(),
+                    scope,
+                )?)),
+                [b'*', ..] => Kind::Pointer(Box::new(Kind::from_pair(
+                    pair.into_inner().next().unwrap(),
+                    scope,
+                )?)),
                 _ => Kind::from_pair(pair, scope)?,
             }),
             _ => unreachable!(),
@@ -120,8 +123,8 @@ impl fmt::Display for Kind {
             Kind::Ref(t) => write!(f, "&{}", t),
             Kind::None => write!(f, ";"),
             Kind::Byte => write!(f, "byte"),
-            Kind::DataBox(t, ..) => write!(f, "ez {{{}}}", t),
-            Kind::Function(t, ..) => write!(f, "ez ({})", t),
+            Kind::DataBox(t, ..) => write!(f, "box {{{}}}", t),
+            Kind::Function(t, ..) => write!(f, "fx ({})", t),
             Kind::Pointer(t) => write!(f, "*{}", t),
         }
     }

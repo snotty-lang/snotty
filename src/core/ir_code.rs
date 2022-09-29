@@ -409,6 +409,7 @@ impl CodeGenerator {
                 Ok(Val::Index(mem, then_type))
             }
 
+            
             Node::None(_) => Ok(Val::None),
 
             Node::Index(arr1, index1, ..) => {

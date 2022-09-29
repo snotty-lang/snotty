@@ -3,7 +3,8 @@ COMMENT = _{ "\\\\" ~ (!NEWLINE ~ '\u{00}'..'\u{7F}')* ~ NEWLINE | "/*" ~ (!"*/"
 WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
 scope = { "{" ~ stmt* ~ "}" }
 return_ = @{ "return" ~ !ASCII_ALPHANUMERIC }
-ez = @{ "ez" ~ !ASCII_ALPHANUMERIC }
+box_ = @{ "box" ~ !ASCII_ALPHANUMERIC }
+fx = @{ "fx" ~ !ASCII_ALPHANUMERIC }
 for_ = @{ "for" ~ !ASCII_ALPHANUMERIC }
 while_ = @{ "while" ~ !ASCII_ALPHANUMERIC }
 otherwise = @{ "otherwise" ~ !ASCII_ALPHANUMERIC }
@@ -15,6 +16,7 @@ stmt = {
     assign
     | reassign
     | deref_assign
+    | index_assign
     | out
     | if_stmt
     | while_stmt
@@ -36,26 +38,21 @@ keyword = {
     | "for"
     | "if"
     | "otherwise"
-    | "ez"
+    | "fx"
+    | "box"
     | "input") ~ !ASCII_ALPHANUMERIC
 }
 kind = {
     "bool" ~ !ASCII_ALPHANUMERIC
     | "byte" ~ !ASCII_ALPHANUMERIC
     | ";"
-    | "ez" ~ "(" ~ (kind ~ ("," ~ kind)*)? ~ ")" ~ ("->" ~ kind)?
+    | "fx" ~ "(" ~ (kind ~ ("," ~ kind)*)? ~ ")" ~ ("->" ~ kind)?
     | "&" ~ kind
     | "*" ~ kind
     | ident
 }
 
-ident = @{
-    !keyword
-    ~ (ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")*
-    | "_" ~ (ASCII_ALPHANUMERIC | "_")+)
-    | placeholder
-}
-placeholder = { "_" }
+ident = @{ !keyword ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 boolean = { ("true" | "false") ~ !ASCII_ALPHANUMERIC }
 none = { ";" }
 input = { "in" ~ !ASCII_ALPHANUMERIC }
@@ -73,6 +70,7 @@ char_letter = {
 }
 number = @{"0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
 array = { "<" ~ kind ~ ">" ~ "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }
+pointer = { "{" ~ expr ~ "}" }
 
 value = _{
     number
@@ -82,6 +80,7 @@ value = _{
     | char
     | array
     | input
+    | pointer
     | ident
     | "(" ~ expr ~ ")"
 }
@@ -116,7 +115,7 @@ index = { value ~ "[" ~ expr ~ "]" }  //! FIXME: change value to expr
 increment = { value ~ "++" }  //! FIXME: change value to expr
 decrement = { value ~ "--" }  //! FIXME: change value to expr
 function_expr = {
-    "ez" ~ "(" 
+    "fx" ~ "(" 
     ~ (ident ~ ":" ~ kind
     ~ ("," ~ ident ~ ":" ~ kind)*)? 
     ~ ")"
@@ -167,8 +166,10 @@ assign = { let_ ~ ident ~ (":" ~ kind)? ~ "=" ~ expr }
 reassign = { ident ~ reassign_op ~ expr }
 out = { out_ ~ expr }
 return_stmt = { return_ ~ expr }
-deref_assign = { deref_sign+ ~ ident ~ reassign_op ~ expr }
-deref_sign = { "*" }
+deref_assign = { derefered ~ reassign_op ~ expr }
+derefered = { deref_signs ~ expr }
+deref_signs = { "*"+ }
+index_assign = { index ~ reassign_op ~ expr }
 
 if_stmt = {
     if_ ~ expr ~ stmt
@@ -183,7 +184,7 @@ for_stmt = {
     ~ ":" ~ stmt
 }
 function = {
-    ez ~ ident ~ "(" 
+    fx ~ ident ~ "(" 
     ~ (ident ~ ":" ~ kind
     ~ ("," ~ ident ~ ":" ~ kind)*)? 
     ~ ")"
@@ -191,7 +192,7 @@ function = {
     ~ stmt
 }
 databox = {
-    ez ~ ident ~ "{"
+    box_ ~ ident ~ "{"
         ~ (ident ~ ":" ~ kind
         ~ ("," ~ ident ~ ":" ~ kind)*)?
     ~ "}"

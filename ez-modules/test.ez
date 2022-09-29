@@ -1,4 +1,13 @@
-let x = 6
+let x = 6 + 1
+let y = &x
+x += 4;
+out x
+out *y
+
+let x= 9
 let y = x
-let a = <*byte>&x
-let z = x + y + *a
+y = x + 1
+let ptr = >(x)<
+let ptr = >{x}<
+{{x}}
+let ptr = {x}

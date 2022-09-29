@@ -34,10 +34,10 @@ macro_rules! error {
 
 #[derive(Parser)]
 #[grammar = "src/parser/grammar.pest"]
-struct EzParser;
+struct SnottyParser;
 
 pub fn parse(program: &str) -> Result<(), Error> {
-    let program = EzParser::parse(Rule::program, program)?;
+    let program = SnottyParser::parse(Rule::program, program)?;
     let mut scope = Analyzer::new();
     for code in program {
         scope.push(code)?;
