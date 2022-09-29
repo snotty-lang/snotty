@@ -1,23 +1,20 @@
-// pointer FIXME
-
 program = _{ SOI ~ stmt* ~ EOI }
-COMMENT = _{ "\\\\" ~ (!NEWLINE ~ ASCII)* ~ NEWLINE | "/*" ~ (!"*/" ~ ASCII)* ~ "*/" }
+COMMENT = _{ "\\\\" ~ (!NEWLINE ~ '\u{00}'..'\u{7F}')* ~ NEWLINE | "/*" ~ (!"*/" ~ '\u{00}'..'\u{7F}')* ~ "*/" }
 WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
-ASCII = _{ '\u{00}'..'\u{7F}' }
-n_ascii = _{ !ASCII_ALPHANUMERIC }
 scope = { "{" ~ stmt* ~ "}" }
-return_ = @{ "return" ~ n_ascii }
-ez = @{ "ez" ~ n_ascii }
-for_ = @{ "for" ~ n_ascii }
-while_ = @{ "while" ~ n_ascii }
-otherwise = @{ "otherwise" ~ n_ascii }
-if_ = @{ "if" ~ n_ascii }
-out_ = @{ "out" ~ n_ascii }
-let_ = @{ "let" ~ n_ascii }
+return_ = @{ "return" ~ !ASCII_ALPHANUMERIC }
+ez = @{ "ez" ~ !ASCII_ALPHANUMERIC }
+for_ = @{ "for" ~ !ASCII_ALPHANUMERIC }
+while_ = @{ "while" ~ !ASCII_ALPHANUMERIC }
+otherwise = @{ "otherwise" ~ !ASCII_ALPHANUMERIC }
+if_ = @{ "if" ~ !ASCII_ALPHANUMERIC }
+out_ = @{ "out" ~ !ASCII_ALPHANUMERIC }
+let_ = @{ "let" ~ !ASCII_ALPHANUMERIC }
 
 stmt = {
     assign
     | reassign
+    | deref_assign
     | out
     | if_stmt
     | while_stmt
@@ -43,11 +40,11 @@ keyword = {
     | "otherwise"
     | "ez"
     | "ezdata"
-    | "input") ~ n_ascii
+    | "input") ~ !ASCII_ALPHANUMERIC
 }
 kind = {
-    "bool" ~ n_ascii
-    | "byte" ~ n_ascii
+    "bool" ~ !ASCII_ALPHANUMERIC
+    | "byte" ~ !ASCII_ALPHANUMERIC
     | ";"
     | "ez" ~ "(" ~ (kind ~ ("," ~ kind)*)? ~ ")" ~ ("->" ~ kind)?
     | databox_expr
@@ -62,24 +59,23 @@ ident = @{
     | placeholder
 }
 placeholder = { "_" }
-boolean = { ("true" | "false") ~ n_ascii }
+boolean = { ("true" | "false") ~ !ASCII_ALPHANUMERIC }
 none = { ";" }
-input = { "in" ~ n_ascii }
-string = ${ "\"" ~ string_inner ~ "\"" }
-string_inner = @{ string_letter* }
+input = { "in" ~ !ASCII_ALPHANUMERIC }
+string = ${ "\"" ~ string_letter* ~ "\"" }
 string_letter = {
-    !("\"" | "\\") ~ ASCII
+    !("\"" | "\\") ~ '\u{00}'..'\u{7F}'
     | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "'" )
     | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
 }
 char = ${ "'" ~ char_letter ~ "'" }
 char_letter = {
-    !("'" | "\\") ~ ASCII
+    !("'" | "\\") ~ '\u{00}'..'\u{7F}'
     | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "'" )
     | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
 }
 number = @{"0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
-array = { "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }
+array = { "<" ~ kind ~ ">" ~ "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }
 
 value = _{
     number
@@ -163,26 +159,26 @@ unop = {(
     | "!"
     | "*"
 )}
+reassign_op = {
+    "="
+    | "+="
+    | "-="
+    | "/="
+    | "%="
+    | "**="
+    | ">>="
+    | "<<="
+    | "&="
+    | "|="
+    | "^="
+}
 
 assign = { let_ ~ ident ~ (":" ~ kind)? ~ "=" ~ expr }
-reassign = {
-    ident
-    ~ ("="
-        | "+="
-        | "-="
-        | "/="
-        | "%="
-        | "**="
-        | ">>="
-        | "<<="
-        | "&="
-        | "|="
-        | "^="
-    )
-    ~ expr
-}
+reassign = { ident ~ reassign_op ~ expr }
 out = { out_ ~ expr }
 return_stmt = { return_ ~ expr }
+deref_assign = { deref_sign+ ~ ident ~ reassign_op ~ expr }
+deref_sign = { "*" }
 
 if_stmt = {
     if_ ~ expr ~ stmt

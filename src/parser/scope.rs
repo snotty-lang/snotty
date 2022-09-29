@@ -13,10 +13,12 @@ use crate::{
     value::{Kind, Value},
 };
 
+type Sharable<T> = Rc<RefCell<T>>;
+
 #[derive(Debug, Default)]
 pub struct Scope<'a> {
-    pub(crate) map: HashMap<&'a str, Value>,
-    code: Rc<RefCell<Vec<Instruction>>>,
+    map: Sharable<Vec<HashMap<&'a str, Value>>>,
+    code: Sharable<Vec<Instruction>>,
     loc: usize,
 }
 
@@ -25,15 +27,45 @@ impl<'a> Scope<'a> {
         Self::default()
     }
 
-    pub fn code(self) -> Rc<RefCell<Vec<Instruction>>> {
+    #[inline]
+    fn insert_instruction(&self, instruction: Instruction) {
+        self.code.borrow_mut().push(instruction)
+    }
+
+    #[inline]
+    pub fn get(&self, ident: &'a str) -> Option<Value> {
+        self.map
+            .borrow()
+            .iter()
+            .rev()
+            .find_map(|map| map.get(ident))
+            .cloned()
+    }
+
+    #[inline]
+    pub fn insert(&self, ident: &'a str, value: Value) {
+        self.map
+            .borrow_mut()
+            .last_mut()
+            .unwrap()
+            .insert(ident, value);
+    }
+
+    pub fn code(self) -> Sharable<Vec<Instruction>> {
         self.code
     }
 
-    pub fn new_from(memory: Rc<RefCell<Vec<Instruction>>>) -> Scope<'a> {
+    fn destroy(&mut self) {
+        self.map.borrow_mut().pop();
+    }
+
+    pub fn child(&self) -> Scope<'a> {
+        let map = self.map.clone();
+        map.borrow_mut().push(HashMap::new());
         Scope {
-            map: HashMap::new(),
-            code: memory,
-            loc: 0,
+            map,
+            code: self.code.clone(),
+            loc: self.loc,
         }
     }
 
@@ -44,10 +76,11 @@ impl<'a> Scope<'a> {
                 .from_pair(pair.into_inner().next().unwrap())
                 .map(|_| ()),
             Rule::scope => {
-                let mut new = Scope::new_from(self.code.clone());
+                let mut child = self.child();
                 for stmt in pair.into_inner() {
-                    new.push(stmt)?;
+                    child.push(stmt)?;
                 }
+                child.destroy();
                 Ok(())
             }
             _ => unreachable!(),
@@ -64,33 +97,70 @@ impl<'a> Scope<'a> {
             Rule::char => Ok(Value::Byte(pair.as_str().as_bytes()[0])),
             Rule::stmt => self.from_pair(pair.into_inner().next().unwrap()),
             Rule::scope => {
-                let mut new = Scope::new_from(self.code.clone());
+                let mut child = self.child();
                 for stmt in pair.into_inner() {
-                    new.push(stmt)?;
+                    child.push(stmt)?;
                 }
+                child.destroy();
                 Ok(Value::None)
             }
             Rule::type_cast => {
                 let mut iter = pair.clone().into_inner();
                 let kind = Kind::from_pair(iter.next().unwrap(), self)?;
                 let expr = self.from_pair(iter.next().unwrap())?;
-                match (expr, kind) {
-                    (expr, kind) if expr.kind() == kind => Ok(expr),
-                    (Value::Memory(i, t1), t2) if t1.get_size() == t2.get_size() => {
-                        Ok(Value::Memory(i, t2))
-                    }
-                    (expr, kind) => {
-                        error!(pair => format!("Cannot cast a <{}> into a <{}>", expr.kind(), kind))
+                fn cast(pair: Pair<Rule>, expr: Value, kind: Kind) -> Result<Value, Error> {
+                    match (expr, kind) {
+                        (expr, kind) if expr.kind() == kind => Ok(expr),
+                        (Value::Memory(i, t1), t2) if t1.get_size() == t2.get_size() => {
+                            Ok(Value::Memory(i, t2))
+                        }
+                        (Value::Ref(t), kind) if t.get_size() == kind.get_size() => {
+                            cast(pair, *t, kind)
+                        }
+                        (expr, Kind::Ref(t)) if expr.get_size() == t.get_size() => {
+                            Ok(Value::Ref(Box::new(cast(pair, expr, *t)?)))
+                        }
+                        (Value::Pointer(i, t1), Kind::Pointer(t2))
+                            if t1.get_size() == t2.get_size() =>
+                        {
+                            Ok(Value::Pointer(i, *t2))
+                        }
+                        (Value::Byte(i), Kind::Pointer(t)) => Ok(Value::Pointer(i as usize, *t)),
+                        (expr, kind) => {
+                            error!(pair => format!("Cannot cast a <{}> into a <{}>", expr.kind(), kind))
+                        }
                     }
                 }
+                cast(pair, expr, kind)
             }
-            Rule::ident => self
-                .map
-                .get(pair.as_str())
-                .ok_or_else(
-                    || error!(E pair => format!("Cannot find {} in current scope", pair.as_str())),
-                )
-                .cloned(),
+            Rule::ident => self.get(pair.as_str()).ok_or_else(
+                || error!(E pair => format!("Cannot find {} in current scope", pair.as_str())),
+            ),
+            Rule::array => {
+                let mut iter = pair.clone().into_inner();
+                let kind = Kind::from_pair(iter.next().unwrap(), self)?;
+                let loc = self.loc;
+                for (i, element) in iter.enumerate() {
+                    let element = self.from_pair(element)?;
+                    if element.kind() != kind {
+                        error!(R pair => format!("Found a <{}> in an array of <{}>s", element.kind(), kind));
+                    }
+                    self.insert_instruction(Instruction::Copy(element, loc + i));
+                    self.loc += 1;
+                }
+                Ok(Value::Pointer(loc, kind))
+            }
+            Rule::string => {
+                let loc = self.loc;
+                for element in pair.into_inner() {
+                    let element = self.from_pair(element)?;
+                    self.insert_instruction(Instruction::Copy(element, self.loc));
+                    self.loc += 1;
+                }
+                self.insert_instruction(Instruction::Copy(Value::Byte(0), self.loc));
+                self.loc += 1;
+                Ok(Value::Pointer(loc, Kind::Byte))
+            }
             Rule::unop_expr => {
                 let mut iter = pair.clone().into_inner();
                 let op = iter.next().unwrap();
@@ -102,7 +172,7 @@ impl<'a> Scope<'a> {
                             let loc = self.loc;
                             self.loc += 1;
                             let t = t.clone();
-                            self.code.borrow_mut().push(Instruction::Deref(expr, loc));
+                            self.insert_instruction(Instruction::Deref(expr, loc));
                             Ok(Value::Memory(loc, t))
                         }
                         Value::Ref(t) => Ok(*t),
@@ -115,7 +185,7 @@ impl<'a> Scope<'a> {
                         }
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code.borrow_mut().push(Instruction::Neg(expr, loc));
+                        self.insert_instruction(Instruction::Neg(expr, loc));
                         Ok(Value::Memory(loc, kind))
                     }
                     "!" => {
@@ -125,7 +195,7 @@ impl<'a> Scope<'a> {
                         }
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code.borrow_mut().push(Instruction::Not(expr, loc));
+                        self.insert_instruction(Instruction::Not(expr, loc));
                         Ok(Value::Memory(loc, kind))
                     }
                     _ => unreachable!(),
@@ -140,137 +210,139 @@ impl<'a> Scope<'a> {
                     (Kind::Byte, "+", Kind::Byte) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Add(left, right, loc));
+                        self.insert_instruction(Instruction::Add(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "-", Kind::Byte) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Sub(left, right, loc));
+                        self.insert_instruction(Instruction::Sub(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (t @ Kind::Pointer(..), "+", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.insert_instruction(Instruction::Add(left, right, loc));
+                        Ok(Value::Memory(loc, t))
+                    }
+                    (t @ Kind::Pointer(..), "-", Kind::Byte) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.insert_instruction(Instruction::Sub(left, right, loc));
+                        Ok(Value::Memory(loc, t))
                     }
                     (Kind::Byte, "*", Kind::Byte) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Mul(left, right, loc));
+                        self.insert_instruction(Instruction::Mul(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "/", Kind::Byte) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Div(left, right, loc));
+                        self.insert_instruction(Instruction::Div(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "%", Kind::Byte) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Mod(left, right, loc));
+                        self.insert_instruction(Instruction::Mod(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "|", Kind::Byte) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Or(left, right, loc));
+                        self.insert_instruction(Instruction::Or(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "^", Kind::Byte) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Xor(left, right, loc));
+                        self.insert_instruction(Instruction::Xor(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "&", Kind::Byte) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::And(left, right, loc));
+                        self.insert_instruction(Instruction::And(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, ">>", Kind::Byte) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Shr(left, right, loc));
+                        self.insert_instruction(Instruction::Shr(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "<<", Kind::Byte) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Shl(left, right, loc));
+                        self.insert_instruction(Instruction::Shl(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "**", Kind::Byte) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Pow(left, right, loc));
+                        self.insert_instruction(Instruction::Pow(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (a, "==", b) if a == b => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Eq(left, right, loc));
+                        self.insert_instruction(Instruction::Eq(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (a, "!=", b) if a == b => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Neq(left, right, loc));
+                        self.insert_instruction(Instruction::Neq(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "<", Kind::Byte) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Lt(left, right, loc));
+                        self.insert_instruction(Instruction::Lt(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "<=", Kind::Byte) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Le(left, right, loc));
+                        self.insert_instruction(Instruction::Le(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, ">", Kind::Byte) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Gt(left, right, loc));
+                        self.insert_instruction(Instruction::Gt(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, ">=", Kind::Byte) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Ge(left, right, loc));
+                        self.insert_instruction(Instruction::Ge(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Pointer(..), "<", Kind::Pointer(..)) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.insert_instruction(Instruction::Lt(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Pointer(..), "<=", Kind::Pointer(..)) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.insert_instruction(Instruction::Le(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Pointer(..), ">", Kind::Pointer(..)) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.insert_instruction(Instruction::Gt(left, right, loc));
+                        Ok(Value::Memory(loc, Kind::Byte))
+                    }
+                    (Kind::Pointer(..), ">=", Kind::Pointer(..)) => {
+                        let loc = self.loc;
+                        self.loc += 1;
+                        self.insert_instruction(Instruction::Ge(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (l, op, r) => {
@@ -296,25 +368,23 @@ impl<'a> Scope<'a> {
                 let loc = self.loc;
                 self.loc += 1;
 
-                self.code
-                    .borrow_mut()
-                    .push(Instruction::TernaryIf(cond, then, otherwise, loc));
+                self.insert_instruction(Instruction::TernaryIf(cond, then, otherwise, loc));
                 Ok(Value::Memory(loc, kind))
             }
             Rule::increment => {
                 let value = self.from_pair(pair.clone().into_inner().next().unwrap())?;
-                if value.kind() != Kind::Byte {
+                if !matches!(value.kind(), Kind::Byte | Kind::Pointer(..)) {
                     error!(R pair => format!("Cannot increment a <{}>", value.kind()));
                 }
-                self.code.borrow_mut().push(Instruction::Inc(value));
+                self.insert_instruction(Instruction::Inc(value));
                 Ok(Value::None)
             }
             Rule::decrement => {
                 let value = self.from_pair(pair.clone().into_inner().next().unwrap())?;
-                if value.kind() != Kind::Byte {
+                if !matches!(value.kind(), Kind::Byte | Kind::Pointer(..)) {
                     error!(R pair => format!("Cannot decrement a <{}>", value.kind()));
                 }
-                self.code.borrow_mut().push(Instruction::Dec(value));
+                self.insert_instruction(Instruction::Dec(value));
                 Ok(Value::None)
             }
             Rule::assign => {
@@ -336,31 +406,26 @@ impl<'a> Scope<'a> {
 
                 match value {
                     Value::Memory(_, Kind::Ref(..)) => {
-                        self.map.insert(ident, value);
+                        self.insert(ident, value);
                     }
                     Value::Memory(i, t) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Copy(Value::Memory(i, t.clone()), loc));
-                        self.map.insert(ident, Value::Memory(loc, t));
+                        self.insert_instruction(Instruction::Copy(
+                            Value::Memory(i, t.clone()),
+                            loc,
+                        ));
+                        self.insert(ident, Value::Memory(loc, t));
                     }
                     Value::Ref(val) => {
                         if let Value::Memory(i, _) = &*val {
-                            self.map
-                                .insert(ident, Value::Memory(*i, Kind::Ref(Box::new(val.kind()))));
+                            self.insert(ident, Value::Memory(*i, Kind::Ref(Box::new(val.kind()))));
                         } else {
-                            self.map
-                                .insert(ident, Value::Ref(Box::new(Value::Ref(val))));
+                            self.insert(ident, Value::Ref(Box::new(Value::Ref(val))));
                         }
                     }
-                    val => {
-                        let t = val.kind();
-                        let loc = self.loc;
-                        self.loc += 1;
-                        self.code.borrow_mut().push(Instruction::Copy(val, loc));
-                        self.map.insert(ident, Value::Memory(loc, t));
+                    _ => {
+                        self.insert(ident, value);
                     }
                 }
 
@@ -370,7 +435,15 @@ impl<'a> Scope<'a> {
                 let mut iter = pair.clone().into_inner();
                 let ident = iter.next().unwrap();
                 let value = self.from_pair(iter.next().unwrap())?;
-                let mut entry = if let Entry::Occupied(e) = self.map.entry(ident.as_str()) {
+                let mut borrow = self.map.borrow_mut();
+                let mut entry = if let Some(e) =
+                    borrow
+                        .iter_mut()
+                        .rev()
+                        .find_map(|map| match map.entry(ident.as_str()) {
+                            Entry::Occupied(e) => Some(e),
+                            _ => None,
+                        }) {
                     e
                 } else {
                     error!(R ident => format!("Cannot find {} in current scope", ident.as_str()));
@@ -386,9 +459,10 @@ impl<'a> Scope<'a> {
                     Value::Memory(i, t) => {
                         let loc = self.loc;
                         self.loc += 1;
-                        self.code
-                            .borrow_mut()
-                            .push(Instruction::Copy(Value::Memory(i, t.clone()), loc));
+                        self.insert_instruction(Instruction::Copy(
+                            Value::Memory(i, t.clone()),
+                            loc,
+                        ));
                         entry.insert(Value::Memory(loc, t));
                     }
                     Value::Ref(val) => {
@@ -398,12 +472,38 @@ impl<'a> Scope<'a> {
                             entry.insert(Value::Ref(Box::new(Value::Ref(val))));
                         }
                     }
-                    val => {
-                        let t = val.kind();
-                        let loc = self.loc;
-                        self.loc += 1;
-                        self.code.borrow_mut().push(Instruction::Copy(val, loc));
-                        entry.insert(Value::Memory(loc, t));
+                    _ => {
+                        entry.insert(value);
+                    }
+                }
+
+                Ok(Value::None)
+            }
+            Rule::deref_assign => {
+                let mut iter = pair.clone().into_inner();
+                let mut ident = iter.next().unwrap();
+                let mut derefs = 0;
+                while ident.as_rule() == Rule::deref_sign {
+                    derefs += 1;
+                    ident = iter.next().unwrap();
+                }
+                println!("{derefs}"); // !TODO
+                let value = self.from_pair(iter.next().unwrap())?;
+                let old = if let Some(v) = self.get(ident.as_str()) {
+                    v
+                } else {
+                    error!(R ident => format!("Cannot find {} in current scope", ident.as_str()));
+                };
+
+                match old.kind() {
+                    Kind::Pointer(t) | Kind::Ref(t) => {
+                        if *t != value.kind() {
+                            error!(R pair => format!("{} is a <{}> but is assigned to a <{}>", ident.as_str(), old.kind(), value.kind()));
+                        }
+                        self.insert_instruction(Instruction::DerefAssign(old, value))
+                    }
+                    k => {
+                        error!(R ident => format!("Cannot dereference a <{}>", k));
                     }
                 }
 
@@ -424,18 +524,14 @@ impl<'a> Scope<'a> {
 
                 let loc = self.loc;
                 self.loc += 1;
-                self.code
-                    .borrow_mut()
-                    .push(Instruction::If(cond, loc, is_otherwise));
+                self.insert_instruction(Instruction::If(cond, loc, is_otherwise));
 
                 self.from_pair(then.clone())?;
                 if let Some(otherwise) = otherwise {
-                    self.code.borrow_mut().push(Instruction::Else(loc));
+                    self.insert_instruction(Instruction::Else(loc));
                     self.from_pair(otherwise.clone())?;
                 }
-                self.code
-                    .borrow_mut()
-                    .push(Instruction::EndIf(loc, is_otherwise));
+                self.insert_instruction(Instruction::EndIf(loc, is_otherwise));
                 Ok(Value::None)
             }
             Rule::while_stmt => {
@@ -448,12 +544,10 @@ impl<'a> Scope<'a> {
                 }
                 let loc = self.loc;
                 self.loc += 1;
-                self.code.borrow_mut().push(Instruction::Copy(cond, loc));
+                self.insert_instruction(Instruction::Copy(cond, loc));
                 cond = Value::Memory(loc, Kind::Byte);
 
-                self.code
-                    .borrow_mut()
-                    .push(Instruction::While(cond.clone()));
+                self.insert_instruction(Instruction::While(cond.clone()));
 
                 let stmt = iter.next().unwrap();
                 self.from_pair(stmt.clone())?;
@@ -461,7 +555,7 @@ impl<'a> Scope<'a> {
                 if let Value::Memory(i, _) = &cond {
                     let new_cond = self.from_pair(cond_pair)?;
                     if new_cond != cond {
-                        self.code.borrow_mut().push(Instruction::Copy(new_cond, *i));
+                        self.insert_instruction(Instruction::Copy(new_cond, *i));
                     }
                 }
                 Ok(Value::None)
@@ -483,12 +577,10 @@ impl<'a> Scope<'a> {
 
                 let loc = self.loc;
                 self.loc += 1;
-                self.code.borrow_mut().push(Instruction::Copy(cond, loc));
+                self.insert_instruction(Instruction::Copy(cond, loc));
                 cond = Value::Memory(loc, Kind::Byte);
 
-                self.code
-                    .borrow_mut()
-                    .push(Instruction::While(cond.clone()));
+                self.insert_instruction(Instruction::While(cond.clone()));
 
                 self.from_pair(body.clone())?;
                 self.from_pair(step.clone())?;
@@ -496,7 +588,7 @@ impl<'a> Scope<'a> {
                 if let Value::Memory(i, _) = &cond {
                     let new_cond = self.from_pair(cond_pair)?;
                     if new_cond != cond {
-                        self.code.borrow_mut().push(Instruction::Copy(new_cond, *i));
+                        self.insert_instruction(Instruction::Copy(new_cond, *i));
                     }
                 }
 
@@ -506,7 +598,7 @@ impl<'a> Scope<'a> {
                 let expr_pair = pair.clone().into_inner().nth(1).unwrap();
                 let expr = self.from_pair(expr_pair.clone())?;
                 if expr.kind() == Kind::Byte {
-                    self.code.borrow_mut().push(Instruction::Out(expr));
+                    self.insert_instruction(Instruction::Out(expr));
                 } else {
                     error!(R expr_pair => format!("Cannot write a <{}> to stdout", expr.kind()))
                 }
@@ -515,7 +607,7 @@ impl<'a> Scope<'a> {
             Rule::input => {
                 let loc = self.loc;
                 self.loc += 1;
-                self.code.borrow_mut().push(Instruction::Input(loc));
+                self.insert_instruction(Instruction::Input(loc));
                 Ok(Value::Memory(loc, Kind::Byte))
             }
             _ => unreachable!("{pair}"),

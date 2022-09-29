@@ -38,7 +38,6 @@ pub fn parse(program: &str) -> Result<(), Error> {
     let program = EzParser::parse(Rule::program, program)?;
     let mut scope = Scope::new();
     for code in program {
-        println!("{}", code);
         scope.push(code)?;
     }
     println!("{:?}", scope.code());

@@ -10,6 +10,7 @@ pub enum Value {
     Ref(Box<Value>),
     Pointer(usize, Kind),
     Memory(usize, Kind),
+    DataBox(Vec<Value>, Kind),
 }
 
 impl Value {
@@ -20,6 +21,7 @@ impl Value {
             Value::Ref(val) => Kind::Ref(Box::new(val.kind())),
             Value::Pointer(_, t) => Kind::Pointer(Box::new(t.clone())),
             Value::Memory(_, t) => t.clone(),
+            Value::DataBox(_, t) => t.clone(),
         }
     }
 
@@ -144,6 +146,7 @@ impl fmt::Display for Value {
             Value::Ref(ptr) => write!(f, "&{}", ptr),
             Value::Memory(mem, _) => write!(f, "<{}>", mem),
             Value::Pointer(v, t) => write!(f, "<*{}>{{{}}}", t, v),
+            Value::DataBox(f_, t) => write!(f, "<{}>{{{:?}}}", t, f_),
         }
     }
 }

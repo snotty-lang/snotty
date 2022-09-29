@@ -4,21 +4,16 @@ use std::fmt;
 #[derive(Debug, Clone)]
 /// Last usize -> assign location
 pub enum Instruction {
-    If(Value, usize, bool),
+    Deref(Value, usize),
     DerefAssign(Value, Value),
-    DerefRef(Value, usize),
-    DerefAssignRef(Value, Value),
     While(Value),
     EndWhile(Value),
-    Clear(usize, usize),
-    Return(Value),
-    Call(usize, Vec<Value>, usize),
+    If(Value, usize, bool),
     Else(usize),
     EndIf(usize, bool),
     TernaryIf(Value, Value, Value, usize),
     Copy(Value, usize),
-    Ref(Value, usize),
-    Deref(Value, usize),
+    Clear(usize, usize),
     Input(usize),
     Add(Value, Value, usize),
     Sub(Value, Value, usize),
@@ -42,6 +37,7 @@ pub enum Instruction {
     Or(Value, Value, usize),
     Not(Value, usize),
     Xor(Value, Value, usize),
+    Ref(Value, usize),
 }
 
 impl Instruction {
@@ -53,14 +49,12 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Instruction::DerefAssign(val, expr) | Instruction::DerefAssignRef(val, expr) => {
+            Instruction::DerefAssign(val, expr) => {
                 write!(f, "{} = {}", val, expr)
             }
             Instruction::Clear(from, to) => write!(f, "clear {} - {}", from, to - 1),
             Instruction::While(cond) => write!(f, "WHILE {}", cond),
             Instruction::EndWhile(cond) => write!(f, "END WHILE {}", cond),
-            Instruction::Return(v) => write!(f, "return {}", v),
-            Instruction::Call(a, b, mem) => write!(f, "[{mem}] = call {:?} : {:?}", a, b),
             Instruction::TernaryIf(a, b, c, mem) => {
                 write!(f, "[{mem}] = if {:?} then {:?} else {:?}", a, b, c)
             }
@@ -85,7 +79,7 @@ impl fmt::Display for Instruction {
             Instruction::Inc(val) => write!(f, "++{:?}", val),
             Instruction::Dec(val) => write!(f, "--{:?}", val),
             Instruction::Ref(val, mem) => write!(f, "[{mem}] = &[{}]", val),
-            Instruction::Deref(val, mem) | Instruction::DerefRef(val, mem) => {
+            Instruction::Deref(val, mem) => {
                 write!(f, "[{mem}] = *{:?}", val)
             }
             Instruction::If(cond, _, _) => write!(f, "IF {:?}", cond),
