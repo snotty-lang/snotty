@@ -13,7 +13,7 @@ out_ = @{ "out" ~ !ASCII_ALPHANUMERIC }
 let_ = @{ "let" ~ !ASCII_ALPHANUMERIC }
 
 stmt = {
-    increment
+    (increment
     | decrement
     | out
     | return_stmt
@@ -25,7 +25,8 @@ stmt = {
     | assign
     | reassign
     | expr
-    | scope
+    | scope)
+    ~ ";"?
 }
 keyword = {
     ("byte"
@@ -59,15 +60,16 @@ input = { "in" ~ !ASCII_ALPHANUMERIC }
 string = ${ "\"" ~ string_letter* ~ "\"" }
 string_letter = {
     !("\"" | "\\") ~ '\u{00}'..'\u{7F}'
-    | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "'" )
+    | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "\'" )
     | "\\" ~ ("x" ~ ASCII_HEX_DIGIT+)
     | "\\" ~ (ASCII_OCT_DIGIT{, 3})
 }
-char = ${ "'" ~ char_letter ~ "'" }
+char = ${ "\'" ~ char_letter ~ "\'" }
 char_letter = {
     !("'" | "\\") ~ '\u{00}'..'\u{7F}'
-    | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "'" )
-    | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
+    | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "\'" )
+    | "\\" ~ ("x" ~ ASCII_HEX_DIGIT+)
+    | "\\" ~ (ASCII_OCT_DIGIT{, 3})
 }
 number = @{"0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
 array = { "<" ~ kind ~ ">" ~ "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }

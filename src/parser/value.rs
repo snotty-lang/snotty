@@ -13,6 +13,12 @@ pub enum Value {
     DataBox(Vec<Value>, Kind),
 }
 
+impl fmt::Debug for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
 impl Value {
     pub fn kind(&self) -> Kind {
         match self {
@@ -27,6 +33,21 @@ impl Value {
 
     pub fn get_size(&self) -> usize {
         self.kind().get_size()
+    }
+
+    pub fn deref_ref(self, derefs: usize, refs: &mut usize) -> Option<Value> {
+        if derefs == 0 {
+            return Some(self);
+        }
+        match self {
+            Value::Ref(t) => {
+                *refs += 1;
+                t.deref_ref(derefs - 1, refs)
+            }
+            Value::Pointer(i, t) => Some(Value::Pointer(i, t.deref_ref(derefs - 1, refs)?)),
+            Value::Memory(i, t) => Some(Value::Memory(i, t.deref_ref(derefs - 1, refs)?)),
+            _ => None,
+        }
     }
 }
 
@@ -115,6 +136,31 @@ impl Kind {
             Kind::Pointer(_) => 2,
         }
     }
+
+    pub fn deref_ref(self, derefs: usize, refs: &mut usize) -> Option<Kind> {
+        if derefs == 0 {
+            return Some(self);
+        }
+        match self {
+            Kind::Ref(t) => {
+                *refs += 1;
+                t.deref_ref(derefs - 1, refs)
+            }
+            Kind::Pointer(t) => Some(Kind::Pointer(Box::new(t.deref_ref(derefs - 1, refs)?))),
+            _ => None,
+        }
+    }
+
+    pub fn dereferenced(self, derefs: usize) -> Option<Kind> {
+        if derefs == 0 {
+            return Some(self);
+        }
+        match self {
+            Kind::Ref(t) => t.dereferenced(derefs - 1),
+            Kind::Pointer(t) => t.dereferenced(derefs - 1),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for Kind {
@@ -136,15 +182,9 @@ impl fmt::Display for Value {
             Value::None => write!(f, ";"),
             Value::Byte(num) => write!(f, "{}", num),
             Value::Ref(ptr) => write!(f, "&{}", ptr),
-            Value::Memory(mem, _) => write!(f, "<{}>", mem),
-            Value::Pointer(v, t) => write!(f, "<*{}>{{{}}}", t, v),
+            Value::Memory(mem, t) => write!(f, "<{}>{{{}}}", t, mem),
+            Value::Pointer(v, t) => write!(f, "<*{}>{{({})}}", t, v),
             Value::DataBox(f_, t) => write!(f, "<{}>{{{:?}}}", t, f_),
         }
-    }
-}
-
-impl fmt::Debug for Value {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self)
     }
 }

@@ -214,6 +214,9 @@ impl<'a> Analyzer<'a> {
                 match op.as_str() {
                     "&" => Ok(Value::Ref(Box::new(expr))),
                     "*" => match expr {
+                        Value::Pointer(_, Kind::None) => {
+                            error!(S span => "Cannot dereference a <*;>".to_string())
+                        }
                         Value::Pointer(_, ref t) => {
                             let loc = self.loc;
                             self.loc += 1;
@@ -498,66 +501,206 @@ impl<'a> Analyzer<'a> {
                 Ok(Value::None)
             }
             Rule::reassign => {
-                // TODO
                 let mut iter = pair.clone().into_inner();
                 let lhs = iter.next().unwrap();
                 let mut lhs_iter = lhs.clone().into_inner();
-                let mut expr_pair = lhs_iter.next().unwrap();
-                let mut _derefs = 0;
-                if expr_pair.as_rule() == Rule::deref_signs {
-                    _derefs = expr_pair.as_str().len();
-                    expr_pair = lhs_iter.next().unwrap();
+                let mut prev_pair = lhs_iter.next().unwrap();
+                let mut derefs = 0;
+                if prev_pair.as_rule() == Rule::deref_signs {
+                    derefs = prev_pair.as_str().len();
+                    prev_pair = lhs_iter.next().unwrap();
                 }
                 let op = iter.next().unwrap();
                 let new = self.analyze_pair(iter.next().unwrap())?;
-                let prev = self.analyze_pair(expr_pair)?;
+                let prev = self.analyze_pair(prev_pair.clone())?;
 
-                let _new = Self::reassign_op(
-                    &mut self.loc,
-                    &mut self.code,
-                    &prev,
-                    new,
-                    op,
-                    &pair,
-                    lhs.as_str(),
-                )?;
+                fn deref(analyzer: &mut Analyzer, expr: Value, derefs: usize) -> Option<Value> {
+                    if derefs == 0 {
+                        return Some(expr);
+                    }
+                    match expr {
+                        Value::Ref(v) => deref(analyzer, *v, derefs - 1),
+                        Value::Memory(i, Kind::Ref(t)) => {
+                            deref(analyzer, Value::Memory(i, *t), derefs - 1)
+                        }
+                        Value::Pointer(_, ref k) => {
+                            let k = k.clone();
+                            let loc = analyzer.loc;
+                            analyzer.loc += 1;
+                            analyzer.code.push(Instruction::Deref(expr, loc));
+                            deref(analyzer, Value::Memory(loc, k), derefs - 1)
+                        }
+                        Value::Memory(_, Kind::Pointer(ref k)) => {
+                            let k = *k.clone();
+                            let loc = analyzer.loc;
+                            analyzer.loc += 1;
+                            analyzer.code.push(Instruction::Deref(expr, loc));
+                            deref(analyzer, Value::Memory(loc, k), derefs - 1)
+                        }
+                        _ => None,
+                    }
+                }
 
-                // match prev {
-                //     Value::Memory(_, Kind::Ref(..)) => {
-                //         entry.insert(value);
-                //     }
-                //     Value::Memory(i, _) => {
-                //         self.code.push(Instruction::Copy(value, i));
-                //     }
-                //     Value::Ref(ref val) => {
-                //         if let Value::Memory(i, _) = &**val {
-                //             entry.insert(Value::Memory(*i, Kind::Ref(Box::new(val.kind()))));
-                //         } else {
-                //             entry.insert(Value::Ref(Box::new(prev)));
-                //         }
-                //     }
-                //     _ => unreachable!(),
-                // }
-                // fn derefed(k: Kind, derefs: usize) -> Option<Kind> {
-                //     if derefs == 0 {
-                //         return Some(k);
-                //     }
-                //     match k {
-                //         Kind::Pointer(k) | Kind::Ref(k) => derefed(*k, derefs - 1),
-                //         _ => None,
-                //     }
-                // }
+                let new = if op.as_str() != "=" {
+                    let kind = prev.kind();
+                    let derefed_prev = if let Some(v) = deref(self, prev.clone(), derefs) {
+                        if v.kind() != new.kind() {
+                            error!(R pair => format!("{} is a <{}> but is assigned to a <{}>", lhs.as_str(), v.kind(), new.kind()));
+                        }
+                        v
+                    } else {
+                        match kind {
+                            Kind::Pointer(_) | Kind::Ref(_) => {
+                                error!(R lhs => format!("Cannot dereference a <{}> {} times", kind, derefs));
+                            }
+                            _ => {
+                                error!(R lhs => format!("Cannot dereference a <{}>", kind));
+                            }
+                        }
+                    };
 
-                // if let Some(k) = derefed(expr.kind(), derefs) {
-                //     if k != value.kind() {
-                //         error!(R pair => format!("{} is a <{}> but is assigned to a <{}>", derefered.as_str(), k, value.kind()));
-                //     }
-                // } else {
-                //     error!(R derefered => format!("Cannot dereference a <{}> {} times", expr.kind(), derefs));
-                // }
+                    match (derefed_prev.kind(), op.as_str().as_bytes(), new.kind()) {
+                        (Kind::Byte, b"+=", Kind::Byte) => {
+                            let loc = self.loc;
+                            self.loc += 1;
+                            self.code.push(Instruction::Add(derefed_prev, new, loc));
+                            Value::Memory(loc, Kind::Byte)
+                        }
+                        (Kind::Byte, b"-=", Kind::Byte) => {
+                            let loc = self.loc;
+                            self.loc += 1;
+                            self.code.push(Instruction::Sub(derefed_prev, new, loc));
+                            Value::Memory(loc, Kind::Byte)
+                        }
+                        (t @ Kind::Pointer(..), b"+=", Kind::Byte) => {
+                            let loc = self.loc;
+                            self.loc += 1;
+                            self.code.push(Instruction::Add(derefed_prev, new, loc));
+                            Value::Memory(loc, t)
+                        }
+                        (t @ Kind::Pointer(..), b"-=", Kind::Byte) => {
+                            let loc = self.loc;
+                            self.loc += 1;
+                            self.code.push(Instruction::Sub(derefed_prev, new, loc));
+                            Value::Memory(loc, t)
+                        }
+                        (Kind::Byte, b"*=", Kind::Byte) => {
+                            let loc = self.loc;
+                            self.loc += 1;
+                            self.code.push(Instruction::Mul(derefed_prev, new, loc));
+                            Value::Memory(loc, Kind::Byte)
+                        }
+                        (Kind::Byte, b"/=", Kind::Byte) => {
+                            let loc = self.loc;
+                            self.loc += 1;
+                            self.code.push(Instruction::Div(derefed_prev, new, loc));
+                            Value::Memory(loc, Kind::Byte)
+                        }
+                        (Kind::Byte, b"%=", Kind::Byte) => {
+                            let loc = self.loc;
+                            self.loc += 1;
+                            self.code.push(Instruction::Mod(derefed_prev, new, loc));
+                            Value::Memory(loc, Kind::Byte)
+                        }
+                        (Kind::Byte, b"|=", Kind::Byte) => {
+                            let loc = self.loc;
+                            self.loc += 1;
+                            self.code.push(Instruction::Or(derefed_prev, new, loc));
+                            Value::Memory(loc, Kind::Byte)
+                        }
+                        (Kind::Byte, b"^=", Kind::Byte) => {
+                            let loc = self.loc;
+                            self.loc += 1;
+                            self.code.push(Instruction::Xor(derefed_prev, new, loc));
+                            Value::Memory(loc, Kind::Byte)
+                        }
+                        (Kind::Byte, b"&=", Kind::Byte) => {
+                            let loc = self.loc;
+                            self.loc += 1;
+                            self.code.push(Instruction::And(derefed_prev, new, loc));
+                            Value::Memory(loc, Kind::Byte)
+                        }
+                        (Kind::Byte, b">>=", Kind::Byte) => {
+                            let loc = self.loc;
+                            self.loc += 1;
+                            self.code.push(Instruction::Shr(derefed_prev, new, loc));
+                            Value::Memory(loc, Kind::Byte)
+                        }
+                        (Kind::Byte, b"<<=", Kind::Byte) => {
+                            let loc = self.loc;
+                            self.loc += 1;
+                            self.code.push(Instruction::Shl(derefed_prev, new, loc));
+                            Value::Memory(loc, Kind::Byte)
+                        }
+                        (Kind::Byte, b"**=", Kind::Byte) => {
+                            let loc = self.loc;
+                            self.loc += 1;
+                            self.code.push(Instruction::Pow(derefed_prev, new, loc));
+                            Value::Memory(loc, Kind::Byte)
+                        }
+                        (l, op, r) => {
+                            let op = std::str::from_utf8(op.split_last().unwrap().1).unwrap();
+                            error!(R pair => format!("Cannot apply operator {} to a <{}> and a <{}>", op, l, r))
+                        }
+                    }
+                } else {
+                    let derefed_kind = if let Some(k) = prev.kind().dereferenced(derefs) {
+                        if k != new.kind() {
+                            error!(R pair => format!("{} is a <{}> but is assigned to a <{}>", lhs.as_str(), k, new.kind()));
+                        }
+                        k
+                    } else {
+                        let kind = prev.kind();
+                        match kind {
+                            Kind::Pointer(_) | Kind::Ref(_) => {
+                                error!(R lhs => format!("Cannot dereference a <{}> {} times", kind, derefs));
+                            }
+                            _ => {
+                                error!(R lhs => format!("Cannot dereference a <{}>", kind));
+                            }
+                        }
+                    };
+                    if derefed_kind == new.kind() {
+                        new
+                    } else {
+                        error!(R pair => format!("{} is a <{}> but is assigned to a <{}>", lhs, derefed_kind, new.kind()));
+                    }
+                };
 
-                // self.code
-                //     .push(Instruction::DerefAssign(expr, derefs, value));
+                match (derefs, prev_pair.as_rule()) {
+                    (0, Rule::ident) => match prev {
+                        Value::Memory(_, Kind::Ref(..)) => {
+                            self.insert(prev_pair.as_str(), new);
+                        }
+                        Value::Memory(i, _) => {
+                            self.code.push(Instruction::Copy(new, i));
+                        }
+                        Value::Ref(ref val) => {
+                            if let Value::Memory(i, _) = &**val {
+                                self.insert(
+                                    prev_pair.as_str(),
+                                    Value::Memory(*i, Kind::Ref(Box::new(val.kind()))),
+                                );
+                            } else {
+                                self.insert(prev_pair.as_str(), Value::Ref(Box::new(prev)));
+                            }
+                        }
+                        _ => unreachable!(),
+                    },
+                    _ => {
+                        let mut refs = 0;
+                        match prev.deref_ref(derefs, &mut refs).unwrap() {
+                            x @ (Value::Pointer(_, _) | Value::Memory(_, Kind::Pointer(_)))
+                                if derefs != refs =>
+                            {
+                                self.code
+                                    .push(Instruction::DerefAssign(x, derefs - refs, new))
+                            }
+                            Value::Memory(i, _) => self.code.push(Instruction::Copy(new, i)),
+                            _ => error!(R pair => format!("Cannot assign to {}", lhs.as_str())),
+                        }
+                    }
+                }
 
                 Ok(Value::None)
             }
@@ -668,108 +811,6 @@ impl<'a> Analyzer<'a> {
             }
             _ => unreachable!("{pair}"),
         }
-    }
-
-    fn reassign_op(
-        loc: &mut usize,
-        code: &mut Vec<Instruction>,
-        prev: &Value,
-        new: Value,
-        op: Pair<'a, Rule>,
-        pair: &Pair<'a, Rule>,
-        lhs: &str,
-    ) -> Result<Value, Error> {
-        Ok(match (prev.kind(), op.as_str().as_bytes(), new.kind()) {
-            (Kind::Byte, b"+=", Kind::Byte) => {
-                let new_loc = *loc;
-                *loc += 1;
-                code.push(Instruction::Add(prev.clone(), new, new_loc));
-                Value::Memory(new_loc, Kind::Byte)
-            }
-            (Kind::Byte, b"-=", Kind::Byte) => {
-                let new_loc = *loc;
-                *loc += 1;
-                code.push(Instruction::Sub(prev.clone(), new, new_loc));
-                Value::Memory(new_loc, Kind::Byte)
-            }
-            (t @ Kind::Pointer(..), b"+=", Kind::Byte) => {
-                let new_loc = *loc;
-                *loc += 1;
-                code.push(Instruction::Add(prev.clone(), new, new_loc));
-                Value::Memory(new_loc, t)
-            }
-            (t @ Kind::Pointer(..), b"-=", Kind::Byte) => {
-                let new_loc = *loc;
-                *loc += 1;
-                code.push(Instruction::Sub(prev.clone(), new, new_loc));
-                Value::Memory(new_loc, t)
-            }
-            (Kind::Byte, b"*=", Kind::Byte) => {
-                let new_loc = *loc;
-                *loc += 1;
-                code.push(Instruction::Mul(prev.clone(), new, new_loc));
-                Value::Memory(new_loc, Kind::Byte)
-            }
-            (Kind::Byte, b"/=", Kind::Byte) => {
-                let new_loc = *loc;
-                *loc += 1;
-                code.push(Instruction::Div(prev.clone(), new, new_loc));
-                Value::Memory(new_loc, Kind::Byte)
-            }
-            (Kind::Byte, b"%=", Kind::Byte) => {
-                let new_loc = *loc;
-                *loc += 1;
-                code.push(Instruction::Mod(prev.clone(), new, new_loc));
-                Value::Memory(new_loc, Kind::Byte)
-            }
-            (Kind::Byte, b"|=", Kind::Byte) => {
-                let new_loc = *loc;
-                *loc += 1;
-                code.push(Instruction::Or(prev.clone(), new, new_loc));
-                Value::Memory(new_loc, Kind::Byte)
-            }
-            (Kind::Byte, b"^=", Kind::Byte) => {
-                let new_loc = *loc;
-                *loc += 1;
-                code.push(Instruction::Xor(prev.clone(), new, new_loc));
-                Value::Memory(new_loc, Kind::Byte)
-            }
-            (Kind::Byte, b"&=", Kind::Byte) => {
-                let new_loc = *loc;
-                *loc += 1;
-                code.push(Instruction::And(prev.clone(), new, new_loc));
-                Value::Memory(new_loc, Kind::Byte)
-            }
-            (Kind::Byte, b">>=", Kind::Byte) => {
-                let new_loc = *loc;
-                *loc += 1;
-                code.push(Instruction::Shr(prev.clone(), new, new_loc));
-                Value::Memory(new_loc, Kind::Byte)
-            }
-            (Kind::Byte, b"<<=", Kind::Byte) => {
-                let new_loc = *loc;
-                *loc += 1;
-                code.push(Instruction::Shl(prev.clone(), new, new_loc));
-                Value::Memory(new_loc, Kind::Byte)
-            }
-            (Kind::Byte, b"**=", Kind::Byte) => {
-                let new_loc = *loc;
-                *loc += 1;
-                code.push(Instruction::Pow(prev.clone(), new, new_loc));
-                Value::Memory(new_loc, Kind::Byte)
-            }
-            (a, b"=", b) => {
-                if a == b {
-                    new
-                } else {
-                    error!(R pair => format!("{} is a <{}> but is assigned to a <{}>", lhs, a, b));
-                }
-            }
-            (l, op, r) => {
-                let op = std::str::from_utf8(op.split_last().unwrap().1).unwrap();
-                error!(R pair => format!("Cannot apply operator {} to a <{}> and a <{}>", op, l, r))
-            }
-        })
     }
 
     fn make_char(c: &[u8]) -> Option<u8> {

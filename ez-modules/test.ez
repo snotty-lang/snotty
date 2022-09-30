@@ -1,2 +1,2 @@
-out '\b'
-for let string = "\123": (*string) != 0 string++out*string
+let z = 9;
+*({5}) = z

@@ -61,7 +61,7 @@ pub fn parse(program: &str) -> Result<(), Error> {
     let program = SnottyParser::parse(Rule::program, program)?;
     let mut scope = Analyzer::new();
     for code in program {
-        println!("{}", code);
+        // println!("{}", code);
         scope.push(code)?;
     }
     println!("{:?}", scope.code());
