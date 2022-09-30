@@ -1,0 +1,2 @@
+let x = 5
+if x > 5 { out 'a' } otherwise { out 'b' }

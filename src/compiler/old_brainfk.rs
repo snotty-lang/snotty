@@ -1,5 +1,6 @@
 use crate::parser::{instruction::Instruction, value::Value};
 
+
 /// Compiles the 3-address code into brainfuck code.
 pub fn transpile(code: &[Instruction]) -> String {
     use crate::goto_add;

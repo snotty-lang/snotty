@@ -6,8 +6,8 @@ extern crate pest;
 #[macro_use]
 extern crate pest_derive;
 
+pub mod compiler;
 pub mod parser;
-// pub mod compiler;
 
 pub fn run(file: &str) -> Result<(), Box<dyn error::Error>> {
     let contents = fs::read_to_string(file)?;
@@ -22,6 +22,6 @@ pub fn run(file: &str) -> Result<(), Box<dyn error::Error>> {
             )))
         }
     };
-    println!("{:?}", ir);
+    println!("{:?}", ir.code);
     Ok(())
 }

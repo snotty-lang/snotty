@@ -11,6 +11,8 @@ use crate::{
     },
 };
 
+use super::IR;
+
 #[derive(Debug)]
 pub struct Analyzer<'a> {
     map: Vec<HashMap<&'a str, Value>>,
@@ -30,6 +32,13 @@ impl<'a> Analyzer<'a> {
             map: vec![HashMap::new()],
             code: Vec::new(),
             loc: 0,
+        }
+    }
+
+    pub fn into_ir(self) -> IR {
+        IR {
+            memory_used: self.loc,
+            code: self.code,
         }
     }
 
@@ -154,29 +163,6 @@ impl<'a> Analyzer<'a> {
             Rule::ident => self.get(pair.as_str()).ok_or_else(
                 || error!(E pair => format!("Cannot find {} in current scope", pair.as_str())),
             ),
-            // Rule::index => {
-            //     let mut iter = pair.into_inner();
-            //     let expr_pair = iter.next().unwrap();
-            //     let index_pair = iter.next().unwrap();
-            //     let expr = self.analyze_pair(expr_pair.clone())?;
-            //     let index = self.analyze_pair(index_pair.clone())?;
-            //     let expr_kind = expr.kind();
-            //     let index_kind = index.kind();
-            //     let kind = if let Kind::Pointer(k) = expr_kind.clone() {
-            //         *k
-            //     } else {
-            //         error!(R expr_pair => format!("Cannot index a <{}>", expr_kind));
-            //     };
-            //     if index_kind != Kind::Byte {
-            //         error!(R expr_pair => format!("Cannot index a <{}> with a <{}>", index_kind, index_kind));
-            //     }
-            //     let loc = self.loc;
-            //     self.loc += 2;
-            //     self.code.push(Instruction::Add(expr, index, loc));
-            //     self.code
-            //         .push(Instruction::Deref(Value::Memory(loc, expr_kind), loc + 1));
-            //     Ok(Value::Memory(loc + 1, kind))
-            // }
             Rule::array => {
                 let span = pair.as_span();
                 let mut iter = pair.into_inner();

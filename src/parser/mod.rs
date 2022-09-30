@@ -10,17 +10,23 @@ use self::instruction::Instruction;
 
 pub type Error = PestError<Rule>;
 
+#[derive(Debug, Clone)]
+pub struct IR {
+    pub memory_used: usize,
+    pub code: Vec<Instruction>,
+}
+
 #[derive(Parser)]
 #[grammar = "src/parser/grammar.pest"]
 struct SnottyParser;
 
-pub fn parse(program: &str) -> Result<Vec<Instruction>, Error> {
+pub fn parse(program: &str) -> Result<IR, Error> {
     let program = SnottyParser::parse(Rule::program, program)?;
-    let mut scope = Analyzer::new();
+    let mut analyzer = Analyzer::new();
     for code in program {
-        scope.push(code)?;
+        analyzer.push(code)?;
     }
-    Ok(scope.code())
+    Ok(analyzer.into_ir())
 }
 
 #[macro_export]
