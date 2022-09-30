@@ -1,11 +1,11 @@
-use crate::utils::{Instruction, Instructions, Val, POINTER_SIZE};
+use crate::parser::{instruction::Instruction, value::Value};
 
 /// Compiles the 3-address code into brainfuck code.
-pub fn transpile(code: &Instructions) -> String {
+pub fn transpile(code: &[Instruction]) -> String {
     use crate::goto_add;
     let mut location = 2usize.pow(15);
     let mut bf_code = String::new();
-    for (assign, instruction) in &code.0 {
+    for (assign, instruction) in code {
         let free_idx = assign.1;
         let size = if let Some((val, size)) = assign.0 {
             goto(&mut bf_code, &mut location, val);
@@ -15,10 +15,10 @@ pub fn transpile(code: &Instructions) -> String {
         };
         let start = location;
         match instruction {
-            Instruction::Input => {
+            Instruction::Input(_) => {
                 bf_code.push(',');
             }
-            Instruction::Print(val) => {
+            Instruction::Out(val) => {
                 goto(&mut bf_code, &mut location, free_idx);
                 goto_add!(val, &mut bf_code, &mut location, {
                     copy(

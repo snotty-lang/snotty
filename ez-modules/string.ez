@@ -1,8 +1,0 @@
-ez strlen(string: *char) -> int {
-    let i =0
-    while (*string != '\0') {
-        i++
-        string++
-    }
-    return i
-}

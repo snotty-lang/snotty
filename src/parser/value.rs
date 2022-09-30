@@ -64,51 +64,6 @@ pub enum Kind {
 impl Kind {
     pub fn from_pair<'a>(pair: Pair<'a, Rule>, scope: &Analyzer<'a>) -> Result<Self, Error> {
         match pair.as_rule() {
-            // Rule::ident => scope
-            //     .map
-            //     .get(pair.as_str())
-            //     .ok_or(Error::UndefinedReference(pair))
-            //     .and_then(|(p, i)| {
-            //         if !matches!(p.as_rule(), Rule::expr | Rule::function) {
-            //             Ok(scope.code.borrow()[*i].kind())
-            //         } else {
-            //             Err(Error::TypeError(p.clone()))
-            //         }
-            //     }),
-            // Rule::function => {
-            //     let mut iter = pair.into_inner();
-            //     drop(iter.next());
-            //     let mut ret_kind = ValueKind::None;
-            //     let mut params = Vec::new();
-            //     while let Some(next) = iter.peek() {
-            //         match next.as_rule() {
-            //             Rule::ident => {
-            //                 drop(iter.next());
-            //                 params.push(ValueKind::from_pair(iter.next().unwrap(), scope)?);
-            //             }
-            //             Rule::kind => ret_kind = ValueKind::from_pair(iter.next().unwrap(), scope)?,
-            //             Rule::stmt => break,
-            //             _ => unreachable!(),
-            //         }
-            //     }
-            //     println!("{}", ret_kind);
-            // Ok(ValueKind::Function(
-            //     scope.code.borrow().len(),
-            //     params,
-            //     Box::new(ret_kind),
-            // ))
-            //     todo!()
-            // }
-            // Rule::databox => {
-            //     let mut iter = pair.into_inner();
-            //     drop(iter.next());
-            //     let mut fields = Vec::new();
-            //     while iter.next().is_some() {
-            //         fields.push(ValueKind::from_pair(iter.next().unwrap(), scope)?);
-            //     }
-            //     // Ok(ValueKind::DataBox(scope.code.borrow().len(), fields));
-            //     todo!()
-            // }
             Rule::kind => Ok(match pair.as_str().trim().as_bytes() {
                 b"byte" => Kind::Byte,
                 b";" => Kind::None,
@@ -183,7 +138,7 @@ impl fmt::Display for Value {
             Value::Byte(num) => write!(f, "{}", num),
             Value::Ref(ptr) => write!(f, "&{}", ptr),
             Value::Memory(mem, t) => write!(f, "<{}>{{{}}}", t, mem),
-            Value::Pointer(v, t) => write!(f, "<*{}>{{({})}}", t, v),
+            Value::Pointer(v, t) => write!(f, "<*{}>{{*{}}}", t, v),
             Value::DataBox(f_, t) => write!(f, "<{}>{{{:?}}}", t, f_),
         }
     }

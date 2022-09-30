@@ -1,8 +1,0 @@
-ez next() -> char { 
-    static current = 38
-    return current as char
-    current++
-}
-
-for (let i = next() : i as int < 64 : i = next())
-    ezout i, '\n'

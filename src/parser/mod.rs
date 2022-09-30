@@ -6,7 +6,22 @@ use pest::{error::Error as PestError, Parser};
 
 use crate::parser::analyzer::Analyzer;
 
+use self::instruction::Instruction;
+
 pub type Error = PestError<Rule>;
+
+#[derive(Parser)]
+#[grammar = "src/parser/grammar.pest"]
+struct SnottyParser;
+
+pub fn parse(program: &str) -> Result<Vec<Instruction>, Error> {
+    let program = SnottyParser::parse(Rule::program, program)?;
+    let mut scope = Analyzer::new();
+    for code in program {
+        scope.push(code)?;
+    }
+    Ok(scope.code())
+}
 
 #[macro_export]
 macro_rules! error {
@@ -51,19 +66,4 @@ macro_rules! error {
             $span,
         ))
     };
-}
-
-#[derive(Parser)]
-#[grammar = "src/parser/grammar.pest"]
-struct SnottyParser;
-
-pub fn parse(program: &str) -> Result<(), Error> {
-    let program = SnottyParser::parse(Rule::program, program)?;
-    let mut scope = Analyzer::new();
-    for code in program {
-        // println!("{}", code);
-        scope.push(code)?;
-    }
-    println!("{:?}", scope.code());
-    Ok(())
 }

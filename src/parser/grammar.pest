@@ -11,6 +11,7 @@ otherwise = @{ "otherwise" ~ !ASCII_ALPHANUMERIC }
 if_ = @{ "if" ~ !ASCII_ALPHANUMERIC }
 out_ = @{ "out" ~ !ASCII_ALPHANUMERIC }
 let_ = @{ "let" ~ !ASCII_ALPHANUMERIC }
+const_ = @{ "const" ~ !ASCII_ALPHANUMERIC }
 
 stmt = {
     (increment
@@ -41,6 +42,7 @@ keyword = {
     | "otherwise"
     | "fx"
     | "box"
+    | "const"
     | "input") ~ !ASCII_ALPHANUMERIC
 }
 kind = {
@@ -72,7 +74,8 @@ char_letter = {
     | "\\" ~ (ASCII_OCT_DIGIT{, 3})
 }
 number = @{"0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
-array = { "<" ~ kind ~ ">" ~ "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }
+array = { array_kind ~ "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }
+array_kind = { ("<" ~ kind ~ ">")? }
 pointer = { "{" ~ expr ~ "}" }
 
 value = _{
@@ -95,7 +98,7 @@ expr = {
     | binop_expr
     | function_expr
     | attr_access
-    | index
+    // | index
     | call
     | value
 }
@@ -103,7 +106,7 @@ expr = {
 unop_expr = { unop ~ expr }
 type_cast = { "<" ~ kind ~ ">" ~ expr }
 ternary = { if_ ~ expr ~ "?"? ~ expr ~ ":"? ~ expr }
-databox_const = {  //! FIXME: change ident to expr
+databox_const = {
     ident ~ "{"
         ~ (ident ~ ":" ~ expr
         ~ ("," ~ ident ~ ":" ~ expr)*)?
@@ -111,10 +114,10 @@ databox_const = {  //! FIXME: change ident to expr
 }
 binop_expr = { value ~ binop ~ expr }  //! FIXME: change value to expr
 call = { value ~ "(" ~ (expr ~ ("," ~ expr)*)? ~ ")" }  //! FIXME: change value to expr
-attr_access = { value ~ "." ~ ident }  //! FIXME: change 1st value to expr
-index = { value ~ "[" ~ expr ~ "]" }  //! FIXME: change value to expr
-increment = { value ~ "+" ~ "+" }  //! FIXME: change value to expr
-decrement = { value ~ "-" ~ "-" }  //! FIXME: change value to expr
+attr_access = { value ~ "." ~ ident }  //! FIXME: change value to expr
+// index = { value ~ "[" ~ expr ~ "]" }  //! FIXME: change value to expr
+increment = { "+" ~ "+" ~ expr }
+decrement = { "-" ~ "-" ~ expr }
 function_expr = {
     "fx" ~ "(" 
     ~ (ident ~ ":" ~ kind
@@ -163,11 +166,11 @@ reassign_op = {
     | "^="
 }
 
-assign = { let_ ~ ident ~ (":" ~ kind)? ~ "=" ~ expr }
+assign = { (let_ | const_) ~ ident ~ (":" ~ kind)? ~ "=" ~ expr }
 reassign = { reassign_lhs ~ reassign_op ~ expr }
 reassign_lhs = {
-    deref_signs ~ (ident | "(" ~ expr ~ ")" | attr_access | index)
-    | ident | attr_access | index
+    deref_signs ~ ("(" ~ expr ~ ")" | attr_access | ident)
+    | attr_access | ident
 }
 deref_signs = { "*"+ }
 out = { out_ ~ expr }
