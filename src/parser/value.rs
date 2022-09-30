@@ -71,11 +71,11 @@ impl Kind {
             //         }
             //     }
             //     println!("{}", ret_kind);
-            //     // Ok(ValueKind::Function(
-            //     //     scope.code.borrow().len(),
-            //     //     params,
-            //     //     Box::new(ret_kind),
-            //     // ))
+            // Ok(ValueKind::Function(
+            //     scope.code.borrow().len(),
+            //     params,
+            //     Box::new(ret_kind),
+            // ))
             //     todo!()
             // }
             // Rule::databox => {

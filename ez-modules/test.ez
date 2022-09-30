@@ -1,13 +1,2 @@
-let x = 6 + 1
-let y = &x
-x += 4;
-out x
-out *y
-
-let x= 9
-let y = x
-y = x + 1
-let ptr = >(x)<
-let ptr = >{x}<
-{{x}}
-let ptr = {x}
+out '\b'
+for let string = "\123": (*string) != 0 string++out*string

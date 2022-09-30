@@ -13,17 +13,17 @@ out_ = @{ "out" ~ !ASCII_ALPHANUMERIC }
 let_ = @{ "let" ~ !ASCII_ALPHANUMERIC }
 
 stmt = {
-    assign
-    | reassign
-    | deref_assign
-    | index_assign
+    increment
+    | decrement
     | out
+    | return_stmt
     | if_stmt
     | while_stmt
     | for_stmt
     | function
     | databox
-    | return_stmt
+    | assign
+    | reassign
     | expr
     | scope
 }
@@ -60,7 +60,8 @@ string = ${ "\"" ~ string_letter* ~ "\"" }
 string_letter = {
     !("\"" | "\\") ~ '\u{00}'..'\u{7F}'
     | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "'" )
-    | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
+    | "\\" ~ ("x" ~ ASCII_HEX_DIGIT+)
+    | "\\" ~ (ASCII_OCT_DIGIT{, 3})
 }
 char = ${ "'" ~ char_letter ~ "'" }
 char_letter = {
@@ -90,8 +91,6 @@ expr = {
     | ternary
     | databox_const
     | binop_expr
-    | increment
-    | decrement
     | function_expr
     | attr_access
     | index
@@ -101,7 +100,7 @@ expr = {
 
 unop_expr = { unop ~ expr }
 type_cast = { "<" ~ kind ~ ">" ~ expr }
-ternary = { value ~ "?" ~ expr ~ ":" ~ expr }  //! FIXME: change value to expr
+ternary = { if_ ~ expr ~ "?"? ~ expr ~ ":"? ~ expr }
 databox_const = {  //! FIXME: change ident to expr
     ident ~ "{"
         ~ (ident ~ ":" ~ expr
@@ -112,8 +111,8 @@ binop_expr = { value ~ binop ~ expr }  //! FIXME: change value to expr
 call = { value ~ "(" ~ (expr ~ ("," ~ expr)*)? ~ ")" }  //! FIXME: change value to expr
 attr_access = { value ~ "." ~ ident }  //! FIXME: change 1st value to expr
 index = { value ~ "[" ~ expr ~ "]" }  //! FIXME: change value to expr
-increment = { value ~ "++" }  //! FIXME: change value to expr
-decrement = { value ~ "--" }  //! FIXME: change value to expr
+increment = { value ~ "+" ~ "+" }  //! FIXME: change value to expr
+decrement = { value ~ "-" ~ "-" }  //! FIXME: change value to expr
 function_expr = {
     "fx" ~ "(" 
     ~ (ident ~ ":" ~ kind
@@ -163,25 +162,26 @@ reassign_op = {
 }
 
 assign = { let_ ~ ident ~ (":" ~ kind)? ~ "=" ~ expr }
-reassign = { ident ~ reassign_op ~ expr }
+reassign = { reassign_lhs ~ reassign_op ~ expr }
+reassign_lhs = {
+    deref_signs ~ (ident | "(" ~ expr ~ ")" | attr_access | index)
+    | ident | attr_access | index
+}
+deref_signs = { "*"+ }
 out = { out_ ~ expr }
 return_stmt = { return_ ~ expr }
-deref_assign = { derefered ~ reassign_op ~ expr }
-derefered = { deref_signs ~ expr }
-deref_signs = { "*"+ }
-index_assign = { index ~ reassign_op ~ expr }
 
 if_stmt = {
-    if_ ~ expr ~ stmt
-    ~ (otherwise
+    if_ ~ expr ~ "?"? ~ stmt
+    ~ (otherwise?
     ~   stmt
     )?
 }
 while_stmt = { while_ ~ expr ~ stmt }
 for_stmt = {
-    for_ ~ ":"
-    ~    stmt ~ ":" ~ expr ~ ":" ~ stmt 
-    ~ ":" ~ stmt
+    for_ ~ ":"?
+    ~    stmt ~ ":"? ~ expr ~ ":"? ~ stmt 
+    ~ ":"? ~ stmt
 }
 function = {
     fx ~ ident ~ "(" 

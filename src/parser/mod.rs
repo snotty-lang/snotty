@@ -30,6 +30,27 @@ macro_rules! error {
             $pair.as_span(),
         ))
     };
+
+    (S $span: expr => $message: expr) => {
+        Err($crate::parser::Error::new_from_span(
+            pest::error::ErrorVariant::CustomError { message: $message },
+            $span,
+        ))
+    };
+
+    (ES $span: expr => $message: expr) => {
+        $crate::parser::Error::new_from_span(
+            pest::error::ErrorVariant::CustomError { message: $message },
+            $span,
+        )
+    };
+
+    (RS $span: expr => $message: expr) => {
+        return Err($crate::parser::Error::new_from_span(
+            pest::error::ErrorVariant::CustomError { message: $message },
+            $span,
+        ))
+    };
 }
 
 #[derive(Parser)]
@@ -40,6 +61,7 @@ pub fn parse(program: &str) -> Result<(), Error> {
     let program = SnottyParser::parse(Rule::program, program)?;
     let mut scope = Analyzer::new();
     for code in program {
+        println!("{}", code);
         scope.push(code)?;
     }
     println!("{:?}", scope.code());
