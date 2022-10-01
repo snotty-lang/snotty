@@ -1,34 +1,28 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 
-use pest::iterators::Pair;
+use pest::{iterators::Pair, Parser};
 
 use crate::{
-    error,
+    error, format_error,
     parser::{
         instruction::Instruction,
         value::{Kind, Value},
-        Error, Memory, Rule,
+        Error, Memory, Rule, SnottyParser, IR,
     },
 };
 
-use super::IR;
-
 #[derive(Debug)]
 pub struct Analyzer<'a> {
+    included: Vec<&'a str>,
     map: Vec<HashMap<&'a str, Value>>,
     code: Vec<Instruction>,
     loc: Memory,
 }
 
-impl<'a> Default for Analyzer<'a> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<'a> Analyzer<'a> {
-    pub fn new() -> Analyzer<'a> {
+    pub fn new(file: &'a str) -> Analyzer<'a> {
         Analyzer {
+            included: vec![file],
             map: vec![HashMap::new()],
             code: Vec::new(),
             loc: 0,
@@ -54,10 +48,6 @@ impl<'a> Analyzer<'a> {
     #[inline]
     pub fn insert(&mut self, ident: &'a str, value: Value) {
         self.map.last_mut().unwrap().insert(ident, value);
-    }
-
-    pub fn code(self) -> Vec<Instruction> {
-        self.code
     }
 
     pub fn push(&mut self, pair: Pair<'a, Rule>) -> Result<(), Error> {
@@ -207,6 +197,52 @@ impl<'a> Analyzer<'a> {
                 self.code.push(Instruction::Copy(Value::Byte(0), self.loc));
                 self.loc += 1;
                 Ok(Value::Pointer(loc, Kind::Byte))
+            }
+            Rule::file => {
+                let span = pair.as_span();
+                let mut iter = pair.into_inner();
+                drop(iter.next());
+                let file = iter
+                    .next()
+                    .unwrap()
+                    .into_inner()
+                    .map(|element| {
+                        Self::make_char(element.as_str().as_bytes())
+                            .ok_or_else(|| error!(ES span => format!("Byte overflow")))
+                            .map(|a| a as char)
+                    })
+                    .try_fold(String::new(), |mut acc, e| {
+                        acc.push(e?);
+                        Ok(acc)
+                    })?;
+
+                if self.included.contains(&&*file) {
+                    return Ok(Value::None);
+                }
+
+                match fs::read_to_string(&file) {
+                    Err(err) => error!(S span => format!("Cannot include file: {err}")),
+                    Ok(program) => {
+                        let program = SnottyParser::parse(Rule::program, &program)
+                            .map_err(|err| format_error(err.with_path(&file)))?;
+                        let mut included = self.included.clone();
+                        included.push(&file);
+                        let mut analyzer = Analyzer {
+                            loc: self.loc,
+                            code: Vec::new(),
+                            map: vec![HashMap::new()],
+                            included,
+                        };
+                        for code in program {
+                            analyzer
+                                .push(code)
+                                .map_err(|err| format_error(err.with_path(&file)))?
+                        }
+                        self.code.extend(analyzer.code);
+                        self.loc = analyzer.loc;
+                        Ok(Value::None)
+                    }
+                }
             }
             Rule::unop_expr => {
                 let span = pair.as_span();

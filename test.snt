@@ -1,1 +1,3 @@
-for let x = "Hello World!\n":(*x) != 0 ++x out *x
+file "test2.snt"
+
+for let x = "Done\n":(*x) != 0 ++x out *x

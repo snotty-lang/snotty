@@ -11,12 +11,13 @@ otherwise = @{ "otherwise" ~ !ASCII_ALPHANUMERIC }
 if_ = @{ "if" ~ !ASCII_ALPHANUMERIC }
 out_ = @{ "out" ~ !ASCII_ALPHANUMERIC }
 let_ = @{ "let" ~ !ASCII_ALPHANUMERIC }
-const_ = @{ "const" ~ !ASCII_ALPHANUMERIC }
+file_ = @{ "file" ~ !ASCII_ALPHANUMERIC }
 
 stmt = {
     (increment
     | decrement
     | out
+    | file
     | return_stmt
     | if_stmt
     | while_stmt
@@ -42,7 +43,7 @@ keyword = {
     | "otherwise"
     | "fx"
     | "box"
-    | "const"
+    | "file"
     | "input") ~ !ASCII_ALPHANUMERIC
 }
 kind = {
@@ -164,13 +165,14 @@ reassign_op = {
     | "^="
 }
 
-assign = { (let_ | const_) ~ ident ~ (":" ~ kind)? ~ "=" ~ expr }
+assign = { let_ ~ ident ~ (":" ~ kind)? ~ "=" ~ expr }
 reassign = { reassign_lhs ~ reassign_op ~ expr }
 reassign_lhs = {
     deref_signs ~ ("(" ~ expr ~ ")" | attr_access | ident)
     | attr_access | ident
 }
 deref_signs = { "*"+ }
+file = { file_ ~ string }
 out = { out_ ~ expr }
 return_stmt = { return_ ~ expr }
 

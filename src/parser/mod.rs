@@ -21,9 +21,9 @@ pub struct IR {
 #[grammar = "src/parser/grammar.pest"]
 struct SnottyParser;
 
-pub fn parse(program: &str) -> Result<IR, Error> {
+pub fn parse(program: &str, file: &str) -> Result<IR, Error> {
     let program = SnottyParser::parse(Rule::program, program)?;
-    let mut analyzer = Analyzer::new();
+    let mut analyzer = Analyzer::new(file);
     for code in program {
         analyzer.push(code)?;
     }
