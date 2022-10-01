@@ -24,7 +24,7 @@ pub fn run(file: &str) -> Result<String, Box<dyn error::Error>> {
             )))
         }
     };
-    println!("{:?}", ir.code);
+    println!("{:?}\n", ir.code);
     let compiled = CCompiler::compile(ir);
     Ok(compiled)
 }

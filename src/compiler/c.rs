@@ -5,8 +5,7 @@ use crate::parser::{Memory, IR};
 
 fn get_header(memory_used: Memory) -> String {
     format!(
-        r#"\
-#include <stdio.h>
+        r#"#include <stdio.h>
 #include <stdint.h>
 #include <termios.h>
 #define OUT(ch) printf("%c", ch)

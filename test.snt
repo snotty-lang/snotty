@@ -1,1 +1,1 @@
-for : let x = 32 : x < 128 : ++x : out x
+for let x = "Hello World!\n":(*x) != 0 ++x out *x
