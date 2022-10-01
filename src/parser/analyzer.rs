@@ -7,7 +7,7 @@ use crate::{
     parser::{
         instruction::Instruction,
         value::{Kind, Value},
-        Error, Rule,
+        Error, Memory, Rule,
     },
 };
 
@@ -17,7 +17,7 @@ use super::IR;
 pub struct Analyzer<'a> {
     map: Vec<HashMap<&'a str, Value>>,
     code: Vec<Instruction>,
-    loc: usize,
+    loc: Memory,
 }
 
 impl<'a> Default for Analyzer<'a> {
@@ -105,7 +105,9 @@ impl<'a> Analyzer<'a> {
                 for stmt in pair.into_inner() {
                     self.push(stmt)?;
                 }
-                self.code.push(Instruction::Clear(prev, self.loc));
+                if self.loc != prev {
+                    self.code.push(Instruction::Clear(prev, self.loc));
+                }
                 self.loc = prev;
                 self.map.pop();
                 Ok(Value::None)
@@ -120,13 +122,13 @@ impl<'a> Analyzer<'a> {
                 fn cast(
                     expr: Value,
                     kind: Kind,
-                    push: &mut impl FnMut(Value) -> usize,
+                    push: &mut impl FnMut(Value) -> Memory,
                 ) -> Option<Value> {
                     match (expr, kind) {
                         (expr, kind) if expr.kind() == kind => Some(expr),
                         (Value::Memory(i, _), t2) => Some(Value::Memory(i, t2)),
                         (Value::Pointer(i, _), Kind::Pointer(t2)) => Some(Value::Pointer(i, *t2)),
-                        (Value::Byte(i), Kind::Pointer(t)) => Some(Value::Pointer(i as usize, *t)),
+                        (Value::Byte(i), Kind::Pointer(t)) => Some(Value::Pointer(i as Memory, *t)),
                         (Value::Ref(t), Kind::Pointer(kind)) if t.kind() == *kind => {
                             let loc = match &*t {
                                 Value::Memory(i, _) => Some(*i),
@@ -183,7 +185,8 @@ impl<'a> Analyzer<'a> {
                         }
                         None => kind = Some(element.kind()),
                     }
-                    self.code.push(Instruction::Copy(element, loc + i));
+                    self.code
+                        .push(Instruction::Copy(element, loc + (i as Memory)));
                     self.loc += 1;
                 }
                 Ok(Value::Pointer(
@@ -216,13 +219,7 @@ impl<'a> Analyzer<'a> {
                         Value::Pointer(_, Kind::None) => {
                             error!(S span => "Cannot dereference a <*;>".to_string())
                         }
-                        Value::Pointer(_, ref t) => {
-                            let loc = self.loc;
-                            self.loc += 1;
-                            let t = t.clone();
-                            self.code.push(Instruction::Deref(expr, loc));
-                            Ok(Value::Memory(loc, t))
-                        }
+                        Value::Pointer(i, t) => Ok(Value::Memory(i, t)),
                         Value::Memory(_, Kind::Pointer(ref t)) => {
                             let loc = self.loc;
                             self.loc += 1;
@@ -334,12 +331,6 @@ impl<'a> Analyzer<'a> {
                         let loc = self.loc;
                         self.loc += 1;
                         self.code.push(Instruction::Shl(left, right, loc));
-                        Ok(Value::Memory(loc, Kind::Byte))
-                    }
-                    (Kind::Byte, "**", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
-                        self.code.push(Instruction::Pow(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (a, "==", b) if a == b => {
@@ -631,12 +622,6 @@ impl<'a> Analyzer<'a> {
                             self.code.push(Instruction::Shl(derefed_prev, new, loc));
                             Value::Memory(loc, Kind::Byte)
                         }
-                        (Kind::Byte, b"**=", Kind::Byte) => {
-                            let loc = self.loc;
-                            self.loc += 1;
-                            self.code.push(Instruction::Pow(derefed_prev, new, loc));
-                            Value::Memory(loc, Kind::Byte)
-                        }
                         (l, op, r) => {
                             let op = std::str::from_utf8(op.split_last().unwrap().1).unwrap();
                             error!(R pair => format!("Cannot apply operator {} to a <{}> and a <{}>", op, l, r))
@@ -715,20 +700,19 @@ impl<'a> Analyzer<'a> {
                 let otherwise = iter.next();
                 let is_otherwise = otherwise.is_some();
 
-                let loc = self.loc;
-                self.loc += 1;
-                self.code.push(Instruction::If(cond, loc, is_otherwise));
+                let if_stmt = self.code.len();
+                self.code.push(Instruction::If(cond, if_stmt, is_otherwise));
 
                 self.analyze_pair(then.clone())?;
                 if let Some(otherwise) = otherwise {
-                    self.code.push(Instruction::Else(loc));
+                    self.code.push(Instruction::Else(if_stmt));
                     self.analyze_pair(if otherwise.as_rule() == Rule::otherwise {
                         iter.next().unwrap()
                     } else {
                         otherwise
                     })?;
                 }
-                self.code.push(Instruction::EndIf(loc, is_otherwise));
+                self.code.push(Instruction::EndIf(if_stmt, is_otherwise));
                 Ok(Value::None)
             }
             Rule::while_stmt => {

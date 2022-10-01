@@ -1,6 +1,11 @@
+use std::fs;
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    if let Err(err) = snotty::run("test.snt") {
-        println!("{}", err);
+    match snotty::run("test.snt") {
+        Err(err) => println!("{err}"),
+        Ok(compiled) => {
+            fs::write("compiled.c", compiled)?;
+        }
     }
     Ok(())
 }

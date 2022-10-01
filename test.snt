@@ -1,2 +1,1 @@
-let x = 5
-if x > 5 { out 'a' } otherwise { out 'b' }
+for : let x = 32 : x < 128 : ++x : out x

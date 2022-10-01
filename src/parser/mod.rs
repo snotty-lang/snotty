@@ -9,10 +9,11 @@ use crate::parser::analyzer::Analyzer;
 use self::instruction::Instruction;
 
 pub type Error = PestError<Rule>;
+pub type Memory = u16;
 
 #[derive(Debug, Clone)]
 pub struct IR {
-    pub memory_used: usize,
+    pub memory_used: Memory,
     pub code: Vec<Instruction>,
 }
 

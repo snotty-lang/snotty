@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::parser::{analyzer::Analyzer, Error, Rule};
+use crate::parser::{analyzer::Analyzer, Error, Memory, Rule};
 use pest::iterators::Pair;
 
 #[derive(Clone, PartialEq)]
@@ -8,8 +8,8 @@ pub enum Value {
     Byte(u8),
     None,
     Ref(Box<Value>),
-    Pointer(usize, Kind),
-    Memory(usize, Kind),
+    Pointer(Memory, Kind),
+    Memory(Memory, Kind),
     DataBox(Vec<Value>, Kind),
 }
 

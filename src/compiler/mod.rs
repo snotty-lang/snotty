@@ -1,6 +1,6 @@
 use crate::parser::IR;
 
-pub mod py;
+pub mod c;
 
 pub trait Compiler {
     fn compile(ir: IR) -> String;
