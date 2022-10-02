@@ -13,15 +13,17 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Analyzer<'a> {
-    included: Vec<&'a str>,
+    included: Vec<String>,
+    fxs: Vec<Vec<Instruction>>,
     map: Vec<HashMap<&'a str, Value>>,
     code: Vec<Instruction>,
     loc: Memory,
 }
 
 impl<'a> Analyzer<'a> {
-    pub fn new(file: &'a str) -> Analyzer<'a> {
+    pub fn new(file: String) -> Analyzer<'a> {
         Analyzer {
+            fxs: vec![],
             included: vec![file],
             map: vec![HashMap::new()],
             code: Vec::new(),
@@ -33,6 +35,7 @@ impl<'a> Analyzer<'a> {
         IR {
             memory_used: self.loc,
             code: self.code,
+            fxs: self.fxs,
         }
     }
 
@@ -55,7 +58,14 @@ impl<'a> Analyzer<'a> {
             Rule::EOI => Ok(()),
             _ => self
                 .analyze_pair(pair.into_inner().next().unwrap())
-                .map(|_| ()),
+                .map(|_| ())
+                .map_err(|err| {
+                    if err.path().is_none() {
+                        err.with_path(&self.included.pop().unwrap())
+                    } else {
+                        err
+                    }
+                }),
         }
     }
 
@@ -216,7 +226,7 @@ impl<'a> Analyzer<'a> {
                         Ok(acc)
                     })?;
 
-                if self.included.contains(&&*file) {
+                if self.included.contains(&file) {
                     return Ok(Value::None);
                 }
 
@@ -226,20 +236,21 @@ impl<'a> Analyzer<'a> {
                         let program = SnottyParser::parse(Rule::program, &program)
                             .map_err(|err| format_error(err.with_path(&file)))?;
                         let mut included = self.included.clone();
-                        included.push(&file);
-                        let mut analyzer = Analyzer {
-                            loc: self.loc,
-                            code: Vec::new(),
-                            map: vec![HashMap::new()],
+                        included.push(file);
+
+                        let mut new = Analyzer {
+                            fxs: vec![],
                             included,
+                            map: vec![HashMap::new()],
+                            code: Vec::new(),
+                            loc: self.loc,
                         };
+
                         for code in program {
-                            analyzer
-                                .push(code)
-                                .map_err(|err| format_error(err.with_path(&file)))?
+                            new.push(code)?
                         }
-                        self.code.extend(analyzer.code);
-                        self.loc = analyzer.loc;
+                        self.code.extend(new.code);
+                        self.fxs.extend(new.fxs);
                         Ok(Value::None)
                     }
                 }
@@ -448,7 +459,7 @@ impl<'a> Analyzer<'a> {
                 let otherwise_pair = iter.next().unwrap();
                 let otherwise = self.analyze_pair(otherwise_pair.clone())?;
                 if otherwise.kind() != kind {
-                    error!(RS span => format!("Both branches of the ternary expression don't match! One returns a <{}> while other returns a <{}>", kind, otherwise.kind()));
+                    error!(RS span => format!("The branches of the ternary expression don't match. One returns a <{}> while other returns a <{}>", kind, otherwise.kind()));
                 }
 
                 let loc = self.loc;
@@ -827,6 +838,46 @@ impl<'a> Analyzer<'a> {
                 self.loc += 1;
                 self.code.push(Instruction::Input(loc));
                 Ok(Value::Memory(loc, Kind::Byte))
+            }
+            Rule::function => {
+                let mut iter = pair.into_inner();
+                drop(iter.next());
+                let ident = iter.next().unwrap().as_str();
+                let code = std::mem::take(&mut self.code);
+                let mut args = Vec::new();
+                let mut ret = Kind::None;
+
+                let mut map = HashMap::new();
+                while let Some(pair) = iter.next() {
+                    match pair.as_rule() {
+                        Rule::ident => {
+                            let ident = pair.as_str();
+                            let kind = Kind::from_pair(iter.next().unwrap(), self)?;
+                            map.insert(ident, Value::Memory(self.loc, kind.clone()));
+                            self.loc += 1;
+                            args.push(kind);
+                        }
+                        Rule::fx_ret => {
+                            ret = Kind::from_pair(pair.into_inner().next().unwrap(), self)?;
+                        }
+                        Rule::stmt => {
+                            let id = self.fxs.len();
+                            let loc = std::mem::take(&mut self.loc);
+                            let value =
+                                Value::Function(Kind::Function(Some(id), args, Box::new(ret)));
+                            self.insert(ident, value.clone());
+                            self.map.push(map);
+                            self.push(pair)?;
+                            self.map.pop();
+                            self.loc = loc;
+                            self.fxs.push(std::mem::replace(&mut self.code, code));
+                            return Ok(value);
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+
+                unreachable!();
             }
             _ => unreachable!("{pair}"),
         }

@@ -1,3 +1,5 @@
-file "test2.snt"
+//file "test2.snt"
 
-for let x = "Done\n":(*x) != 0 ++x out *x
+fx hello(str: *byte) {str = <*byte>2 out *str}
+
+let x = hello

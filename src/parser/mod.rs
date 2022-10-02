@@ -15,14 +15,16 @@ pub type Memory = u16;
 pub struct IR {
     pub memory_used: Memory,
     pub code: Vec<Instruction>,
+    pub fxs: Vec<Vec<Instruction>>,
 }
 
 #[derive(Parser)]
 #[grammar = "src/parser/grammar.pest"]
 struct SnottyParser;
 
-pub fn parse(program: &str, file: &str) -> Result<IR, Error> {
+pub fn parse(program: &str, file: String) -> Result<IR, Error> {
     let program = SnottyParser::parse(Rule::program, program)?;
+    // println!("{}", program);
     let mut analyzer = Analyzer::new(file);
     for code in program {
         analyzer.push(code)?;

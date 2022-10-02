@@ -1,5 +1,5 @@
 program = _{ SOI ~ stmt* ~ EOI }
-COMMENT = _{ "\\\\" ~ (!NEWLINE ~ '\u{00}'..'\u{7F}')* ~ NEWLINE | "/*" ~ (!"*/" ~ '\u{00}'..'\u{7F}')* ~ "*/" }
+COMMENT = _{ "//" ~ (!NEWLINE ~ '\u{00}'..'\u{7F}')* ~ NEWLINE | "/*" ~ (!"*/" ~ '\u{00}'..'\u{7F}')* ~ "*/" }
 WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
 scope = { "{" ~ stmt* ~ "}" }
 return_ = @{ "return" ~ !ASCII_ALPHANUMERIC }
@@ -47,10 +47,9 @@ keyword = {
     | "input") ~ !ASCII_ALPHANUMERIC
 }
 kind = {
-    "bool" ~ !ASCII_ALPHANUMERIC
-    | "byte" ~ !ASCII_ALPHANUMERIC
+    "byte" ~ !ASCII_ALPHANUMERIC
     | ";"
-    | "fx" ~ "(" ~ (kind ~ ("," ~ kind)*)? ~ ")" ~ ("->" ~ kind)?
+    | "fx" ~ "(" ~ (kind ~ ("," ~ kind)*)? ~ ")" ~ fx_ret?
     | "&" ~ kind
     | "*" ~ kind
     | ident
@@ -188,12 +187,13 @@ for_stmt = {
     ~    stmt ~ ":"? ~ expr ~ ":"? ~ stmt 
     ~ ":"? ~ stmt
 }
+fx_ret = { "->" ~ kind }
 function = {
     fx ~ ident ~ "(" 
     ~ (ident ~ ":" ~ kind
     ~ ("," ~ ident ~ ":" ~ kind)*)? 
     ~ ")"
-    ~ ("->" ~ kind)?
+    ~ fx_ret?
     ~ stmt
 }
 databox = {

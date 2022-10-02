@@ -38,6 +38,7 @@ fn to_c(v: &Value) -> String {
         Value::Ref(v) => to_c(v),
         Value::Pointer(i, _) => i.to_string(),
         Value::Memory(i, _) => format!("memory[{i}]"),
+        Value::Function(..) => todo!(),
         Value::DataBox(_, _) => todo!(),
     }
 }
@@ -46,7 +47,9 @@ pub struct CCompiler;
 
 impl Compiler for CCompiler {
     fn compile(ir: IR) -> String {
-        let IR { memory_used, code } = ir;
+        let IR {
+            memory_used, code, ..
+        } = ir;
         let mut compiled = get_header(memory_used);
 
         for instruction in code {
@@ -65,7 +68,7 @@ impl Compiler for CCompiler {
                 Instruction::Else(_) => compiled.push_str("    } else {\n"),
                 Instruction::EndIf(_, _) => compiled.push_str("    }\n"),
                 Instruction::TernaryIf(v, a, b, i) => compiled.push_str(&format!(
-                    "    if ({}) {{ memory[{i}] = {} }} else {{ memory[{i}] = {} }}\n",
+                    "    if ({}) {{ memory[{i}] = {}; }} else {{ memory[{i}] = {}; }}\n",
                     to_c(&v),
                     to_c(&a),
                     to_c(&b)
