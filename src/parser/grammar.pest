@@ -164,7 +164,7 @@ reassign_op = {
     | "^="
 }
 
-assign = { let_ ~ ident ~ (":" ~ kind)? ~ "=" ~ expr }
+assign = { let_ ~ ident ~ "=" ~ expr }
 reassign = { reassign_lhs ~ reassign_op ~ expr }
 reassign_lhs = {
     deref_signs ~ ("(" ~ expr ~ ")" | attr_access | ident)

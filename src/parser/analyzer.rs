@@ -6,7 +6,7 @@ use crate::{
     error, format_error,
     parser::{
         instruction::Instruction,
-        value::{Kind, Value},
+        value::{FunctionType, Kind, Value},
         Error, Memory, Rule, SnottyParser, IR,
     },
 };
@@ -115,7 +115,7 @@ impl<'a> Analyzer<'a> {
             Rule::type_cast => {
                 let span = pair.as_span();
                 let mut iter = pair.into_inner();
-                let kind = Kind::from_pair(iter.next().unwrap(), self)?;
+                let kind = Kind::from_pair(iter.next().unwrap(), self, 0)?;
                 let expr = self.analyze_pair(iter.next().unwrap())?;
                 let expr_kind = expr.kind();
 
@@ -166,15 +166,9 @@ impl<'a> Analyzer<'a> {
                 || error!(E pair => format!("Cannot find {} in current scope", pair.as_str())),
             ),
             Rule::array => {
-                let span = pair.as_span();
-                let mut iter = pair.into_inner();
-                let mut kind = if let Some(kind) = iter.next().unwrap().into_inner().next() {
-                    Some(Kind::from_pair(kind, self)?)
-                } else {
-                    None
-                };
+                let mut kind = None;
                 let loc = self.loc;
-                for (i, element_rule) in iter.enumerate() {
+                for (i, element_rule) in pair.into_inner().enumerate() {
                     let span = element_rule.as_span();
                     let element = self.analyze_pair(element_rule)?;
                     match kind {
@@ -189,10 +183,7 @@ impl<'a> Analyzer<'a> {
                         .push(Instruction::Copy(element, loc + (i as Memory)));
                     self.loc += 1;
                 }
-                Ok(Value::Pointer(
-                    loc,
-                    kind.ok_or_else(|| error!(ES span => format!("Cannot infer type of array")))?,
-                ))
+                Ok(Value::Pointer(loc, kind.unwrap_or_default()))
             }
             Rule::string => {
                 let loc = self.loc;
@@ -488,22 +479,10 @@ impl<'a> Analyzer<'a> {
                 Ok(Value::None)
             }
             Rule::assign => {
-                let span = pair.as_span();
                 let mut iter = pair.into_inner();
                 drop(iter.next());
                 let ident = iter.next().unwrap().as_str();
-                let mut next = iter.next().unwrap();
-                let kind = if next.as_rule() == Rule::kind {
-                    let k = Some(Kind::from_pair(next, self)?);
-                    next = iter.next().unwrap();
-                    k
-                } else {
-                    None
-                };
-                let value = self.analyze_pair(next)?;
-                if matches!(kind, Some(ref kind) if *kind != value.kind()) {
-                    error!(RS span => format!("{} should be a <{}> but it is a <{}>", ident, kind.unwrap(), value.kind()));
-                }
+                let value = self.analyze_pair(iter.next().unwrap())?;
 
                 if ident == "_" {
                     return Ok(Value::None);
@@ -844,31 +823,38 @@ impl<'a> Analyzer<'a> {
                 drop(iter.next());
                 let ident = iter.next().unwrap().as_str();
                 let code = std::mem::take(&mut self.code);
-                let mut args = Vec::new();
+                let mut params = Vec::new();
                 let mut ret = Kind::None;
+                let loc = std::mem::take(&mut self.loc);
 
                 let mut map = HashMap::new();
                 while let Some(pair) = iter.next() {
                     match pair.as_rule() {
                         Rule::ident => {
                             let ident = pair.as_str();
-                            let kind = Kind::from_pair(iter.next().unwrap(), self)?;
+                            let kind = Kind::from_pair(iter.next().unwrap(), self, self.loc)?;
                             map.insert(ident, Value::Memory(self.loc, kind.clone()));
                             self.loc += 1;
-                            args.push(kind);
+                            params.push(kind);
                         }
                         Rule::fx_ret => {
-                            ret = Kind::from_pair(pair.into_inner().next().unwrap(), self)?;
+                            ret =
+                                Kind::from_pair(pair.into_inner().next().unwrap(), self, self.loc)?;
+                            map.insert("$ret", Value::Memory(self.loc, ret.clone()));
+                            self.loc += 1;
                         }
                         Rule::stmt => {
                             let id = self.fxs.len();
-                            let loc = std::mem::take(&mut self.loc);
-                            let value =
-                                Value::Function(Kind::Function(Some(id), args, Box::new(ret)));
-                            self.insert(ident, value.clone());
+                            let start = self.loc;
                             self.map.push(map);
                             self.push(pair)?;
                             self.map.pop();
+                            let value = Value::Function(Kind::Function(
+                                FunctionType::PtrToFx(id as u16, self.loc - start),
+                                params,
+                                Box::new(ret),
+                            ));
+                            self.insert(ident, value.clone());
                             self.loc = loc;
                             self.fxs.push(std::mem::replace(&mut self.code, code));
                             return Ok(value);
@@ -878,6 +864,43 @@ impl<'a> Analyzer<'a> {
                 }
 
                 unreachable!();
+            }
+            Rule::call => {
+                let span = pair.as_span();
+                let mut iter = pair.into_inner();
+                let fx = self.analyze_pair(iter.next().unwrap())?;
+                let args = iter.collect::<Vec<_>>();
+                let mut out = Value::None;
+                match fx.kind() {
+                    Kind::Function(FunctionType::PtrToFx(a, mem), params, ret) => {
+                        let fx = self.fxs[a as usize].clone();
+                        if args.len() != params.len() {
+                            error!(RS span => format!("The function takes {} arguments, while {} were passed", params.len(), args.len()));
+                        }
+                        for (pair, kind) in args.into_iter().zip(params) {
+                            let span = pair.as_span();
+                            let expr = self.analyze_pair(pair)?;
+                            let expr_kind = expr.kind();
+                            if expr_kind != kind {
+                                error!(RS span => format!("The function expected a <{}>, but <{}> was passed instead", kind, expr_kind));
+                            }
+                            self.code.push(Instruction::Copy(expr, self.loc));
+                            self.loc += 1;
+                        }
+
+                        if !matches!(*ret, Kind::None) {
+                            out = Value::Memory(self.loc, *ret);
+                            self.loc += 1;
+                        }
+
+                        for code in fx {
+                            self.code.push(code.with_offset(self.loc));
+                        }
+                        self.loc += mem;
+                    }
+                    k => error!(RS span => format!("Cannot call a <{}>", k)),
+                }
+                Ok(out)
             }
             _ => unreachable!("{pair}"),
         }

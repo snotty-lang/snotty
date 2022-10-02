@@ -1,5 +1,3 @@
-//file "test2.snt"
+fx print(str: *byte) for;:(*str)!=0++str:out*str
 
-fx hello(str: *byte) {str = <*byte>2 out *str}
-
-let x = hello
+print("Hello World!")
