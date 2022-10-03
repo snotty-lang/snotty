@@ -177,27 +177,6 @@ impl<'a> Analyzer<'a> {
                     || error!(E pair => format!("Cannot find {} in current scope", pair.as_str())),
                 )
                 .cloned(),
-            Rule::array => {
-                let mut kind = None;
-                let loc = self.loc;
-                for (i, element_rule) in pair.into_inner().enumerate() {
-                    let span = element_rule.as_span();
-                    let element = self.analyze_pair(element_rule)?;
-                    match kind {
-                        Some(ref kind) => {
-                            if element.kind() != *kind {
-                                error!(RS span => format!("Found a <{}> in an array of <{}>s", element.kind(), kind));
-                            }
-                        }
-                        None => kind = Some(element.kind()),
-                    }
-                    self.code
-                        .push(Instruction::Copy(element, loc + (i as Memory)));
-                    self.loc += 1;
-                    self.max_memory += 1;
-                }
-                Ok(Value::Pointer(loc, kind.unwrap_or_default()))
-            }
             Rule::string => {
                 let loc = self.loc;
                 let span = pair.as_span();

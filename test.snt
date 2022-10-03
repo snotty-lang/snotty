@@ -1,26 +1,9 @@
 fx print(str: *byte) for;:(*str)!=0++str:out*str
-
-print("Hello World!\n")
-
 let index = fx (array: *byte, n: byte) -> byte { return *(array + n) }
 
+//print("Hello World!\n")
 
-for : let i = 0 : i < 8 : ++i : {
-    out index("Hi man!\n", i)
-}
+//for let i = 0 i < 8 : ++i for let j = 0 j < 8 ++j out index("Hi man!\n", j)
 
-for : let i = 0 : i < 8 : ++i : {
-    out index("Hi man!\n", i)
-}
+let x = [0 +0, 0 * 0, 0 - 0]
 
-for : let i = 0 : i < 8 : ++i : {
-    out index("Hi man!\n", i)
-}
-
-for : let i = 0 : i < 8 : ++i : {
-    out index("Hi man!\n", i)
-}
-
-for : let i = 0 : i < 8 : ++i : {
-    out index("Hi man!\n", i)
-}
