@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <termios.h>
 #define OUT(ch) printf("%c", ch)
-#define MEMORY 5
+#define MEMORY 11
 
 int in() {
     struct termios old, new;
@@ -19,12 +19,22 @@ int in() {
 
 int main() {
     uint8_t memory[MEMORY];
-    memory[0] = 0;
-    memory[1] = 0 + 0;
-    memory[1] = memory[1];
-    memory[3] = 0 * 0;
+    memory[0] = 1;
+    memory[1] = memory[0] < 9;
+    memory[2] = memory[1];
+    while (memory[2]) {
+    memory[3] = 0;
+    memory[4] = memory[3] < memory[0];
+    memory[5] = memory[4];
+    while (memory[5]) {
+    OUT(42);
+    ++memory[3];
+    memory[6] = memory[3] < memory[0];
+    memory[5] = memory[6];
+    }
+    OUT(10);
+    ++memory[0];
+    memory[3] = memory[0] < 9;
     memory[2] = memory[3];
-    memory[5] = 0 - 0;
-    memory[3] = memory[5];
-    memory[7] = 1;
+    }
 }

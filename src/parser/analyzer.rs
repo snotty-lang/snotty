@@ -6,7 +6,7 @@ use crate::{
     error, format_error,
     parser::{
         instruction::Instruction,
-        value::{FunctionType, Kind, Value},
+        value::{Kind, Value},
         Error, Memory, Rule, SnottyParser, IR,
     },
 };
@@ -125,7 +125,7 @@ impl<'a> Analyzer<'a> {
             Rule::type_cast => {
                 let span = pair.as_span();
                 let mut iter = pair.into_inner();
-                let kind = Kind::from_pair(iter.next().unwrap(), self, 0)?;
+                let kind = Kind::from_pair(iter.next().unwrap(), self)?;
                 let expr = self.analyze_pair(iter.next().unwrap())?;
                 let expr_kind = expr.kind();
 
@@ -788,14 +788,13 @@ impl<'a> Analyzer<'a> {
                     match pair.as_rule() {
                         Rule::ident => {
                             let ident = pair.as_str();
-                            let kind = Kind::from_pair(iter.next().unwrap(), self, self.loc)?;
+                            let kind = Kind::from_pair(iter.next().unwrap(), self)?;
                             map.insert(ident, Value::Memory(self.loc, kind.clone()));
                             self.loc += 1;
                             params.push(kind);
                         }
                         Rule::fx_ret => {
-                            ret =
-                                Kind::from_pair(pair.into_inner().next().unwrap(), self, self.loc)?;
+                            ret = Kind::from_pair(pair.into_inner().next().unwrap(), self)?;
                             map.insert("$ret", Value::Memory(self.loc, ret.clone()));
                             self.loc += 1;
                         }
@@ -808,11 +807,11 @@ impl<'a> Analyzer<'a> {
                             let end = self.loc;
                             self.insert(
                                 ident,
-                                Value::Function(Kind::Function(
-                                    FunctionType::PtrToFx(id as u16, end - start),
-                                    params,
-                                    Box::new(ret),
-                                )),
+                                Value::Function(
+                                    id as u16,
+                                    end - start,
+                                    Kind::Function(params, Box::new(ret)),
+                                ),
                             );
                             self.loc = loc;
                             self.max_memory = max_mem;
@@ -841,14 +840,13 @@ impl<'a> Analyzer<'a> {
                     match pair.as_rule() {
                         Rule::ident => {
                             let ident = pair.as_str();
-                            let kind = Kind::from_pair(iter.next().unwrap(), self, self.loc)?;
+                            let kind = Kind::from_pair(iter.next().unwrap(), self)?;
                             map.insert(ident, Value::Memory(self.loc, kind.clone()));
                             self.loc += 1;
                             params.push(kind);
                         }
                         Rule::fx_ret => {
-                            ret =
-                                Kind::from_pair(pair.into_inner().next().unwrap(), self, self.loc)?;
+                            ret = Kind::from_pair(pair.into_inner().next().unwrap(), self)?;
                             map.insert("$ret", Value::Memory(self.loc, ret.clone()));
                             self.loc += 1;
                         }
@@ -863,11 +861,11 @@ impl<'a> Analyzer<'a> {
                             self.max_memory = max_mem;
                             self.memory_used = mem_used;
                             self.fxs.push(std::mem::replace(&mut self.code, code));
-                            return Ok(Value::Function(Kind::Function(
-                                FunctionType::PtrToFx(id as u16, end - start),
-                                params,
-                                Box::new(ret),
-                            )));
+                            return Ok(Value::Function(
+                                id as u16,
+                                end - start,
+                                Kind::Function(params, Box::new(ret)),
+                            ));
                         }
                         _ => unreachable!("{pair}"),
                     }
@@ -898,8 +896,8 @@ impl<'a> Analyzer<'a> {
                 let fx = self.analyze_pair(iter.next().unwrap())?;
                 let args = iter.collect::<Vec<_>>();
                 let mut out = Value::None;
-                match fx.kind() {
-                    Kind::Function(FunctionType::PtrToFx(a, mem), params, ret) => {
+                match fx {
+                    Value::Function(a, mem, Kind::Function(params, ret)) => {
                         let fx = self.fxs[a as usize].clone();
                         if args.len() != params.len() {
                             error!(RS span => format!("The fx takes {} arguments, while {} were passed", params.len(), args.len()));
@@ -928,7 +926,8 @@ impl<'a> Analyzer<'a> {
                         self.loc += mem;
                         self.memory_used += mem;
                     }
-                    k => error!(RS span => format!("Cannot call a <{}>", k)),
+
+                    k => error!(RS span => format!("Cannot call a <{}>", k.kind())),
                 }
                 Ok(out)
             }

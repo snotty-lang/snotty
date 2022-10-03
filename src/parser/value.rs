@@ -10,7 +10,7 @@ pub enum Value {
     Ref(Box<Value>),
     Pointer(Memory, Kind),
     Memory(Memory, Kind),
-    Function(Kind),
+    Function(Memory, Memory, Kind),
     DataBox(Vec<Value>, Kind),
 }
 
@@ -28,7 +28,7 @@ impl Value {
             Value::Ref(val) => Kind::Ref(Box::new(val.kind())),
             Value::Pointer(_, t) => Kind::Pointer(Box::new(t.clone())),
             Value::Memory(_, t) => t.clone(),
-            Value::Function(t) => t.clone(),
+            Value::Function(_, _, t) => t.clone(),
             Value::DataBox(_, t) => t.clone(),
         }
     }
@@ -70,13 +70,7 @@ pub enum Kind {
     Ref(Box<Kind>),
     Pointer(Box<Kind>),
     DataBox(usize, Vec<Kind>),
-    Function(FunctionType, Vec<Kind>, Box<Kind>),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FunctionType {
-    PtrToFx(Memory, Memory),
-    PtrToMem(Memory),
+    Function(Vec<Kind>, Box<Kind>),
 }
 
 impl fmt::Debug for Kind {
@@ -86,11 +80,7 @@ impl fmt::Debug for Kind {
 }
 
 impl Kind {
-    pub fn from_pair<'a>(
-        pair: Pair<'a, Rule>,
-        analyzer: &Analyzer<'a>,
-        fx_mem: Memory,
-    ) -> Result<Self, Error> {
+    pub fn from_pair<'a>(pair: Pair<'a, Rule>, analyzer: &Analyzer<'a>) -> Result<Self, Error> {
         match pair.as_rule() {
             Rule::kind => Ok(match pair.as_str().trim().as_bytes() {
                 b"byte" => Kind::Byte,
@@ -98,30 +88,24 @@ impl Kind {
                 [b'&', ..] => Kind::Ref(Box::new(Kind::from_pair(
                     pair.into_inner().next().unwrap(),
                     analyzer,
-                    fx_mem,
                 )?)),
                 [b'*', ..] => Kind::Pointer(Box::new(Kind::from_pair(
                     pair.into_inner().next().unwrap(),
                     analyzer,
-                    fx_mem,
                 )?)),
                 [b'f', b'x', x, ..] if !x.is_ascii_alphanumeric() => {
                     let mut args = Vec::new();
                     let mut ret = Kind::None;
                     for pair in pair.into_inner() {
                         match pair.as_rule() {
-                            Rule::kind => args.push(Kind::from_pair(pair, analyzer, fx_mem)?),
+                            Rule::kind => args.push(Kind::from_pair(pair, analyzer)?),
                             Rule::fx_ret => {
-                                ret = Kind::from_pair(
-                                    pair.into_inner().next().unwrap(),
-                                    analyzer,
-                                    fx_mem,
-                                )?
+                                ret = Kind::from_pair(pair.into_inner().next().unwrap(), analyzer)?
                             }
                             _ => unreachable!(),
                         }
                     }
-                    Kind::Function(FunctionType::PtrToMem(fx_mem), args, Box::new(ret))
+                    Kind::Function(args, Box::new(ret))
                 }
                 _ => todo!(),
             }),
@@ -173,7 +157,7 @@ impl fmt::Display for Kind {
             Kind::None => write!(f, ";"),
             Kind::Byte => write!(f, "byte"),
             Kind::DataBox(t, ..) => write!(f, "box {{{}}}", t),
-            Kind::Function(ptr, t, r) => write!(f, "({ptr:?}) fx ({:?}) -> {}", t, r),
+            Kind::Function(t, r) => write!(f, "fx ({:?}) -> {}", t, r),
             Kind::Pointer(t) => write!(f, "*{}", t),
         }
     }
@@ -187,7 +171,7 @@ impl fmt::Display for Value {
             Value::Ref(ptr) => write!(f, "&{}", ptr),
             Value::Memory(mem, t) => write!(f, "<{}>{{{}}}", t, mem),
             Value::Pointer(v, t) => write!(f, "<*{}>{{*{}}}", t, v),
-            Value::Function(t) => write!(f, "{}", t),
+            Value::Function(a, _, t) => write!(f, "(fx {a}) {}", t),
             Value::DataBox(f_, t) => write!(f, "<{}>{{{:?}}}", t, f_),
         }
     }

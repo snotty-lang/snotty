@@ -1,9 +1,4 @@
 fx print(str: *byte) for;:(*str)!=0++str:out*str
-let index = fx (array: *byte, n: byte) -> byte { return *(array + n) }
+//fx repeated_map(str: *byte, n: byte, fn: fx(*byte)) for let i = 0 i < n ++i fn(str)
 
-//print("Hello World!\n")
-
-//for let i = 0 i < 8 : ++i for let j = 0 j < 8 ++j out index("Hi man!\n", j)
-
-let x = [0 +0, 0 * 0, 0 - 0]
-
+for let i = 1 i < 9 ++i {for let j = 0 j < i ++j out '*' out 10}

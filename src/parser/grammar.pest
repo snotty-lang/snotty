@@ -12,6 +12,7 @@ if_ = @{ "if" ~ !ASCII_ALPHANUMERIC }
 out_ = @{ "out" ~ !ASCII_ALPHANUMERIC }
 let_ = @{ "let" ~ !ASCII_ALPHANUMERIC }
 file_ = @{ "file" ~ !ASCII_ALPHANUMERIC }
+byte = @{ "byte" ~ !ASCII_ALPHANUMERIC }
 
 stmt = {
     (increment
@@ -46,8 +47,9 @@ keyword = {
     | "file"
     | "input") ~ !ASCII_ALPHANUMERIC
 }
+
 kind = {
-    "byte" ~ !ASCII_ALPHANUMERIC
+    byte
     | ";"
     | "fx" ~ "(" ~ (kind ~ ("," ~ kind)*)? ~ ")" ~ fx_ret?
     | "&" ~ kind
