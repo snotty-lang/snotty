@@ -18,6 +18,8 @@ pub struct Analyzer<'a> {
     map: Vec<HashMap<&'a str, Value>>,
     code: Vec<Instruction>,
     loc: Memory,
+    max_memory: Memory,
+    memory_used: Memory,
 }
 
 impl<'a> Analyzer<'a> {
@@ -28,29 +30,35 @@ impl<'a> Analyzer<'a> {
             map: vec![HashMap::new()],
             code: Vec::new(),
             loc: 0,
+            max_memory: 0,
+            memory_used: 0,
         }
     }
 
     pub fn into_ir(self) -> IR {
         IR {
-            memory_used: self.loc,
+            memory_used: self.memory_used.max(self.max_memory),
             code: self.code,
             fxs: self.fxs,
         }
     }
 
     #[inline]
-    pub fn get(&self, ident: &'a str) -> Option<Value> {
-        self.map
-            .iter()
-            .rev()
-            .find_map(|map| map.get(ident))
-            .cloned()
+    pub fn get(&self, ident: &'a str) -> Option<&Value> {
+        self.map.iter().rev().find_map(|map| map.get(ident))
     }
 
     #[inline]
     pub fn insert(&mut self, ident: &'a str, value: Value) {
         self.map.last_mut().unwrap().insert(ident, value);
+    }
+
+    #[inline]
+    pub fn memory(&mut self) -> Memory {
+        let curr = self.loc;
+        self.loc += 1;
+        self.memory_used += 1;
+        curr
     }
 
     pub fn push(&mut self, pair: Pair<'a, Rule>) -> Result<(), Error> {
@@ -90,8 +98,7 @@ impl<'a> Analyzer<'a> {
                     Value::Memory(i, t) => Ok(Value::Pointer(i, t)),
                     Value::None => Ok(Value::Pointer(0, Kind::None)),
                     _ => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         let kind = value.kind();
                         self.code.push(Instruction::Copy(value, loc));
                         Ok(Value::Pointer(loc, kind))
@@ -105,9 +112,12 @@ impl<'a> Analyzer<'a> {
                 for stmt in pair.into_inner() {
                     self.push(stmt)?;
                 }
+                let diff = self.loc - prev;
                 if self.loc != prev {
                     self.code.push(Instruction::Clear(prev, self.loc));
                 }
+                self.max_memory = diff + self.memory_used;
+                self.memory_used -= diff;
                 self.loc = prev;
                 self.map.pop();
                 Ok(Value::None)
@@ -152,8 +162,7 @@ impl<'a> Analyzer<'a> {
                 }
 
                 let push = &mut |val: Value| {
-                    let loc = self.loc;
-                    self.loc += 1;
+                    let loc = self.memory();
                     self.code.push(Instruction::Copy(val, loc));
                     loc
                 };
@@ -162,9 +171,12 @@ impl<'a> Analyzer<'a> {
                     || error!(ES span => format!("Cannot cast a <{}> into a <{}>", expr_kind, kind)),
                 )
             }
-            Rule::ident => self.get(pair.as_str()).ok_or_else(
-                || error!(E pair => format!("Cannot find {} in current scope", pair.as_str())),
-            ),
+            Rule::ident => self
+                .get(pair.as_str())
+                .ok_or_else(
+                    || error!(E pair => format!("Cannot find {} in current scope", pair.as_str())),
+                )
+                .cloned(),
             Rule::array => {
                 let mut kind = None;
                 let loc = self.loc;
@@ -182,6 +194,7 @@ impl<'a> Analyzer<'a> {
                     self.code
                         .push(Instruction::Copy(element, loc + (i as Memory)));
                     self.loc += 1;
+                    self.max_memory += 1;
                 }
                 Ok(Value::Pointer(loc, kind.unwrap_or_default()))
             }
@@ -191,12 +204,11 @@ impl<'a> Analyzer<'a> {
                 for element in pair.into_inner() {
                     let byte = Self::make_char(element.as_str().as_bytes())
                         .ok_or_else(|| error!(ES span => format!("Byte overflow")))?;
-                    self.code
-                        .push(Instruction::Copy(Value::Byte(byte), self.loc));
-                    self.loc += 1;
+                    let mem = self.memory();
+                    self.code.push(Instruction::Copy(Value::Byte(byte), mem));
                 }
-                self.code.push(Instruction::Copy(Value::Byte(0), self.loc));
-                self.loc += 1;
+                let mem = self.memory();
+                self.code.push(Instruction::Copy(Value::Byte(0), mem));
                 Ok(Value::Pointer(loc, Kind::Byte))
             }
             Rule::file => {
@@ -235,6 +247,8 @@ impl<'a> Analyzer<'a> {
                             map: vec![HashMap::new()],
                             code: Vec::new(),
                             loc: self.loc,
+                            max_memory: self.max_memory,
+                            memory_used: self.memory_used,
                         };
 
                         for code in program {
@@ -242,6 +256,8 @@ impl<'a> Analyzer<'a> {
                         }
                         self.code.extend(new.code);
                         self.fxs.extend(new.fxs);
+                        self.memory_used = new.memory_used;
+                        self.max_memory = new.max_memory;
                         Ok(Value::None)
                     }
                 }
@@ -259,8 +275,7 @@ impl<'a> Analyzer<'a> {
                         }
                         Value::Pointer(i, t) => Ok(Value::Memory(i, t)),
                         Value::Memory(_, Kind::Pointer(ref t)) => {
-                            let loc = self.loc;
-                            self.loc += 1;
+                            let loc = self.memory();
                             let t = *t.clone();
                             self.code.push(Instruction::Deref(expr, loc));
                             Ok(Value::Memory(loc, t))
@@ -274,8 +289,7 @@ impl<'a> Analyzer<'a> {
                         if kind != Kind::Byte {
                             error!(RS span => format!("Cannot negate a <{}>", kind));
                         }
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Neg(expr, loc));
                         Ok(Value::Memory(loc, kind))
                     }
@@ -284,8 +298,7 @@ impl<'a> Analyzer<'a> {
                         if kind != Kind::Byte {
                             error!(RS span => format!("Cannot not a <{}>", kind));
                         }
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Not(expr, loc));
                         Ok(Value::Memory(loc, kind))
                     }
@@ -300,134 +313,112 @@ impl<'a> Analyzer<'a> {
                 let right = self.analyze_pair(iter.next().unwrap())?;
                 match (left.kind(), op.as_str(), right.kind()) {
                     (Kind::Byte, "+", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Add(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "-", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Sub(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (t @ Kind::Pointer(..), "+", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Add(left, right, loc));
                         Ok(Value::Memory(loc, t))
                     }
                     (t @ Kind::Pointer(..), "-", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Sub(left, right, loc));
                         Ok(Value::Memory(loc, t))
                     }
                     (Kind::Byte, "*", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Mul(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "/", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Div(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "%", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Mod(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "|", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Or(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "^", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Xor(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "&", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::And(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, ">>", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Shr(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "<<", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Shl(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (a, "==", b) if a == b => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Eq(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (a, "!=", b) if a == b => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Neq(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "<", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Lt(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, "<=", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Le(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, ">", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Gt(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Byte, ">=", Kind::Byte) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Ge(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Pointer(..), "<", Kind::Pointer(..)) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Lt(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Pointer(..), "<=", Kind::Pointer(..)) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Le(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Pointer(..), ">", Kind::Pointer(..)) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Gt(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
                     (Kind::Pointer(..), ">=", Kind::Pointer(..)) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code.push(Instruction::Ge(left, right, loc));
                         Ok(Value::Memory(loc, Kind::Byte))
                     }
@@ -453,8 +444,7 @@ impl<'a> Analyzer<'a> {
                     error!(RS span => format!("The branches of the ternary expression don't match. One returns a <{}> while other returns a <{}>", kind, otherwise.kind()));
                 }
 
-                let loc = self.loc;
-                self.loc += 1;
+                let loc = self.memory();
 
                 self.code
                     .push(Instruction::TernaryIf(cond, then, otherwise, loc));
@@ -493,8 +483,7 @@ impl<'a> Analyzer<'a> {
                         self.insert(ident, value);
                     }
                     Value::Memory(i, t) => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.code
                             .push(Instruction::Copy(Value::Memory(i, t.clone()), loc));
                         self.insert(ident, Value::Memory(loc, t));
@@ -507,8 +496,7 @@ impl<'a> Analyzer<'a> {
                         }
                     }
                     val => {
-                        let loc = self.loc;
-                        self.loc += 1;
+                        let loc = self.memory();
                         self.insert(ident, Value::Memory(loc, val.kind()));
                         self.code.push(Instruction::Copy(val, loc));
                     }
@@ -575,81 +563,70 @@ impl<'a> Analyzer<'a> {
                         }
                     };
 
-                    match (derefed_prev.kind(), op.as_str().as_bytes(), new.kind()) {
-                        (Kind::Byte, b"+=", Kind::Byte) => {
-                            let loc = self.loc;
-                            self.loc += 1;
+                    match (derefed_prev.kind(), op.as_str(), new.kind()) {
+                        (Kind::Byte, "+=", Kind::Byte) => {
+                            let loc = self.memory();
                             self.code.push(Instruction::Add(derefed_prev, new, loc));
                             Value::Memory(loc, Kind::Byte)
                         }
-                        (Kind::Byte, b"-=", Kind::Byte) => {
-                            let loc = self.loc;
-                            self.loc += 1;
+                        (Kind::Byte, "-=", Kind::Byte) => {
+                            let loc = self.memory();
                             self.code.push(Instruction::Sub(derefed_prev, new, loc));
                             Value::Memory(loc, Kind::Byte)
                         }
-                        (t @ Kind::Pointer(..), b"+=", Kind::Byte) => {
-                            let loc = self.loc;
-                            self.loc += 1;
+                        (t @ Kind::Pointer(..), "+=", Kind::Byte) => {
+                            let loc = self.memory();
                             self.code.push(Instruction::Add(derefed_prev, new, loc));
                             Value::Memory(loc, t)
                         }
-                        (t @ Kind::Pointer(..), b"-=", Kind::Byte) => {
-                            let loc = self.loc;
-                            self.loc += 1;
+                        (t @ Kind::Pointer(..), "-=", Kind::Byte) => {
+                            let loc = self.memory();
                             self.code.push(Instruction::Sub(derefed_prev, new, loc));
                             Value::Memory(loc, t)
                         }
-                        (Kind::Byte, b"*=", Kind::Byte) => {
-                            let loc = self.loc;
-                            self.loc += 1;
+                        (Kind::Byte, "*=", Kind::Byte) => {
+                            let loc = self.memory();
                             self.code.push(Instruction::Mul(derefed_prev, new, loc));
                             Value::Memory(loc, Kind::Byte)
                         }
-                        (Kind::Byte, b"/=", Kind::Byte) => {
-                            let loc = self.loc;
-                            self.loc += 1;
+                        (Kind::Byte, "/=", Kind::Byte) => {
+                            let loc = self.memory();
                             self.code.push(Instruction::Div(derefed_prev, new, loc));
                             Value::Memory(loc, Kind::Byte)
                         }
-                        (Kind::Byte, b"%=", Kind::Byte) => {
-                            let loc = self.loc;
-                            self.loc += 1;
+                        (Kind::Byte, "%=", Kind::Byte) => {
+                            let loc = self.memory();
                             self.code.push(Instruction::Mod(derefed_prev, new, loc));
                             Value::Memory(loc, Kind::Byte)
                         }
-                        (Kind::Byte, b"|=", Kind::Byte) => {
-                            let loc = self.loc;
-                            self.loc += 1;
+                        (Kind::Byte, "|=", Kind::Byte) => {
+                            let loc = self.memory();
                             self.code.push(Instruction::Or(derefed_prev, new, loc));
                             Value::Memory(loc, Kind::Byte)
                         }
-                        (Kind::Byte, b"^=", Kind::Byte) => {
-                            let loc = self.loc;
-                            self.loc += 1;
+                        (Kind::Byte, "^=", Kind::Byte) => {
+                            let loc = self.memory();
                             self.code.push(Instruction::Xor(derefed_prev, new, loc));
                             Value::Memory(loc, Kind::Byte)
                         }
-                        (Kind::Byte, b"&=", Kind::Byte) => {
-                            let loc = self.loc;
-                            self.loc += 1;
+                        (Kind::Byte, "&=", Kind::Byte) => {
+                            let loc = self.memory();
                             self.code.push(Instruction::And(derefed_prev, new, loc));
                             Value::Memory(loc, Kind::Byte)
                         }
-                        (Kind::Byte, b">>=", Kind::Byte) => {
-                            let loc = self.loc;
-                            self.loc += 1;
+                        (Kind::Byte, ">>=", Kind::Byte) => {
+                            let loc = self.memory();
                             self.code.push(Instruction::Shr(derefed_prev, new, loc));
                             Value::Memory(loc, Kind::Byte)
                         }
-                        (Kind::Byte, b"<<=", Kind::Byte) => {
-                            let loc = self.loc;
-                            self.loc += 1;
+                        (Kind::Byte, "<<=", Kind::Byte) => {
+                            let loc = self.memory();
                             self.code.push(Instruction::Shl(derefed_prev, new, loc));
                             Value::Memory(loc, Kind::Byte)
                         }
                         (l, op, r) => {
-                            let op = std::str::from_utf8(op.split_last().unwrap().1).unwrap();
+                            let op =
+                                std::str::from_utf8(op.as_bytes().split_last().unwrap().1).unwrap();
                             error!(R pair => format!("Cannot apply operator {} to a <{}> and a <{}>", op, l, r))
                         }
                     }
@@ -749,8 +726,7 @@ impl<'a> Analyzer<'a> {
                 if cond.kind() != Kind::Byte {
                     error!(R cond_pair => format!("Condition in a while statement must be a <byte>, and not a <{}>", cond.kind()));
                 }
-                let loc = self.loc;
-                self.loc += 1;
+                let loc = self.memory();
                 self.code.push(Instruction::Copy(cond, loc));
                 cond = Value::Memory(loc, Kind::Byte);
 
@@ -783,8 +759,7 @@ impl<'a> Analyzer<'a> {
                     error!(R cond_pair => format!("Condition in a for statement must be a <byte>, and not a <{}>", cond.kind()));
                 }
 
-                let loc = self.loc;
-                self.loc += 1;
+                let loc = self.memory();
                 self.code.push(Instruction::Copy(cond, loc));
                 cond = Value::Memory(loc, Kind::Byte);
 
@@ -826,6 +801,8 @@ impl<'a> Analyzer<'a> {
                 let mut params = Vec::new();
                 let mut ret = Kind::None;
                 let loc = std::mem::take(&mut self.loc);
+                let mem_used = self.memory_used;
+                let max_mem = self.max_memory;
 
                 let mut map = HashMap::new();
                 while let Some(pair) = iter.next() {
@@ -849,21 +826,92 @@ impl<'a> Analyzer<'a> {
                             self.map.push(map);
                             self.push(pair)?;
                             self.map.pop();
-                            let value = Value::Function(Kind::Function(
-                                FunctionType::PtrToFx(id as u16, self.loc - start),
-                                params,
-                                Box::new(ret),
-                            ));
-                            self.insert(ident, value.clone());
+                            let end = self.loc;
+                            self.insert(
+                                ident,
+                                Value::Function(Kind::Function(
+                                    FunctionType::PtrToFx(id as u16, end - start),
+                                    params,
+                                    Box::new(ret),
+                                )),
+                            );
                             self.loc = loc;
+                            self.max_memory = max_mem;
+                            self.memory_used = mem_used;
                             self.fxs.push(std::mem::replace(&mut self.code, code));
-                            return Ok(value);
+                            return Ok(Value::None);
                         }
                         _ => unreachable!(),
                     }
                 }
 
                 unreachable!();
+            }
+            Rule::function_expr => {
+                let mut iter = pair.into_inner();
+                drop(iter.next());
+                let code = std::mem::take(&mut self.code);
+                let mut params = Vec::new();
+                let mut ret = Kind::None;
+                let loc = std::mem::take(&mut self.loc);
+                let mem_used = self.memory_used;
+                let max_mem = self.max_memory;
+
+                let mut map = HashMap::new();
+                while let Some(pair) = iter.next() {
+                    match pair.as_rule() {
+                        Rule::ident => {
+                            let ident = pair.as_str();
+                            let kind = Kind::from_pair(iter.next().unwrap(), self, self.loc)?;
+                            map.insert(ident, Value::Memory(self.loc, kind.clone()));
+                            self.loc += 1;
+                            params.push(kind);
+                        }
+                        Rule::fx_ret => {
+                            ret =
+                                Kind::from_pair(pair.into_inner().next().unwrap(), self, self.loc)?;
+                            map.insert("$ret", Value::Memory(self.loc, ret.clone()));
+                            self.loc += 1;
+                        }
+                        Rule::stmt => {
+                            let id = self.fxs.len();
+                            let start = self.loc;
+                            self.map.push(map);
+                            self.push(pair)?;
+                            self.map.pop();
+                            let end = self.loc;
+                            self.loc = loc;
+                            self.max_memory = max_mem;
+                            self.memory_used = mem_used;
+                            self.fxs.push(std::mem::replace(&mut self.code, code));
+                            return Ok(Value::Function(Kind::Function(
+                                FunctionType::PtrToFx(id as u16, end - start),
+                                params,
+                                Box::new(ret),
+                            )));
+                        }
+                        _ => unreachable!("{pair}"),
+                    }
+                }
+
+                unreachable!();
+            }
+            Rule::return_stmt => {
+                let span = pair.as_span();
+                let pair = pair.into_inner().nth(1).unwrap();
+                let expr = self.analyze_pair(pair)?;
+                match self.get("$ret") {
+                    Some(Value::Memory(m, k)) => {
+                        let expr_kind = expr.kind();
+                        if *k != expr_kind {
+                            error!(RS span => format!("cannot return a <{}> in a fx that returns a <{}>", expr_kind, k));
+                        }
+                        self.code.push(Instruction::Copy(expr, *m));
+                        Ok(Value::None)
+                    }
+                    Some(_) => unreachable!(),
+                    None => error!(S span => format!("cannot return outside an fx")),
+                }
             }
             Rule::call => {
                 let span = pair.as_span();
@@ -875,28 +923,31 @@ impl<'a> Analyzer<'a> {
                     Kind::Function(FunctionType::PtrToFx(a, mem), params, ret) => {
                         let fx = self.fxs[a as usize].clone();
                         if args.len() != params.len() {
-                            error!(RS span => format!("The function takes {} arguments, while {} were passed", params.len(), args.len()));
+                            error!(RS span => format!("The fx takes {} arguments, while {} were passed", params.len(), args.len()));
                         }
+                        let mut offset = 0;
                         for (pair, kind) in args.into_iter().zip(params) {
                             let span = pair.as_span();
                             let expr = self.analyze_pair(pair)?;
                             let expr_kind = expr.kind();
                             if expr_kind != kind {
-                                error!(RS span => format!("The function expected a <{}>, but <{}> was passed instead", kind, expr_kind));
+                                error!(RS span => format!("The fx expected a <{}>, but <{}> was passed instead", kind, expr_kind));
                             }
-                            self.code.push(Instruction::Copy(expr, self.loc));
-                            self.loc += 1;
+                            let mem = self.memory();
+                            self.code.push(Instruction::Copy(expr, mem));
+                            offset += 1;
                         }
 
-                        if !matches!(*ret, Kind::None) {
-                            out = Value::Memory(self.loc, *ret);
-                            self.loc += 1;
+                        if *ret != Kind::None {
+                            out = Value::Memory(self.memory(), *ret);
+                            offset += 1;
                         }
 
                         for code in fx {
-                            self.code.push(code.with_offset(self.loc));
+                            self.code.push(code.with_offset(self.loc - offset));
                         }
                         self.loc += mem;
+                        self.memory_used += mem;
                     }
                     k => error!(RS span => format!("Cannot call a <{}>", k)),
                 }

@@ -34,11 +34,10 @@ int main() {{
 fn to_c(v: &Value) -> String {
     match v {
         Value::Byte(b) => b.to_string(),
-        Value::None => String::from("NULL"),
+        Value::None | Value::Function(..) => String::from("0"),
         Value::Ref(v) => to_c(v),
         Value::Pointer(i, _) => i.to_string(),
         Value::Memory(i, _) => format!("memory[{i}]"),
-        Value::Function(..) => todo!(),
         Value::DataBox(_, _) => todo!(),
     }
 }

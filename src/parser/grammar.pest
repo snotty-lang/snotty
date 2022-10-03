@@ -119,11 +119,11 @@ attr_access = { value ~ "." ~ ident }  //! FIXME: change value to expr
 increment = { "+" ~ "+" ~ expr }
 decrement = { "-" ~ "-" ~ expr }
 function_expr = {
-    "fx" ~ "(" 
+    fx ~ "(" 
     ~ (ident ~ ":" ~ kind
     ~ ("," ~ ident ~ ":" ~ kind)*)? 
     ~ ")"
-    ~ ("->" ~ kind)?
+    ~ fx_ret?
     ~ stmt
 }
 
