@@ -24,7 +24,6 @@ struct SnottyParser;
 
 pub fn parse(program: &str, file: String) -> Result<IR, Vec<Error>> {
     let program = SnottyParser::parse(Rule::program, program).map_err(|e| vec![e])?;
-    // println!("{}", program);
     let mut analyzer = Analyzer::new(file);
     for code in program {
         analyzer.push(code);

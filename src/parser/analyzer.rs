@@ -11,6 +11,8 @@ use crate::{
     },
 };
 
+use super::value::ValueProperties;
+
 #[derive(Debug, Clone, Copy)]
 struct ProgramMemory {
     used: Memory,
@@ -495,7 +497,7 @@ impl<'a> Analyzer<'a> {
             }
             Rule::assign => {
                 let mut iter = pair.into_inner();
-                drop(iter.next());
+                let is_const = iter.next().unwrap().as_str().trim() == "const";
                 let ident = iter.next().unwrap().as_str();
                 let value = self.analyze_pair(iter.next().unwrap())?;
 
@@ -506,7 +508,13 @@ impl<'a> Analyzer<'a> {
                 match (&value.value, value.kind()) {
                     (BaseValue::Memory(_), Kind::Ref(..) | Kind::Function(..))
                     | (BaseValue::Function(..), _) => {
-                        self.insert(ident, value);
+                        self.insert(
+                            ident,
+                            value.with_properties(ValueProperties {
+                                is_const,
+                                ..Default::default()
+                            }),
+                        );
                     }
                     (BaseValue::Memory(i), k) => {
                         let loc = self.memory();
@@ -516,14 +524,32 @@ impl<'a> Analyzer<'a> {
                     }
                     (BaseValue::Ref(val), _) => {
                         if let BaseValue::Memory(i) = &(*val).value {
-                            self.insert(ident, Value::memory(*i, value.kind));
+                            self.insert(
+                                ident,
+                                Value::memory(*i, value.kind).with_properties(ValueProperties {
+                                    is_const,
+                                    ..Default::default()
+                                }),
+                            );
                         } else {
-                            self.insert(ident, Value::reference(value));
+                            self.insert(
+                                ident,
+                                Value::reference(value).with_properties(ValueProperties {
+                                    is_const,
+                                    ..Default::default()
+                                }),
+                            );
                         }
                     }
                     (_, kind) => {
                         let loc = self.memory();
-                        self.insert(ident, Value::memory(loc, kind.clone()));
+                        self.insert(
+                            ident,
+                            Value::memory(loc, kind.clone()).with_properties(ValueProperties {
+                                is_const,
+                                ..Default::default()
+                            }),
+                        );
                         self.code.push(Instruction::Copy(value, loc));
                     }
                 }
@@ -543,6 +569,9 @@ impl<'a> Analyzer<'a> {
                 let op = iter.next().unwrap();
                 let new = self.analyze_pair(iter.next().unwrap())?;
                 let prev = self.analyze_pair(prev_pair.clone())?;
+                if prev.properties.is_const {
+                    error!(R lhs => format!("Cannot assign to a const"));
+                }
 
                 fn deref(analyzer: &mut Analyzer, expr: Value, derefs: usize) -> Option<Value> {
                     if derefs == 0 {
@@ -553,8 +582,8 @@ impl<'a> Analyzer<'a> {
                         (BaseValue::Memory(i), Kind::Ref(k)) => {
                             deref(analyzer, Value::memory(*i, *k.clone()), derefs - 1)
                         }
-                        (BaseValue::Pointer(_), k) => {
-                            let k = k.clone();
+                        (BaseValue::Pointer(_), Kind::Pointer(k)) => {
+                            let k = (**k).clone();
                             let loc = analyzer.loc;
                             analyzer.loc += 1;
                             analyzer.code.push(Instruction::Deref(expr, loc));
@@ -571,24 +600,16 @@ impl<'a> Analyzer<'a> {
                     }
                 }
 
-                let new = if op.as_str() != "=" {
-                    let kind = prev.kind();
-                    let derefed_prev = if let Some(v) = deref(self, prev.clone(), derefs) {
-                        if v.kind() != new.kind() {
-                            error!(R pair => format!("{} is a <{}> but is assigned to a <{}>", lhs.as_str(), v.kind(), new.kind()));
-                        }
-                        v
-                    } else {
-                        match kind {
-                            Kind::Pointer(_) | Kind::Ref(_) => {
-                                error!(R lhs => format!("Cannot dereference a <{}> {} times", kind, derefs));
-                            }
-                            _ => {
-                                error!(R lhs => format!("Cannot dereference a <{}>", kind));
-                            }
-                        }
-                    };
+                let derefed_prev = deref(self, prev.clone(), derefs).ok_or_else(||match prev.kind() {
+                    Kind::Pointer(_) | Kind::Ref(_) => {
+                        error!(E lhs => format!("Cannot dereference a <{}> {} times", prev.kind(), derefs))
+                    }
+                    kind => {
+                        error!(E lhs => format!("Cannot dereference a <{}>", kind))
+                    }
+                })?;
 
+                let new = if op.as_str() != "=" {
                     match (derefed_prev.kind(), op.as_str(), new.kind()) {
                         (Kind::Byte, "+=", Kind::Byte) => {
                             let loc = self.memory();
@@ -659,26 +680,10 @@ impl<'a> Analyzer<'a> {
                         }
                     }
                 } else {
-                    let derefed_kind = if let Some(k) = prev.kind().clone().dereferenced(derefs) {
-                        if k != *new.kind() {
-                            error!(R pair => format!("{} is a <{}> but is assigned to a <{}>", lhs.as_str(), k, new.kind()));
-                        }
-                        k
-                    } else {
-                        let kind = prev.kind();
-                        match kind {
-                            Kind::Pointer(_) | Kind::Ref(_) => {
-                                error!(R lhs => format!("Cannot dereference a <{}> {} times", kind, derefs));
-                            }
-                            _ => {
-                                error!(R lhs => format!("Cannot dereference a <{}>", kind));
-                            }
-                        }
-                    };
-                    if derefed_kind == *new.kind() {
+                    if derefed_prev.kind() == new.kind() {
                         new
                     } else {
-                        error!(R pair => format!("{} is a <{}> but is assigned to a <{}>", lhs, derefed_kind, new.kind()));
+                        error!(R pair => format!("{} is a <{}> but is assigned to a <{}>", lhs, derefed_prev.kind(), new.kind()));
                     }
                 };
 

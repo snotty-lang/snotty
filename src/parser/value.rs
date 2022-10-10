@@ -106,17 +106,6 @@ impl Kind {
             _ => None,
         }
     }
-
-    pub fn dereferenced(self, derefs: usize) -> Option<Kind> {
-        if derefs == 0 {
-            return Some(self);
-        }
-        match self {
-            Kind::Ref(t) => t.dereferenced(derefs - 1),
-            Kind::Pointer(t) => t.dereferenced(derefs - 1),
-            _ => None,
-        }
-    }
 }
 
 impl Display for Kind {
@@ -223,6 +212,11 @@ impl Value {
         }
     }
 
+    pub const fn with_properties(mut self, properties: ValueProperties) -> Self {
+        self.properties = properties;
+        self
+    }
+
     pub(crate) fn deref_ref(self, derefs: usize, refs: &mut usize) -> Option<Self> {
         if derefs == 0 {
             return Some(self);
@@ -263,11 +257,19 @@ impl Display for Value {
     }
 }
 
-#[derive(Default, Clone, PartialEq, Eq)]
-pub struct ValueProperties {}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValueProperties {
+    pub is_const: bool,
+}
 
 impl ValueProperties {
     pub const fn default() -> ValueProperties {
-        ValueProperties {}
+        ValueProperties { is_const: false }
+    }
+}
+
+impl Default for ValueProperties {
+    fn default() -> ValueProperties {
+        ValueProperties::default()
     }
 }
