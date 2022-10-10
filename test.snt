@@ -1,4 +1,4 @@
 fx print(str: *byte) for;:(*str)!=0++str:out*str
-//fx repeated_map(str: *byte, n: byte, fn: fx(*byte)) for let i = 0 i < n ++i fn(str)
 
-for let i = 1 i < 9 ++i {for let j = 0 j < i ++j out '*' out 10}
+print("Hey bob!\n");
+(*{print})("How's it going?\n");

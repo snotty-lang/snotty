@@ -34,6 +34,7 @@ pub enum Instruction {
     Or(Value, Value, Memory),
     Not(Value, Memory),
     Xor(Value, Value, Memory),
+    Call(Memory, Memory),
 }
 
 impl Instruction {
@@ -62,7 +63,7 @@ impl Instruction {
                 c.offset_memory(offset);
                 *d += offset;
             }
-            Instruction::Clear(a, b) => {
+            Instruction::Clear(a, b) | Instruction::Call(a, b) => {
                 *a += offset;
                 *b += offset;
             }

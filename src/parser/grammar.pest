@@ -45,7 +45,7 @@ keyword = {
     | "fx"
     | "box"
     | "file"
-    | "input") ~ !ASCII_ALPHANUMERIC
+    | "in") ~ !ASCII_ALPHANUMERIC
 }
 
 kind = {

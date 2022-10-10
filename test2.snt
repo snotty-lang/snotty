@@ -1,2 +1,0 @@
-file "test.snt"
-for let x = "Hello World!\n":(*x) != 0 ++x out *x

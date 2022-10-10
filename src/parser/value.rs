@@ -1,62 +1,31 @@
-use std::fmt;
+use std::fmt::{self, Debug, Display};
 
 use crate::parser::{analyzer::Analyzer, Error, Memory, Rule};
 use pest::iterators::Pair;
 
 #[derive(Clone, PartialEq, Eq)]
-pub enum Value {
+pub enum BaseValue {
     Byte(u8),
     None,
     Ref(Box<Value>),
-    Pointer(Memory, Kind),
-    Memory(Memory, Kind),
-    Function(Memory, Memory, Kind),
-    DataBox(Vec<Value>, Kind),
+    Pointer(Memory),
+    Memory(Memory),
+    Function(Memory, Memory),
+    DataBox(Vec<BaseValue>),
 }
 
-impl fmt::Debug for Value {
+impl Debug for BaseValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self)
     }
 }
 
-impl Value {
-    pub fn kind(&self) -> Kind {
-        match self {
-            Value::Byte(_) => Kind::Byte,
-            Value::None => Kind::None,
-            Value::Ref(val) => Kind::Ref(Box::new(val.kind())),
-            Value::Pointer(_, t) => Kind::Pointer(Box::new(t.clone())),
-            Value::Memory(_, t) => t.clone(),
-            Value::Function(_, _, t) => t.clone(),
-            Value::DataBox(_, t) => t.clone(),
-        }
-    }
-
-    pub fn get_size(&self) -> usize {
-        self.kind().get_size()
-    }
-
-    pub fn deref_ref(self, derefs: usize, refs: &mut usize) -> Option<Value> {
-        if derefs == 0 {
-            return Some(self);
-        }
-        match self {
-            Value::Ref(t) => {
-                *refs += 1;
-                t.deref_ref(derefs - 1, refs)
-            }
-            Value::Pointer(i, t) => Some(Value::Pointer(i, t.deref_ref(derefs - 1, refs)?)),
-            Value::Memory(i, t) => Some(Value::Memory(i, t.deref_ref(derefs - 1, refs)?)),
-            _ => None,
-        }
-    }
-
+impl BaseValue {
     pub fn offset_memory(&mut self, offset: Memory) {
         match self {
-            Value::Ref(t) => t.offset_memory(offset),
-            Value::Pointer(m, _) | Value::Memory(m, _) => *m += offset,
-            Value::DataBox(_, _) => todo!(),
+            BaseValue::Ref(t) => t.offset_memory(offset),
+            BaseValue::Pointer(m) | BaseValue::Memory(m) => *m += offset,
+            BaseValue::DataBox(_) => todo!(),
             _ => (),
         }
     }
@@ -73,7 +42,7 @@ pub enum Kind {
     Function(Vec<Kind>, Box<Kind>),
 }
 
-impl fmt::Debug for Kind {
+impl Debug for Kind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self)
     }
@@ -150,29 +119,155 @@ impl Kind {
     }
 }
 
-impl fmt::Display for Kind {
+impl Display for Kind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Kind::Ref(t) => write!(f, "&{}", t),
             Kind::None => write!(f, ";"),
             Kind::Byte => write!(f, "byte"),
             Kind::DataBox(t, ..) => write!(f, "box {{{}}}", t),
-            Kind::Function(t, r) => write!(f, "fx ({:?}) -> {}", t, r),
+            Kind::Function(t, r) => {
+                write!(f, "fx (")?;
+                match &**t {
+                    [] => (),
+                    [x, y @ ..] => {
+                        write!(f, "{}", x)?;
+                        for x in y {
+                            write!(f, ", {}", x)?
+                        }
+                    }
+                }
+                write!(f, ") -> {}", r)?;
+                Ok(())
+            }
             Kind::Pointer(t) => write!(f, "*{}", t),
         }
     }
 }
 
-impl fmt::Display for Value {
+impl Display for BaseValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Value::None => write!(f, ";"),
-            Value::Byte(num) => write!(f, "{}", num),
-            Value::Ref(ptr) => write!(f, "&{}", ptr),
-            Value::Memory(mem, t) => write!(f, "<{}>{{{}}}", t, mem),
-            Value::Pointer(v, t) => write!(f, "<*{}>{{*{}}}", t, v),
-            Value::Function(a, _, t) => write!(f, "(fx {a}) {}", t),
-            Value::DataBox(f_, t) => write!(f, "<{}>{{{:?}}}", t, f_),
+            BaseValue::None => write!(f, ";"),
+            BaseValue::Byte(num) => write!(f, "{}", num),
+            BaseValue::Ref(ptr) => write!(f, "&{}", ptr),
+            BaseValue::Memory(mem) => write!(f, "{{{}}}", mem),
+            BaseValue::Pointer(v) => write!(f, "{{*{}}}", v),
+            BaseValue::Function(a, _) => write!(f, "fx {{{}}}", a),
+            BaseValue::DataBox(f_) => write!(f, "box {{{:?}}}", f_),
         }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct Value {
+    pub kind: Kind,
+    pub value: BaseValue,
+    pub properties: ValueProperties,
+}
+
+impl Value {
+    pub const fn kind(&self) -> &Kind {
+        &self.kind
+    }
+
+    pub const fn byte(byte: u8) -> Self {
+        Self {
+            kind: Kind::Byte,
+            value: BaseValue::Byte(byte),
+            properties: ValueProperties::default(),
+        }
+    }
+
+    pub const fn none() -> Self {
+        Self {
+            kind: Kind::None,
+            value: BaseValue::None,
+            properties: ValueProperties::default(),
+        }
+    }
+
+    pub fn reference(to: Value) -> Self {
+        Self {
+            kind: Kind::Ref(Box::new(to.kind().clone())),
+            value: BaseValue::Ref(Box::new(to)),
+            properties: ValueProperties::default(),
+        }
+    }
+
+    pub fn function(fx: Memory, mem: Memory, params: Vec<Kind>, ret: Kind) -> Self {
+        Self {
+            kind: Kind::Function(params, Box::new(ret)),
+            value: BaseValue::Function(fx, mem),
+            properties: ValueProperties::default(),
+        }
+    }
+
+    pub fn databox() -> Self {
+        todo!()
+    }
+
+    pub fn pointer(memory: Memory, kind: Kind) -> Self {
+        Self {
+            kind: Kind::Pointer(Box::new(kind)),
+            value: BaseValue::Pointer(memory),
+            properties: ValueProperties::default(),
+        }
+    }
+
+    pub const fn memory(memory: Memory, kind: Kind) -> Self {
+        Self {
+            kind,
+            value: BaseValue::Memory(memory),
+            properties: ValueProperties::default(),
+        }
+    }
+
+    pub(crate) fn deref_ref(self, derefs: usize, refs: &mut usize) -> Option<Self> {
+        if derefs == 0 {
+            return Some(self);
+        }
+
+        match self.value {
+            BaseValue::Ref(t) => {
+                *refs += 1;
+                t.deref_ref(derefs - 1, refs)
+            }
+            BaseValue::Pointer(i) => {
+                Some(Value::pointer(i, self.kind.deref_ref(derefs - 1, refs)?))
+            }
+            BaseValue::Memory(i) => Some(Value::memory(i, self.kind.deref_ref(derefs - 1, refs)?)),
+            _ => None,
+        }
+    }
+
+    pub fn offset_memory(&mut self, offset: Memory) {
+        match &mut self.value {
+            BaseValue::Ref(t) => t.offset_memory(offset),
+            BaseValue::Pointer(m) | BaseValue::Memory(m) => *m += offset,
+            BaseValue::DataBox(_) => todo!(),
+            _ => (),
+        }
+    }
+}
+
+impl Debug for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<{}>:<{}>", self.kind, self.value)
+    }
+}
+
+#[derive(Default, Clone, PartialEq, Eq)]
+pub struct ValueProperties {}
+
+impl ValueProperties {
+    pub const fn default() -> ValueProperties {
+        ValueProperties {}
     }
 }
