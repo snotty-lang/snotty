@@ -1,5 +1,3 @@
-use std::{error, fs};
-
 use parser::{Error, Rule};
 
 use crate::compiler::{c::CCompiler, Compiler};
@@ -11,9 +9,8 @@ extern crate pest_derive;
 pub mod compiler;
 pub mod parser;
 
-pub fn run(file: String) -> Result<String, Box<dyn error::Error>> {
-    let contents = fs::read_to_string(&file)?;
-    let ir = parser::parse(&contents, file)?;
+pub fn run(file: String, contents: &str) -> Result<String, Vec<Error>> {
+    let ir = parser::parse(contents, file)?;
     println!("{:?}\n", ir.fxs);
     println!("{:?}\n", ir.code);
     let compiled = CCompiler::compile(ir);

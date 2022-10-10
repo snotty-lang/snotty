@@ -1,4 +1,5 @@
-fx print(str: *byte) for;:(*str)!=0++str:out*str
-
+fx prnt(str: *byte) for;:(*str)!=0++str:out*str
+!nope
 print("Hey bob!\n");
 (*{print})("How's it going?\n");
+axe + t

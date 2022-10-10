@@ -11,6 +11,12 @@ use crate::{
     },
 };
 
+#[derive(Debug, Clone, Copy)]
+struct ProgramMemory {
+    used: Memory,
+    cleared: Memory,
+}
+
 #[derive(Debug)]
 pub struct Analyzer<'a> {
     included: Vec<String>,
@@ -18,8 +24,8 @@ pub struct Analyzer<'a> {
     map: Vec<HashMap<&'a str, Value>>,
     code: Vec<Instruction>,
     loc: Memory,
-    memory: Memory,
-    mem_debt: Memory,
+    memory: ProgramMemory,
+    errors: Vec<Error>,
 }
 
 impl<'a> Analyzer<'a> {
@@ -30,16 +36,23 @@ impl<'a> Analyzer<'a> {
             map: vec![HashMap::new()],
             code: Vec::new(),
             loc: 0,
-            memory: 0,
-            mem_debt: 0,
+            memory: ProgramMemory {
+                used: 0,
+                cleared: 0,
+            },
+            errors: vec![],
         }
     }
 
-    pub fn into_ir(self) -> IR {
-        IR {
-            memory_used: self.memory,
-            code: self.code,
-            fxs: self.fxs,
+    pub fn into_ir(self) -> Result<IR, Vec<Error>> {
+        if self.errors.is_empty() {
+            Ok(IR {
+                memory_used: self.memory.used,
+                code: self.code,
+                fxs: self.fxs,
+            })
+        } else {
+            Err(self.errors)
         }
     }
 
@@ -62,8 +75,8 @@ impl<'a> Analyzer<'a> {
     pub fn memory(&mut self) -> Memory {
         let curr = self.loc;
         self.loc += 1;
-        if self.mem_debt.checked_sub(1).is_none() {
-            self.memory += 1;
+        if self.memory.cleared.checked_sub(1).is_none() {
+            self.memory.used += 1;
         }
         curr
     }
@@ -72,28 +85,32 @@ impl<'a> Analyzer<'a> {
     pub fn alloc(&mut self, mem: Memory) -> Memory {
         let curr = self.loc;
         self.loc += mem;
-        if self.mem_debt >= mem {
-            self.mem_debt -= mem;
-        } else {
-            self.memory += mem - self.mem_debt;
-            self.mem_debt = 0;
-        }
+        self.inc_mem(mem);
         curr
     }
 
-    pub fn push(&mut self, pair: Pair<'a, Rule>) -> Result<(), Error> {
+    #[inline]
+    fn inc_mem(&mut self, mem: Memory) {
+        if self.memory.cleared >= mem {
+            self.memory.cleared -= mem;
+        } else {
+            self.memory.used += mem - self.memory.cleared;
+            self.memory.cleared = 0;
+        }
+    }
+
+    pub fn push(&mut self, pair: Pair<'a, Rule>) {
         match pair.as_rule() {
-            Rule::EOI => Ok(()),
-            _ => self
-                .analyze_pair(pair.into_inner().next().unwrap())
-                .map(|_| ())
-                .map_err(|err| {
-                    if err.path().is_none() {
-                        err.with_path(&self.included.pop().unwrap())
+            Rule::EOI => (),
+            _ => {
+                if let Err(err) = self.analyze_pair(pair.into_inner().next().unwrap()) {
+                    self.errors.push(if err.path().is_none() {
+                        err.with_path(self.included.last().unwrap())
                     } else {
                         err
-                    }
-                }),
+                    })
+                }
+            }
         }
     }
 
@@ -130,13 +147,13 @@ impl<'a> Analyzer<'a> {
                 self.map.push(HashMap::new());
                 let prev = self.loc;
                 for stmt in pair.into_inner() {
-                    self.push(stmt)?;
+                    self.push(stmt);
                 }
                 let diff = self.loc - prev;
                 if self.loc != prev {
                     self.code.push(Instruction::Clear(prev, self.loc));
                 }
-                self.mem_debt = diff;
+                self.memory.cleared += diff;
                 self.loc = prev;
                 self.map.pop();
                 Ok(Value::none())
@@ -252,16 +269,16 @@ impl<'a> Analyzer<'a> {
                             code: Vec::new(),
                             loc: self.loc,
                             memory: self.memory,
-                            mem_debt: self.mem_debt,
+                            errors: vec![],
                         };
 
                         for code in program {
-                            new.push(code)?
+                            new.push(code);
                         }
                         self.code.extend(new.code);
+                        self.errors.extend(new.errors);
                         self.fxs.extend(new.fxs);
                         self.memory = new.memory;
-                        self.mem_debt = new.mem_debt;
                         Ok(Value::none())
                     }
                 }
@@ -277,7 +294,9 @@ impl<'a> Analyzer<'a> {
                         (BaseValue::Pointer(_), Kind::None) => {
                             error!(S span => "Cannot dereference a <*;>".to_string())
                         }
-                        (BaseValue::Pointer(i), Kind::Pointer(ref k)) => Ok(Value::memory(*i, *k.clone())),
+                        (BaseValue::Pointer(i), Kind::Pointer(ref k)) => {
+                            Ok(Value::memory(*i, *k.clone()))
+                        }
                         (BaseValue::Memory(_), Kind::Pointer(ref k)) => {
                             let loc = self.memory();
                             let k = *k.clone();
@@ -832,7 +851,7 @@ impl<'a> Analyzer<'a> {
                             let start = self.loc;
                             self.insert(ident, Value::function(id as u16, 0, params, ret));
                             self.map.push(map);
-                            self.push(pair)?;
+                            self.push(pair);
                             self.map.pop();
                             let end = self.loc;
                             if let Some(Value {
@@ -879,7 +898,7 @@ impl<'a> Analyzer<'a> {
                             let id = self.fxs.len();
                             let start = self.loc;
                             self.map.push(map);
-                            self.push(pair)?;
+                            self.push(pair);
                             self.map.pop();
                             let end = self.loc;
                             self.loc = loc;
@@ -953,7 +972,7 @@ impl<'a> Analyzer<'a> {
                             self.code.push(code.with_offset(start));
                         }
                         self.loc += mem;
-                        self.memory += mem;
+                        self.inc_mem(mem);
                     }
 
                     (BaseValue::Function(i, _), Kind::Function(params, ret))
