@@ -569,7 +569,7 @@ impl<'a> Analyzer<'a> {
                 let op = iter.next().unwrap();
                 let new = self.analyze_pair(iter.next().unwrap())?;
                 let prev = self.analyze_pair(prev_pair.clone())?;
-                if prev.properties.is_const {
+                if prev.properties.is_const && derefs == 0 {
                     error!(R lhs => format!("Cannot assign to a const"));
                 }
 
@@ -679,12 +679,10 @@ impl<'a> Analyzer<'a> {
                             error!(R pair => format!("Cannot apply operator {} to a <{}> and a <{}>", op, l, r))
                         }
                     }
+                } else if derefed_prev.kind() == new.kind() {
+                    new
                 } else {
-                    if derefed_prev.kind() == new.kind() {
-                        new
-                    } else {
-                        error!(R pair => format!("{} is a <{}> but is assigned to a <{}>", lhs, derefed_prev.kind(), new.kind()));
-                    }
+                    error!(R pair => format!("{} is a <{}> but is assigned to a <{}>", lhs, derefed_prev.kind(), new.kind()));
                 };
 
                 match (derefs, prev_pair.as_rule()) {

@@ -1,6 +1,8 @@
 pub mod analyzer;
 pub mod instruction;
+pub mod token;
 pub mod value;
+pub mod parser;
 
 use pest::{error::Error as PestError, Parser};
 
