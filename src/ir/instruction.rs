@@ -1,4 +1,4 @@
-use crate::parser::{value::Value, Memory};
+use super::value::{Memory, Value};
 
 #[derive(Debug, Clone)]
 pub enum Instruction {

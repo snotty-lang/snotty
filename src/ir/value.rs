@@ -1,7 +1,6 @@
 use std::fmt::{self, Debug, Display};
 
-use crate::parser::{analyzer::Analyzer, Error, Memory, Rule};
-use pest::iterators::Pair;
+pub type Memory = u16;
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum BaseValue {
@@ -49,38 +48,38 @@ impl Debug for Kind {
 }
 
 impl Kind {
-    pub fn from_pair<'a>(pair: Pair<'a, Rule>, analyzer: &Analyzer<'a>) -> Result<Self, Error> {
-        match pair.as_rule() {
-            Rule::kind => Ok(match pair.as_str().trim().as_bytes() {
-                b"byte" => Kind::Byte,
-                b";" => Kind::None,
-                [b'&', ..] => Kind::Ref(Box::new(Kind::from_pair(
-                    pair.into_inner().next().unwrap(),
-                    analyzer,
-                )?)),
-                [b'*', ..] => Kind::Pointer(Box::new(Kind::from_pair(
-                    pair.into_inner().next().unwrap(),
-                    analyzer,
-                )?)),
-                [b'f', b'x', x, ..] if !x.is_ascii_alphanumeric() => {
-                    let mut args = Vec::new();
-                    let mut ret = Kind::None;
-                    for pair in pair.into_inner() {
-                        match pair.as_rule() {
-                            Rule::kind => args.push(Kind::from_pair(pair, analyzer)?),
-                            Rule::fx_ret => {
-                                ret = Kind::from_pair(pair.into_inner().next().unwrap(), analyzer)?
-                            }
-                            _ => unreachable!(),
-                        }
-                    }
-                    Kind::Function(args, Box::new(ret))
-                }
-                _ => todo!(),
-            }),
-            _ => unreachable!(),
-        }
-    }
+    // pub fn from_pair<'a>(pair: Pair<'a, Rule>, analyzer: &Analyzer<'a>) -> Result<Self, Error> {
+    //     match pair.as_rule() {
+    //         Rule::kind => Ok(match pair.as_str().trim().as_bytes() {
+    //             b"byte" => Kind::Byte,
+    //             b";" => Kind::None,
+    //             [b'&', ..] => Kind::Ref(Box::new(Kind::from_pair(
+    //                 pair.into_inner().next().unwrap(),
+    //                 analyzer,
+    //             )?)),
+    //             [b'*', ..] => Kind::Pointer(Box::new(Kind::from_pair(
+    //                 pair.into_inner().next().unwrap(),
+    //                 analyzer,
+    //             )?)),
+    //             [b'f', b'x', x, ..] if !x.is_ascii_alphanumeric() => {
+    //                 let mut args = Vec::new();
+    //                 let mut ret = Kind::None;
+    //                 for pair in pair.into_inner() {
+    //                     match pair.as_rule() {
+    //                         Rule::kind => args.push(Kind::from_pair(pair, analyzer)?),
+    //                         Rule::fx_ret => {
+    //                             ret = Kind::from_pair(pair.into_inner().next().unwrap(), analyzer)?
+    //                         }
+    //                         _ => unreachable!(),
+    //                     }
+    //                 }
+    //                 Kind::Function(args, Box::new(ret))
+    //             }
+    //             _ => todo!(),
+    //         }),
+    //         _ => unreachable!(),
+    //     }
+    // }
 
     pub fn get_size(&self) -> usize {
         match self {
@@ -217,23 +216,23 @@ impl Value {
         self
     }
 
-    pub(crate) fn deref_ref(self, derefs: usize, refs: &mut usize) -> Option<Self> {
-        if derefs == 0 {
-            return Some(self);
-        }
+    // pub(crate) fn deref_ref(self, derefs: usize, refs: &mut usize) -> Option<Self> {
+    //     if derefs == 0 {
+    //         return Some(self);
+    //     }
 
-        match self.value {
-            BaseValue::Ref(t) => {
-                *refs += 1;
-                t.deref_ref(derefs - 1, refs)
-            }
-            BaseValue::Pointer(i) => {
-                Some(Value::pointer(i, self.kind.deref_ref(derefs - 1, refs)?))
-            }
-            BaseValue::Memory(i) => Some(Value::memory(i, self.kind.deref_ref(derefs - 1, refs)?)),
-            _ => None,
-        }
-    }
+    //     match self.value {
+    //         BaseValue::Ref(t) => {
+    //             *refs += 1;
+    //             t.deref_ref(derefs - 1, refs)
+    //         }
+    //         BaseValue::Pointer(i) => {
+    //             Some(Value::pointer(i, self.kind.deref_ref(derefs - 1, refs)?))
+    //         }
+    //         BaseValue::Memory(i) => Some(Value::memory(i, self.kind.deref_ref(derefs - 1, refs)?)),
+    //         _ => None,
+    //     }
+    // }
 
     pub fn offset_memory(&mut self, offset: Memory) {
         match &mut self.value {

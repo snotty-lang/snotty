@@ -1,79 +1,79 @@
-pub mod analyzer;
-pub mod instruction;
+pub mod grammar;
+pub mod snotty;
 pub mod token;
-pub mod value;
-pub mod parser;
 
-use pest::{error::Error as PestError, Parser};
+pub type Span = core::ops::Range<usize>;
+use self::grammar::{Grammar, Item, Rule, SpannedItem, SpannedRule};
+use self::snotty::SNOTTY_GRAMMAR;
+use crate::error::{Error, ErrorKind};
+use token::{SpannedToken, Token};
 
-use crate::parser::analyzer::Analyzer;
-
-use self::instruction::Instruction;
-
-pub type Error = PestError<Rule>;
-pub type Memory = u16;
+use logos::Logos;
 
 #[derive(Debug, Clone)]
-pub struct IR {
-    pub memory_used: Memory,
-    pub code: Vec<Instruction>,
-    pub fxs: Vec<Vec<Instruction>>,
+pub struct ParseResult<'a> {
+    pub rules: Vec<SpannedRule>,
+    pub errors: Vec<Error<'a>>,
+    pub tokens: Vec<SpannedToken>,
 }
 
-#[derive(Parser)]
-#[grammar = "src/parser/grammar.pest"]
-struct SnottyParser;
+pub struct Parser<'source> {
+    source: &'source str,
+    tokens: Vec<SpannedToken>,
+    buffer: Vec<SpannedItem>,
+    errors: Vec<Error<'source>>,
+    grammar: Grammar,
+}
 
-pub fn parse(program: &str, file: String) -> Result<IR, Vec<Error>> {
-    let program = SnottyParser::parse(Rule::program, program).map_err(|e| vec![e])?;
-    let mut analyzer = Analyzer::new(file);
-    for code in program {
-        analyzer.push(code);
+impl<'source> Parser<'source> {
+    pub fn new(source: &'source str, grammar: Grammar) -> Parser {
+        Self {
+            source,
+            tokens: Token::lexer(source).spanned().collect(),
+            buffer: Vec::new(),
+            errors: Vec::new(),
+            grammar,
+        }
     }
-    analyzer.into_ir()
-}
 
-#[macro_export]
-macro_rules! error {
-    ($pair: expr => $message: expr) => {
-        Err($crate::parser::Error::new_from_span(
-            pest::error::ErrorVariant::CustomError { message: $message },
-            $pair.as_span(),
-        ))
-    };
+    pub fn new_snotty(source: &'source str) -> Parser {
+        Self {
+            source,
+            tokens: Token::lexer(source).spanned().collect(),
+            buffer: Vec::new(),
+            errors: Vec::new(),
+            grammar: SNOTTY_GRAMMAR.clone(),
+        }
+    }
 
-    (E $pair: expr => $message: expr) => {
-        $crate::parser::Error::new_from_span(
-            pest::error::ErrorVariant::CustomError { message: $message },
-            $pair.as_span(),
-        )
-    };
+    pub fn shift_reduce(mut self) -> ParseResult<'source> {
+        for (token, span) in self.tokens.iter() {
+            self.buffer.push((Item::Token(token.clone()), span.clone()));
+            while let Some((rule, span)) = self.grammar.reduce(&mut self.buffer) {
+                self.buffer.push((Item::Rule(rule), span));
+            }
+        }
 
-    (R $pair: expr => $message: expr) => {
-        return Err($crate::parser::Error::new_from_span(
-            pest::error::ErrorVariant::CustomError { message: $message },
-            $pair.as_span(),
-        ))
-    };
+        let rules = match self.buffer.as_slice() {
+            [] => {
+                self.errors.push(
+                    Error::new(ErrorKind::Error, 0..self.source.len(), self.source)
+                        .with_description(String::from("Empty file")),
+                );
+                vec![(Rule::ParseError, 0..self.source.len())]
+            }
+            slice if slice.iter().all(|(item, _)| matches!(item, Item::Rule(_))) => self
+                .buffer
+                .into_iter()
+                .map(|(item, span)| (item.into_rule().unwrap(), span))
+                .collect(),
+            s => todo!("{s:?}"),
+        };
 
-    (S $span: expr => $message: expr) => {
-        Err($crate::parser::Error::new_from_span(
-            pest::error::ErrorVariant::CustomError { message: $message },
-            $span,
-        ))
-    };
-
-    (ES $span: expr => $message: expr) => {
-        $crate::parser::Error::new_from_span(
-            pest::error::ErrorVariant::CustomError { message: $message },
-            $span,
-        )
-    };
-
-    (RS $span: expr => $message: expr) => {
-        return Err($crate::parser::Error::new_from_span(
-            pest::error::ErrorVariant::CustomError { message: $message },
-            $span,
-        ))
-    };
+        ParseResult {
+            rules,
+            errors: self.errors,
+            tokens: self.tokens,
+        }
+    }
 }

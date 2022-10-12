@@ -1,8 +1,12 @@
 use logos::Logos;
 
+use super::Span;
+
+pub type SpannedToken = (Token, Span);
+
 #[rustfmt::skip]
-#[derive(Logos, Debug, PartialEq, Clone)]
-pub enum Keyword {
+#[derive(Logos, Debug, PartialEq, Clone, Eq)]
+pub enum Token {
     #[token("fx")] Fx,
     #[token("return")] Return,
     #[token("box")] Box,
@@ -13,20 +17,9 @@ pub enum Keyword {
     #[token("out")] Out,
     #[token("let")] Let,
     #[token("file")] File,
-    #[token("byte")] Byte,
+    #[token("byte")] ByteKw,
     #[token("const")] Const,
     #[token("in")] In,
-    #[error] Error
-}
-
-#[rustfmt::skip]
-#[derive(Logos, Debug, PartialEq, Clone)]
-pub enum Token {
-    #[regex(
-        "fx|return|box|for|while|otherwise|if|out|let|file|const|byte|in",
-        |lex| Keyword::lexer(lex.slice()).next().unwrap()
-    )]
-    Keyword(Keyword),
 
     #[token("{")] OpenBrace,
     #[token("}")] ClosedBrace,
@@ -70,11 +63,11 @@ pub enum Token {
     #[regex(r#""([^"]|\\(["ntrf\\b/']|x[0-9A-Fa-f]+|[0-7][0-7]?[0-7]?))*""#)] String,
 
     #[regex(r"[a-zA-Z_][a-zA-Z_0-9]*")] Identifier,
-    #[regex(r"\d+", |byte| byte.slice().parse())] Byte(u8),
+    #[regex(r"\d+")] Byte,
 
     #[error]
     #[regex(r"[ \t\n\f]+", logos::skip)]
     #[regex(r"\\\\.*\n", logos::skip)]
     #[regex(r"\\\*.*\*\\", logos::skip)]
-    Error,
+    LexError,
 }

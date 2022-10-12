@@ -1,5 +1,1 @@
-fx print(str: *byte) for;:(*str)!=0++str:out*str
-
-print("Hey bob!\n");
-(*{print})("How's it going?\n");
 
