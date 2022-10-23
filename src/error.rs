@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::parser::Span;
+use crate::Span;
 
 #[derive(Debug, Clone)]
 pub struct Error<'source> {

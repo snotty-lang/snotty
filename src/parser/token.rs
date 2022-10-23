@@ -1,11 +1,7 @@
 use logos::Logos;
 
-use super::Span;
-
-pub type SpannedToken = (Token, Span);
-
 #[rustfmt::skip]
-#[derive(Logos, Debug, PartialEq, Clone, Eq)]
+#[derive(Logos, Debug, PartialEq, Clone, Eq, Hash)]
 pub enum Token {
     #[token("fx")] Fx,
     #[token("return")] Return,
@@ -22,9 +18,9 @@ pub enum Token {
     #[token("in")] In,
 
     #[token("{")] OpenBrace,
-    #[token("}")] ClosedBrace,
+    #[token("}")] CloseBrace,
     #[token("[")] OpenBracket,
-    #[token("]")] ClosedBracket,
+    #[token("]")] CloseBracket,
     #[token("(")] OpenParen,
     #[token(")")] CloseParen,
 

@@ -7,5 +7,4 @@ edition = "2021"
 
 [dependencies]
 logos = "0.12.1"
-patricia_tree = "0.3.2"
-lazy_static = "1.4.0"
+chumsky = "0.8.0"

@@ -1,19 +1,19 @@
-program = _{ SOI ~ stmt* ~ EOI }
-COMMENT = _{ "//" ~ (!NEWLINE ~ '\u{00}'..'\u{7F}')* ~ NEWLINE | "/*" ~ (!"*/" ~ '\u{00}'..'\u{7F}')* ~ "*/" }
-WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
-scope = { "{" ~ stmt* ~ "}" }
-return_ = @{ "return" ~ !ASCII_ALPHANUMERIC }
-box_ = @{ "box" ~ !ASCII_ALPHANUMERIC }
-fx = @{ "fx" ~ !ASCII_ALPHANUMERIC }
-for_ = @{ "for" ~ !ASCII_ALPHANUMERIC }
-while_ = @{ "while" ~ !ASCII_ALPHANUMERIC }
-otherwise = @{ "otherwise" ~ !ASCII_ALPHANUMERIC }
-if_ = @{ "if" ~ !ASCII_ALPHANUMERIC }
-out_ = @{ "out" ~ !ASCII_ALPHANUMERIC }
-let_ = @{ "let" ~ !ASCII_ALPHANUMERIC }
-file_ = @{ "file" ~ !ASCII_ALPHANUMERIC }
-byte = @{ "byte" ~ !ASCII_ALPHANUMERIC }
-const_ = @{ "const" ~ !ASCII_ALPHANUMERIC }
+    program = _{ SOI ~ stmt* ~ EOI }
+    COMMENT = _{ "//" ~ (!NEWLINE ~ '\u{00}'..'\u{7F}')* ~ NEWLINE | "/*" ~ (!"*/" ~ '\u{00}'..'\u{7F}')* ~ "*/" }
+    WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+    scope = { "{" ~ stmt* ~ "}" }
+    return_ = @{ "return" ~ !ASCII_ALPHANUMERIC }
+    box_ = @{ "box" ~ !ASCII_ALPHANUMERIC }
+    fx = @{ "fx" ~ !ASCII_ALPHANUMERIC }
+    for_ = @{ "for" ~ !ASCII_ALPHANUMERIC }
+    while_ = @{ "while" ~ !ASCII_ALPHANUMERIC }
+    otherwise = @{ "otherwise" ~ !ASCII_ALPHANUMERIC }
+    if_ = @{ "if" ~ !ASCII_ALPHANUMERIC }
+    out_ = @{ "out" ~ !ASCII_ALPHANUMERIC }
+    let_ = @{ "let" ~ !ASCII_ALPHANUMERIC }
+    file_ = @{ "file" ~ !ASCII_ALPHANUMERIC }
+    byte = @{ "byte" ~ !ASCII_ALPHANUMERIC }
+    const_ = @{ "const" ~ !ASCII_ALPHANUMERIC }
 
 stmt = {
     (increment
@@ -59,54 +59,54 @@ kind = {
     | ident
 }
 
-ident = @{ !keyword ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
-boolean = @{ ("true" | "false") ~ !ASCII_ALPHANUMERIC }
-none = { ";" }
-input = @{ "in" ~ !ASCII_ALPHANUMERIC }
-string = ${ "\"" ~ string_letter* ~ "\"" }
-string_letter = {
-    !("\"" | "\\") ~ '\u{00}'..'\u{7F}'
-    | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "\'" )
-    | "\\" ~ ("x" ~ ASCII_HEX_DIGIT+)
-    | "\\" ~ (ASCII_OCT_DIGIT{, 3})
-}
-char = ${ "\'" ~ char_letter ~ "\'" }
-char_letter = {
-    !("'" | "\\") ~ '\u{00}'..'\u{7F}'
-    | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "\'" )
-    | "\\" ~ ("x" ~ ASCII_HEX_DIGIT+)
-    | "\\" ~ (ASCII_OCT_DIGIT{, 3})
-}
-number = @{"0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
+    ident = @{ !keyword ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+    boolean = @{ ("true" | "false") ~ !ASCII_ALPHANUMERIC }
+    none = { ";" }
+    input = @{ "in" ~ !ASCII_ALPHANUMERIC }
+    string = ${ "\"" ~ string_letter* ~ "\"" }
+    string_letter = {
+        !("\"" | "\\") ~ '\u{00}'..'\u{7F}'
+        | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "\'" )
+        | "\\" ~ ("x" ~ ASCII_HEX_DIGIT+)
+        | "\\" ~ (ASCII_OCT_DIGIT{, 3})
+    }
+    char = ${ "\'" ~ char_letter ~ "\'" }
+    char_letter = {
+        !("'" | "\\") ~ '\u{00}'..'\u{7F}'
+        | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t" | "\'" )
+        | "\\" ~ ("x" ~ ASCII_HEX_DIGIT+)
+        | "\\" ~ (ASCII_OCT_DIGIT{, 3})
+    }
+    number = @{"0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
 // array = { "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }
-pointer = { "{" ~ expr ~ "}" }
+    pointer = { "{" ~ expr ~ "}" }
 
-value = _{
-    number
-    | boolean
-    | none
-    | string
-    | char
-    // | array
-    | input
-    | pointer
-    | ident
-    | "(" ~ expr ~ ")"
-}
+    value = _{
+            // number
+            // | boolean
+            // | none
+            // | string
+            // | char
+        // | array
+            | input
+            // | pointer
+            // | ident
+            // | "(" ~ expr ~ ")"
+    }
 expr = {
     type_cast
-    | unop_expr
+        | unop_expr
     | ternary
     // | databox_const
-    | binop_expr
+        | binop_expr
     | function_expr
     // | attr_access
     // | index
-    | call
-    | value
+        | call
+        | value
 }
 
-unop_expr = { unop ~ expr }
+    unop_expr = { unop ~ expr }
 type_cast = { "<" ~ kind ~ ">" ~ expr }
 ternary = { if_ ~ expr ~ "?"? ~ expr ~ ":"? ~ expr }
 // databox_const = {
@@ -115,8 +115,8 @@ ternary = { if_ ~ expr ~ "?"? ~ expr ~ ":"? ~ expr }
 //         ~ ("," ~ ident ~ ":" ~ expr)*)?
 //     ~ "}"
 // }
-binop_expr = { value ~ binop ~ expr }  //! FIXME: change value to expr
-call = { value ~ "(" ~ (expr ~ ("," ~ expr)*)? ~ ")" }  //! FIXME: change value to expr
+    binop_expr = { value ~ binop ~ expr }  //! FIXME: change value to expr
+    call = { value ~ "(" ~ (expr ~ ("," ~ expr)*)? ~ ")" }  //! FIXME: change value to expr
 // attr_access = { value ~ "." ~ ident }  //! FIXME: change value to expr
 // index = { value ~ "[" ~ expr ~ "]" }  //! FIXME: change value to expr
 increment = { "+" ~ "+" ~ expr }
@@ -130,30 +130,30 @@ function_expr = {
     ~ stmt
 }
 
-binop = {
-    "+"
-    | "-"
-    | "*"
-    | "/"
-    | "%"
-    | "|"
-    | "^"
-    | "&"
-    | ">>"
-    | "<<"
-    | "=="
-    | "!="
-    | ">="
-    | "<="
-    | ">"
-    | "<"
-}
-unop = {
-    "&"
-    | "-"
-    | "!"
-    | "*"
-}
+    binop = {
+            "+"
+            | "-"
+            | "*"
+            | "/"
+            | "%"
+            | "|"
+            | "^"
+            | "&"
+            | ">>"
+            | "<<"
+            | "=="
+            | "!="
+            | ">="
+            | "<="
+            | ">"
+            | "<"
+    }
+    unop = {
+        "&"
+        | "-"
+        | "!"
+        | "*"
+    }
 reassign_op = {
     "="
     | "+="
