@@ -74,7 +74,10 @@ pub enum SyntaxKind {
 
     Eof,
 
-    Root,  // 53
+    Root,
+    Kind,
+
+    Cast,
 
     #[error]
     Error,
@@ -139,7 +142,12 @@ impl Display for SyntaxKind {
                 SyntaxKind::Number => "number",
                 SyntaxKind::Comment => "comment",
                 SyntaxKind::Whitespace => "space",
-                _ => unimplemented!(),
+                SyntaxKind::Kind => "kind",
+
+                SyntaxKind::Eof => "EOF",
+                SyntaxKind::Root => "ROOT",
+                SyntaxKind::Cast => "CAST",
+                SyntaxKind::Error => "ERROR",
             }
         )
     }

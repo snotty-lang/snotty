@@ -32,7 +32,7 @@ pub fn compile(file: String, contents: &str) -> Result<String, Vec<Error>> {
         error.set_path(file.clone());
         eprintln!("{}", error);
     }
-    println!("{}", parse.syntax());
+    println!("{:#?}", parse.syntax());
 
     // println!("{:?}\n", rules);
     // println!("{:?}\n", errors);

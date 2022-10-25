@@ -51,12 +51,12 @@ keyword = {
 }
 
 kind = {
-    byte
-    | ";"
+    // byte
+    // | ";"
     | "fx" ~ "(" ~ (kind ~ ("," ~ kind)*)? ~ ")" ~ fx_ret?
-    | "&" ~ kind
-    | "*" ~ kind
-    | ident
+    // | "&" ~ kind
+    // | "*" ~ kind
+    // | ident
 }
 
     ident = @{ !keyword ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
@@ -87,8 +87,8 @@ kind = {
             // | none
             // | string
             // | char
-        // | array
-            | input
+        | array
+            // | input
             // | pointer
             // | ident
             // | "(" ~ expr ~ ")"

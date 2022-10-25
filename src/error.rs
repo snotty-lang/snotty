@@ -16,6 +16,8 @@ pub struct Error<'source> {
 #[derive(Debug, Clone)]
 pub enum ErrorKind {
     UnexpectedSyntax { expected: SyntaxKind },
+    UnknownSyntax,
+    MissingSemicolon,
     Custom { message: String },
 }
 
@@ -29,30 +31,33 @@ pub struct Location {
 impl Location {
     pub fn from_span(span: Span, source: &str) -> Location {
         let mut current_loc = 0;
-        let mut line_start = None;
-        let mut line_end = None;
-        let mut column_start = None;
-        let mut column_end = None;
-        for (i, line) in source.lines().enumerate() {
-            if line.len() + current_loc >= span.start && line_start.is_none() {
-                line_start = Some(i);
-                column_start = Some(span.start - current_loc);
+        let mut start = false;
+        let mut line = 0..0;
+        let mut column = 0..0;
+
+        for (i, source_line) in source.lines().enumerate() {
+            if source_line.len() + current_loc >= span.start && start {
+                line.start = i;
+                column.start = span.start - current_loc;
+                start = false;
             }
-            if line.len() + current_loc >= span.end {
-                line_end = Some(i);
-                column_end = Some(span.end - current_loc);
+            if source_line.len() + current_loc >= span.end {
+                line.end = i;
+                column.end = span.end - current_loc;
                 break;
             }
-            current_loc += line.len();
+            current_loc += source_line.len();
         }
-        let mut column = column_start.unwrap()..column_end.unwrap();
+
+        if !start {
+            line.start = source.lines().count() - 1;
+            column.start = source.lines().last().unwrap_or_default().len();
+        }
+
         if column.is_empty() {
-            column.end += 1;
+            column.end = column.start + 1;
         }
-        Self {
-            column,
-            line: line_start.unwrap()..line_end.unwrap(),
-        }
+        Self { column, line }
     }
 }
 
@@ -106,7 +111,6 @@ impl Display for Error<'_> {
         };
 
         let start_line = self.source.lines().nth(self.location.line.start).unwrap();
-        let end_line = self.source.lines().nth(self.location.line.end).unwrap();
         let blue = Color::BLUE;
 
         writeln!(
@@ -139,7 +143,7 @@ impl Display for Error<'_> {
                 " ".repeat(self.location.column.start),
                 "_".repeat(start_line.len() - 1),
                 self.location.line.end + 1,
-                end_line,
+                self.source.lines().nth(self.location.line.end).unwrap(),
                 "_".repeat(self.location.column.end - 1),
             )?,
 
@@ -154,7 +158,7 @@ impl Display for Error<'_> {
                 " ".repeat(self.location.column.start),
                 "_".repeat(start_line.len() - 1),
                 self.location.line.end + 1,
-                end_line,
+                self.source.lines().nth(self.location.line.end).unwrap(),
                 "_".repeat(self.location.column.end - 1),
             )?,
         }
@@ -171,6 +175,8 @@ impl Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ErrorKind::Custom { message } => write!(f, "{}", message),
+            ErrorKind::UnknownSyntax => write!(f, "I don't recognize this syntax"),
+            ErrorKind::MissingSemicolon => write!(f, "I think you forgot that semicolon there"),
             ErrorKind::UnexpectedSyntax { expected } => {
                 write!(f, "Expected to see a {} there instead", expected)
             }
