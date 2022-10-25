@@ -36,10 +36,10 @@ impl Location {
         let mut column = 0..0;
 
         for (i, source_line) in source.lines().enumerate() {
-            if source_line.len() + current_loc >= span.start && start {
+            if source_line.len() + current_loc >= span.start && !start {
                 line.start = i;
                 column.start = span.start - current_loc;
-                start = false;
+                start = true;
             }
             if source_line.len() + current_loc >= span.end {
                 line.end = i;

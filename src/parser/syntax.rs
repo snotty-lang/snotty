@@ -78,6 +78,9 @@ pub enum SyntaxKind {
     Kind,
 
     Cast,
+    Ternary,
+    Pointer,
+    Scope,
 
     #[error]
     Error,
@@ -143,10 +146,13 @@ impl Display for SyntaxKind {
                 SyntaxKind::Comment => "comment",
                 SyntaxKind::Whitespace => "space",
                 SyntaxKind::Kind => "kind",
+                SyntaxKind::Pointer => "pointer",
 
+                SyntaxKind::Scope => "SCOPE",
                 SyntaxKind::Eof => "EOF",
                 SyntaxKind::Root => "ROOT",
                 SyntaxKind::Cast => "CAST",
+                SyntaxKind::Ternary => "Ternary",
                 SyntaxKind::Error => "ERROR",
             }
         )

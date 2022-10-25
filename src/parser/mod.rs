@@ -106,18 +106,61 @@ impl<'a> Parser<'a> {
 
                 self.builder.finish_node();
             }
+            a @ (OutKw | ReturnKw) => {
+                self.builder.start_node(a.into());
+                self.bump_space();
+                self.expression();
+                self.builder.finish_node();
+            }
+            FileKw => {
+                let start = self.current_span_location();
+                self.builder.start_node(FileKw.into());
+                self.bump_space();
+                if self.current_syntax() != String {
+                    self.unexpected_syntax(start, String, &[]);
+                }
+                self.builder.finish_node();
+                self.bump_space();
+            }
+            OpenBrace => {
+                self.builder.start_node(Scope.into());
+                self.bump_space();
+                loop {
+                    match self.current_syntax() {
+                        Eof => {
+                            self.builder.start_node(Error.into());
+                            self.errors.push(Error::error(
+                                ErrorKind::UnexpectedSyntax {
+                                    expected: CloseBrace,
+                                },
+                                self.current_span_location() + 1..0,
+                                self.source,
+                            ));
+                            self.builder.finish_node();
+                            break;
+                        }
+                        CloseBrace => {
+                            self.bump_space();
+                            break;
+                        }
+                        _ => self.statement(),
+                    }
+                }
+                self.builder.finish_node();
+                return;
+            }
             _ => self.expression(),
         }
 
         if self.current_syntax() != SemiColon {
             self.errors.push(Error::error(
                 ErrorKind::MissingSemicolon,
-                self.current_span_location() + 1..0,
+                self.current_span_location()..0,
                 self.source,
             ))
-        } else {
-            self.bump_space();
         }
+
+        self.skip_syntax(&[Whitespace, Comment, SemiColon]);
     }
 
     fn expression(&mut self) {
@@ -180,7 +223,21 @@ impl<'a> Parser<'a> {
                 self.bump_space();
                 return s;
             }
-            _ => todo!(),
+            OpenBrace => {
+                self.builder.start_node(Pointer.into());
+                self.bump_space();
+                self.expression();
+
+                let mut s = ParseResult::Ok;
+                if self.current_syntax() != CloseBrace {
+                    s = self.unexpected_syntax(self.current_span_location(), CloseParen, recovery);
+                }
+
+                self.builder.finish_node();
+                self.bump_space();
+                return s;
+            }
+            x => todo!("{}", x),
         }
         ParseResult::Ok
     }
@@ -229,9 +286,7 @@ impl<'a> Parser<'a> {
 
     /// Skip Whitespace and Comments
     fn skip_space(&mut self) {
-        while matches!(self.current_syntax(), Whitespace | Comment) {
-            self.bump();
-        }
+        self.skip_syntax(&[Whitespace, Comment])
     }
 
     /// Skips until the specified syntax is encountered.
@@ -249,6 +304,13 @@ impl<'a> Parser<'a> {
                     }
                 }
             }
+            self.bump();
+        }
+    }
+
+    /// Skips until the current syntax is none of the specified syntaxs
+    fn skip_syntax(&mut self, syntaxs: &[SyntaxKind]) {
+        while syntaxs.contains(&self.current_syntax()) {
             self.bump();
         }
     }
