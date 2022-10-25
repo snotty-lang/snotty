@@ -1,205 +1,154 @@
-pub mod ast;
-pub mod token;
+pub mod syntax;
 
-use chumsky::prelude::*;
+use crate::{
+    error::{Error, ErrorKind},
+    Spanned,
+};
+use syntax::{Parse, SyntaxKind};
+use SyntaxKind::*;
 
-use crate::Spanned;
+use logos::Logos;
+use rowan::GreenNodeBuilder;
 
-use ast::{Rule, AST};
-use token::Token::{self, *};
+pub type ParseResult = Result<(), ErrorKind>;
 
-pub fn parser() -> impl Parser<Token, AST, Error = Simple<Token>> {
-    let expr = recursive(|expr| {
-        let pointer = expr
-            .clone()
-            .delimited_by(just(OpenBrace), just(CloseBrace))
-            .map_with_span(|_, span| {
-                AST::from(Spanned {
-                    span,
-                    value: Rule::Pointer,
-                })
-            });
+pub struct Parser<'a> {
+    source: &'a str,
+    tokens: Vec<Spanned<SyntaxKind>>,
+    builder: GreenNodeBuilder<'static>,
+    errors: Vec<Error<'a>>,
+}
 
-        let byte = just(Byte).map_with_span(|_, span| {
-            AST::from(Spanned {
-                span,
-                value: Rule::Byte,
-            })
-        });
+impl<'a> Parser<'a> {
+    pub fn new(source: &'a str) -> Parser {
+        Self {
+            source,
+            tokens: SyntaxKind::lexer(source)
+                .spanned()
+                .map(Spanned::from)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect(),
+            builder: GreenNodeBuilder::new(),
+            errors: Vec::new(),
+        }
+    }
 
-        let identifier = just(Identifier).map_with_span(|_, span| {
-            AST::from(Spanned {
-                span,
-                value: Rule::Identifier,
-            })
-        });
+    pub fn parse(mut self) -> Parse<'a> {
+        self.builder.start_node(Root.into());
 
-        let none = just(SemiColon).map_with_span(|_, span| {
-            AST::from(Spanned {
-                span,
-                value: Rule::None,
-            })
-        });
+        while {
+            self.skip_space();
+            !self.tokens.is_empty()
+        } {
+            if let ParseResult::Err(kind) = self.statement() {
+                let Spanned { span, .. } = self.current().unwrap();
+                self.errors
+                    .push(Error::error(kind, span.clone(), self.source));
+                self.builder.start_node(Error.into());
+                self.bump();
+                self.builder.finish_node();
+            }
+        }
 
-        let char = just(Char).map_with_span(|_, span| {
-            AST::from(Spanned {
-                span,
-                value: Rule::Byte,
-            })
-        });
+        self.skip_space();
+        self.builder.finish_node();
 
-        let string = just(String).map_with_span(|_, span| {
-            AST::from(Spanned {
-                span,
-                value: Rule::String,
-            })
-        });
+        Parse {
+            green_node: self.builder.finish(),
+            errors: self.errors,
+        }
+    }
 
-        let input = just(In).map_with_span(|_, span| {
-            AST::from(Spanned {
-                span,
-                value: Rule::Input,
-            })
-        });
+    fn statement(&mut self) -> ParseResult {
+        self.skip_space();
+        match self.current_syntax() {
+            IfKw => {
+                self.builder.start_node(IfKw.into());
+                self.bump();
+                self.builder.finish_node();
+            }
+            LetKw => {
+                self.builder.start_node(LetKw.into());
+                let ident = self.bump_space();
+                if ident != Identifier {
+                    let start = self.current_span_location();
+                    self.builder.start_node(Error.into());
+                    self.skip_till_syntax(Assign);
+                    self.builder.finish_node();
+                    self.errors.push(Error::error(
+                        ErrorKind::UnexpectedSyntax {
+                            expected: Identifier,
+                        },
+                        start..self.current_span_location(),
+                        self.source,
+                    ));
+                }
+                self.bump();
+                self.builder.finish_node();
+            }
+            _ => return self.expression(),
+        }
 
-        let value = byte
-            .or(pointer)
-            .or(char)
-            .or(string)
-            .or(none)
-            .or(identifier)
-            .or(input)
-            .or(expr
-                .clone()
-                .delimited_by(just(OpenParen), just(CloseParen))
-                .map_with_span(|_, span| {
-                    AST::from(Spanned {
-                        span,
-                        value: Rule::Value,
-                    })
-                }));
+        Ok(())
+    }
 
-        let kind = recursive(|kind: Recursive<Token, AST, _>| {
-            just(ByteKw)
-                .or(just(SemiColon))
-                .or(just(Identifier))
-                .map_with_span(|_, span| {
-                    AST::from(Spanned {
-                        span,
-                        value: Rule::Kind,
-                    })
-                })
-                .or(just(Fx)
-                    .ignore_then(
-                        kind.clone()
-                            .separated_by(just(Comma))
-                            .delimited_by(just(OpenParen), just(CloseParen)),
-                    )
-                    .then(just(Arrow).ignore_then(kind.clone()).or_not())
-                    .map_with_span(|(mut params, ret), span| {
-                        params.extend(ret);
-                        AST {
-                            rule: Spanned {
-                                span,
-                                value: Rule::Kind,
-                            },
-                            children: params,
-                        }
-                    }))
-                .or(just(And).ignore_then(kind.clone()))
-                .or(just(Mul).ignore_then(kind))
-        });
+    fn expression(&self) -> ParseResult {
+        todo!()
+    }
 
-        let cast = just(LessThan)
-            .ignore_then(kind)
-            .then_ignore(just(GreaterThan))
-            .then(expr.clone())
-            .map_with_span(|_, span| {
-                AST::from(Spanned {
-                    span,
-                    value: Rule::TypeCast,
-                })
-            });
+    /// Skip Whitespace and Comments
+    fn skip_space(&mut self) {
+        while matches!(self.current_syntax(), Whitespace | Comment) {
+            self.bump();
+        }
+    }
 
-        let ternary = expr
-            .clone()
-            .then_ignore(just(Question))
-            .then(expr.clone())
-            .then_ignore(just(Colon))
-            .then(expr)
-            .map_with_span(|_, span| {
-                AST::from(Spanned {
-                    span,
-                    value: Rule::Ternary,
-                })
-            });
+    /// Skips until the specified syntax is encountered.
+    /// Returns true if the syntax was found else false if eof was found
+    fn skip_till_syntax(&mut self, syntax: SyntaxKind) -> bool {
+        while match self.current_syntax() {
+            Eof => return false,
+            s => s != syntax,
+        } {
+            self.bump();
+        }
+        true
+    }
 
-        cast.or(ternary).or(value)
-    });
+    /// Consume current syntax and push to builder.
+    /// Returns false if the token is Eof
+    fn bump(&mut self) -> bool {
+        if let Some(Spanned { span, value }) = self.tokens.pop() {
+            self.builder.token(value.into(), &self.source[span]);
+            return true;
+        }
+        false
+    }
 
-    expr
+    fn bump_space(&mut self) -> SyntaxKind {
+        self.bump();
+        self.skip_space();
+        self.current_syntax()
+    }
 
-    //     let op = |c| just(c).padded();
+    fn current(&self) -> Option<&Spanned<SyntaxKind>> {
+        self.tokens.last()
+    }
 
-    //     let unary = op('-')
-    //         .repeated()
-    //         .then(atom)
-    //         .foldr(|_op, rhs| Expr::Neg(Box::new(rhs)));
+    /// Peeks the current syntax
+    fn current_syntax(&self) -> SyntaxKind {
+        self.tokens
+            .last()
+            .map(|spanned| spanned.value)
+            .unwrap_or(Eof)
+    }
 
-    //     let product = unary
-    //         .clone()
-    //         .then(
-    //             op('*')
-    //                 .to(Expr::Mul as fn(_, _) -> _)
-    //                 .or(op('/').to(Expr::Div as fn(_, _) -> _))
-    //                 .then(unary)
-    //                 .repeated(),
-    //         )
-    //         .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)));
-
-    //     let sum = product
-    //         .clone()
-    //         .then(
-    //             op('+')
-    //                 .to(Expr::Add as fn(_, _) -> _)
-    //                 .or(op('-').to(Expr::Sub as fn(_, _) -> _))
-    //                 .then(product)
-    //                 .repeated(),
-    //         )
-    //         .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)));
-
-    //     sum
-    // });
-
-    // let decl = recursive(|decl| {
-    //     let r#let = text::keyword("let")
-    //         .ignore_then(ident)
-    //         .then_ignore(just('='))
-    //         .then(expr.clone())
-    //         .then_ignore(just(';'))
-    //         .then(decl.clone())
-    //         .map(|((name, rhs), then)| Expr::Let {
-    //             name,
-    //             rhs: Box::new(rhs),
-    //             then: Box::new(then),
-    //         });
-
-    //     let r#fn = text::keyword("fn")
-    //         .ignore_then(ident)
-    //         .then(ident.repeated())
-    //         .then_ignore(just('='))
-    //         .then(expr.clone())
-    //         .then_ignore(just(';'))
-    //         .then(decl)
-    //         .map(|(((name, args), body), then)| Expr::Fn {
-    //             name,
-    //             args,
-    //             body: Box::new(body),
-    //             then: Box::new(then),
-    //         });
-
-    //     r#let.or(r#fn).or(expr).padded()
-    // });
-
-    // decl.then_ignore(end())
+    fn current_span_location(&self) -> usize {
+        self.tokens
+            .last()
+            .map(|spanned| spanned.span.start)
+            .unwrap_or(self.source.len() - 1)
+    }
 }

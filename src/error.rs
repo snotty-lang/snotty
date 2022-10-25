@@ -1,16 +1,25 @@
 use std::fmt::Display;
 
-use crate::Span;
+use crate::{parser::syntax::SyntaxKind, Span};
 
+/// Error
 #[derive(Debug, Clone)]
 pub struct Error<'source> {
     location: Location,
     source: &'source str,
-    description: String,
     kind: ErrorKind,
+    variant: ErrorVariant,
     path: String,
 }
 
+/// Kind of the error
+#[derive(Debug, Clone)]
+pub enum ErrorKind {
+    UnexpectedSyntax { expected: SyntaxKind },
+    Custom { message: String },
+}
+
+/// Location of the error
 #[derive(Debug, Clone)]
 pub struct Location {
     line: Span,
@@ -36,34 +45,47 @@ impl Location {
             }
             current_loc += line.len();
         }
+        let mut column = column_start.unwrap()..column_end.unwrap();
+        if column.is_empty() {
+            column.end += 1;
+        }
         Self {
-            column: column_start.unwrap()..column_end.unwrap(),
+            column,
             line: line_start.unwrap()..line_end.unwrap(),
         }
     }
 }
 
+/// Variant of Error: Error or Warning
 #[derive(Debug, Clone)]
-pub enum ErrorKind {
+pub enum ErrorVariant {
     Error,
     Warning,
     // Help,
 }
 
 impl<'source> Error<'source> {
-    pub fn new(kind: ErrorKind, span: Span, source: &'source str) -> Error<'source> {
+    /// Instantiate an error
+    #[allow(clippy::self_named_constructors)]
+    pub fn error(kind: ErrorKind, span: Span, source: &'source str) -> Error<'source> {
         Self {
-            kind,
+            variant: ErrorVariant::Error,
             location: Location::from_span(span, source),
             source,
-            description: String::new(),
+            kind,
             path: String::from("<program>"),
         }
     }
 
-    pub fn with_description(mut self, description: String) -> Self {
-        self.description = description;
-        self
+    /// Instantiate a warning
+    pub fn warning(kind: ErrorKind, span: Span, source: &'source str) -> Error<'source> {
+        Self {
+            variant: ErrorVariant::Warning,
+            location: Location::from_span(span, source),
+            source,
+            kind,
+            path: String::from("<program>"),
+        }
     }
 
     pub fn with_path(mut self, path: String) -> Self {
@@ -74,17 +96,13 @@ impl<'source> Error<'source> {
     pub fn set_path(&mut self, path: String) {
         self.path = path
     }
-
-    pub fn set_description(&mut self, description: String) {
-        self.description = description;
-    }
 }
 
 impl Display for Error<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let (text, color) = match self.kind {
-            ErrorKind::Error => ("error", Color::RED),
-            ErrorKind::Warning => ("warning", Color::ORANGE),
+        let (text, color) = match self.variant {
+            ErrorVariant::Error => ("error", Color::RED),
+            ErrorVariant::Warning => ("warning", Color::ORANGE),
         };
 
         let start_line = self.source.lines().nth(self.location.line.start).unwrap();
@@ -96,7 +114,7 @@ impl Display for Error<'_> {
             "\x1b[1;{color}m{text}\x1b[39m: {}\x1b[22m\n\
              \x1b[{blue}m   --> \x1b[39m{}:{}:{}\n\
              \x1b[{blue}m    |\n{:0>3} |\x1b[39m {}",
-            self.description,
+            self.kind,
             self.path,
             self.location.line.start + 1,
             self.location.column.start + 1,
@@ -109,7 +127,7 @@ impl Display for Error<'_> {
                 f,
                 "\x1b[{}m    |\x1b[{color}m {}{}\x1b[39m",
                 Color::BLUE,
-                "".repeat(self.location.column.start),
+                " ".repeat(self.location.column.start),
                 "^".repeat(self.location.column.len()),
             )?,
             1 => writeln!(
@@ -118,7 +136,7 @@ impl Display for Error<'_> {
                      \x1b[{blue}m    |\n\
                      {:0>3} |\x1b[39m {}\n\
                      \x1b[{blue}m    |\x1b[{color}m {}^\x1b[39m",
-                "".repeat(self.location.column.start),
+                " ".repeat(self.location.column.start),
                 "_".repeat(start_line.len() - 1),
                 self.location.line.end + 1,
                 end_line,
@@ -133,7 +151,7 @@ impl Display for Error<'_> {
                      \x1b[{blue}m    |\n\
                      {:0>3} |\x1b[39m {}\n\
                      \x1b[{blue}m    |\x1b[{color}m {}^\x1b[39m",
-                "".repeat(self.location.column.start),
+                " ".repeat(self.location.column.start),
                 "_".repeat(start_line.len() - 1),
                 self.location.line.end + 1,
                 end_line,
@@ -142,13 +160,25 @@ impl Display for Error<'_> {
         }
         writeln!(
             f,
-            "\x1b[{}m    |\n    =\x1b[39m fix ur code lol",
+            "\x1b[{}m    |\n    =\x1b[39m Man can't even write compilable code",
             Color::BLUE
         )?;
         Ok(())
     }
 }
 
+impl Display for ErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ErrorKind::Custom { message } => write!(f, "{}", message),
+            ErrorKind::UnexpectedSyntax { expected } => {
+                write!(f, "Expected to see a {} there instead", expected)
+            }
+        }
+    }
+}
+
+/// **Only works in ANSI supported terminals**
 struct Color(u8, u8, u8);
 
 impl Color {

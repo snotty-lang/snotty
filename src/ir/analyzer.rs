@@ -1013,42 +1013,43 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn make_char(c: &[u8]) -> Option<u8> {
-        match c {
-            [b'\\', b'u', hex @ ..] => {
-                let mut output = 0u8;
-                for (i, &digit) in hex.iter().rev().enumerate() {
-                    output = output.checked_add(
-                        match digit {
-                            b'0'..=b'9' => digit - b'0',
-                            b'a'..=b'f' => digit - b'a' + 10,
-                            b'A'..=b'F' => digit - b'A' + 10,
-                            _ => unreachable!(),
-                        }
-                        .checked_mul(16u8.checked_pow(i as u32)?)?,
-                    )?;
-                }
-                Some(output)
+    
+}
+fn make_char(c: &[u8]) -> Option<u8> {
+    match c {
+        [b'\\', b'u', hex @ ..] => {
+            let mut output = 0u8;
+            for (i, &digit) in hex.iter().rev().enumerate() {
+                output = output.checked_add(
+                    match digit {
+                        b'0'..=b'9' => digit - b'0',
+                        b'a'..=b'f' => digit - b'a' + 10,
+                        b'A'..=b'F' => digit - b'A' + 10,
+                        _ => unreachable!(),
+                    }
+                    .checked_mul(16u8.checked_pow(i as u32)?)?,
+                )?;
             }
-            &[b'\\', oct1, oct2, oct3] => {
-                (oct3 - b'0' + (oct2 - b'0') * 8).checked_add((oct1 - b'0').checked_mul(64)?)
-            }
-            [b'\\', x] => Some(match x {
-                b'\\' => 0x5C,
-                b'n' => 0x0A,
-                b'a' => 0x07,
-                b'b' => 0x08,
-                b'e' => 0x1B,
-                b'f' => 0x0C,
-                b'r' => 0x0D,
-                b'k' => 0x09,
-                b'v' => 0x0B,
-                b'\'' => 0x27,
-                b'\"' => 0x22,
-                _ => unreachable!(),
-            }),
-            &[x] => Some(x),
-            _ => unreachable!(),
+            Some(output)
         }
+        &[b'\\', oct1, oct2, oct3] => {
+            (oct3 - b'0' + (oct2 - b'0') * 8).checked_add((oct1 - b'0').checked_mul(64)?)
+        }
+        [b'\\', x] => Some(match x {
+            b'\\' => 0x5C,
+            b'n' => 0x0A,
+            b'a' => 0x07,
+            b'b' => 0x08,
+            b'e' => 0x1B,
+            b'f' => 0x0C,
+            b'r' => 0x0D,
+            b'k' => 0x09,
+            b'v' => 0x0B,
+            b'\'' => 0x27,
+            b'\"' => 0x22,
+            _ => unreachable!(),
+        }),
+        &[x] => Some(x),
+        _ => unreachable!(),
     }
 }
