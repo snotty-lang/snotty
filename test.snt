@@ -1,1 +1,3 @@
-let x = <byte>53; 
+loop (let a = 1; a a;)  {
+    let z = o;
+}

@@ -12,8 +12,7 @@ pub enum SyntaxKind {
     #[token("fx")] FxKw,
     #[token("return")] ReturnKw,
     #[token("box")] BoxKw,
-    #[token("for")] ForKw,
-    #[token("while")] WhileKw,
+    #[token("loop")] LoopKw,
     #[token("otherwise")] OtherwiseKw,
     #[token("if")] IfKw,
     #[token("out")] OutKw,
@@ -79,6 +78,9 @@ pub enum SyntaxKind {
     Ternary,
     Pointer,
     Scope,
+    Let,
+    Loop,
+
     /// Is never Instantiated in parse tree
     Value,
 
@@ -95,8 +97,7 @@ impl Display for SyntaxKind {
                 SyntaxKind::FxKw => "'fx'",
                 SyntaxKind::ReturnKw => "'return'",
                 SyntaxKind::BoxKw => "'box'",
-                SyntaxKind::ForKw => "'for'",
-                SyntaxKind::WhileKw => "'while'",
+                SyntaxKind::LoopKw => "'loop'",
                 SyntaxKind::OtherwiseKw => "'otherwise'",
                 SyntaxKind::IfKw => "'if'",
                 SyntaxKind::OutKw => "'out'",
@@ -148,6 +149,8 @@ impl Display for SyntaxKind {
                 SyntaxKind::Kind => "kind",
                 SyntaxKind::Pointer => "pointer",
                 SyntaxKind::Value => "value",
+                SyntaxKind::Let => "LET",
+                SyntaxKind::Loop => "LOOP",
                 SyntaxKind::Scope => "SCOPE",
                 SyntaxKind::Eof => "EOF",
                 SyntaxKind::Root => "ROOT",

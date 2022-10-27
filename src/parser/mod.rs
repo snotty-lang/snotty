@@ -1,7 +1,10 @@
 mod peekable;
 pub mod syntax;
 
-use crate::error::{Error, ErrorKind};
+use crate::{
+    error::{Error, ErrorKind},
+    Span,
+};
 use peekable::Peekable;
 use syntax::{Parse, SyntaxKind};
 use SyntaxKind::*;
@@ -21,6 +24,18 @@ impl ParseRecovery {
     fn is_end(&self) -> bool {
         matches!(self, ParseRecovery::Eof | ParseRecovery::SemiColon)
     }
+
+    fn is_not_ok(&self) -> bool {
+        *self != ParseRecovery::Ok
+    }
+
+    fn has_not_recovered_by(&self, n: usize) -> bool {
+        match self {
+            ParseRecovery::Ok => false,
+            &ParseRecovery::Recovered(r) => r > n,
+            _ => true,
+        }
+    }
 }
 
 pub struct Parser<'a> {
@@ -28,6 +43,7 @@ pub struct Parser<'a> {
     tokens: Peekable<SpannedIter<'a, SyntaxKind>>,
     builder: GreenNodeBuilder<'static>,
     errors: Vec<Error<'a>>,
+    recovery: Vec<SyntaxKind>,
 }
 
 impl<'a> Parser<'a> {
@@ -37,6 +53,7 @@ impl<'a> Parser<'a> {
             tokens: Peekable::new(SyntaxKind::lexer(source).spanned()),
             builder: GreenNodeBuilder::new(),
             errors: Vec::new(),
+            recovery: Vec::new(),
         }
     }
 
@@ -59,63 +76,59 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn statement(&mut self) {
+    fn statement(&mut self) -> ParseRecovery {
         match self.current_syntax() {
             LetKw => {
-                let start = self.current_span_location();
-                self.builder.start_node(LetKw.into());
-                let ident = self.bump_space();
-
-                if ident != Identifier {
-                    let current = self.current_span_location();
-                    if self
-                        .unexpected_syntax(current, Identifier, &[Assign])
-                        .is_end()
-                    {
+                self.builder.start_node(Let.into());
+                self.recovery.push(Assign);
+                if self.bump_space() != Identifier {
+                    let s = self.unexpected_syntax(Identifier);
+                    if s.has_not_recovered_by(0) {
+                        self.recovery.pop();
                         self.builder.finish_node();
-                        self.bump_space();
-                        return;
+                        return s;
                     }
                 } else {
                     self.bump_space();
                 }
-
-                if self.current_syntax() != Assign
-                    && self.unexpected_syntax(start, Assign, &[Assign]).is_end()
-                {
-                    self.builder.finish_node();
-                    self.bump_space();
-                    return;
+                if self.current_syntax() != Assign {
+                    let s = self.unexpected_syntax(Assign);
+                    if s.has_not_recovered_by(0) {
+                        self.recovery.pop();
+                        self.builder.finish_node();
+                        return s;
+                    }
                 }
+                self.recovery.pop();
 
                 self.bump_space();
-                self.expression(&[]);
+                self.expression();
                 self.builder.finish_node();
             }
             a @ (OutKw | ReturnKw) => {
                 self.builder.start_node(a.into());
                 self.bump_space();
-                self.expression(&[]);
+                self.expression();
                 self.builder.finish_node();
             }
             FileKw => {
-                let start = self.current_span_location();
                 self.builder.start_node(FileKw.into());
                 self.bump_space();
                 if self.current_syntax() != String {
-                    self.unexpected_syntax(start, String, &[]);
+                    self.unexpected_syntax(String);
                 }
                 self.bump();
                 self.builder.finish_node();
             }
             OpenBrace => {
                 self.builder.start_node(Scope.into());
+                self.recovery.push(CloseBrace);
                 self.bump_space();
                 loop {
                     match self.current_syntax() {
                         Eof => {
                             self.builder.start_node(Error.into());
-                            let current = self.current_span_location();
+                            let current = self.current_syntax_location();
                             self.errors.push(Error::error(
                                 ErrorKind::UnexpectedSyntax {
                                     expected: CloseBrace,
@@ -130,18 +143,142 @@ impl<'a> Parser<'a> {
                             self.bump();
                             break;
                         }
-                        _ => self.statement(),
+                        _ => {
+                            self.statement();
+                        }
                     }
                 }
+                self.recovery.pop();
                 self.builder.finish_node();
-                return;
+                return ParseRecovery::Ok;
+            }
+            LoopKw => {
+                self.builder.start_node(Loop.into());
+                self.recovery
+                    .extend([CloseBrace, OpenBrace, CloseParen, OpenParen]);
+
+                if self.bump_space() != OpenParen {
+                    let s = self.unexpected_syntax(OpenParen);
+                    if s.has_not_recovered_by(4) {
+                        self.recovery.drain(self.recovery.len() - 4..);
+                        self.builder.finish_node();
+                        self.bump_space();
+                        return s;
+                    }
+                }
+                self.bump_space();
+                self.recovery.pop();
+
+                if self.current_syntax() != SemiColon {
+                    let s = self.statement();
+                    if matches!(s, ParseRecovery::Recovered(4..) | ParseRecovery::Eof) {
+                        self.recovery.drain(self.recovery.len() - 3..);
+                        self.builder.finish_node();
+                        self.bump_space();
+                        return s;
+                    }
+                } else {
+                    self.bump();
+                }
+                self.skip_space();
+
+                if self.current_syntax() != SemiColon {
+                    let s = self.expression();
+                    if matches!(s, ParseRecovery::Recovered(4..) | ParseRecovery::Eof) {
+                        self.recovery.drain(self.recovery.len() - 3..);
+                        self.builder.finish_node();
+                        self.bump_space();
+                        return s;
+                    }
+                } else {
+                    self.bump();
+                }
+                self.skip_space();
+
+                if self.current_syntax() != SemiColon {
+                    let s = self.statement();
+                    if matches!(s, ParseRecovery::Recovered(4..) | ParseRecovery::Eof) {
+                        self.recovery.drain(self.recovery.len() - 3..);
+                        self.builder.finish_node();
+                        self.bump_space();
+                        return s;
+                    }
+                } else {
+                    self.bump();
+                }
+                self.skip_space();
+
+                if self.current_syntax() != CloseParen {
+                    let s = self.unexpected_syntax(CloseParen);
+                    if s.is_end() {
+                        self.recovery.drain(self.recovery.len() - 3..);
+                        self.builder.finish_node();
+                        self.bump_space();
+                        return s;
+                    }
+                }
+                self.bump_space();
+                self.recovery.pop();
+
+                self.builder.start_node(Scope.into());
+                if self.current_syntax() != OpenBrace {
+                    let s = self.unexpected_syntax(OpenBrace);
+                    if s.is_end() || matches!(s, ParseRecovery::Recovered(1)) {
+                        self.bump();
+                        self.recovery.drain(self.recovery.len() - 2..);
+                        self.builder.finish_node();
+                        self.builder.finish_node();
+                        return s;
+                    }
+                }
+                self.bump_space();
+                self.recovery.pop();
+
+                loop {
+                    match self.current_syntax() {
+                        Eof => {
+                            self.builder.start_node(Error.into());
+                            let current = self.current_syntax_location();
+                            self.errors.push(Error::error(
+                                ErrorKind::UnexpectedSyntax {
+                                    expected: CloseBrace,
+                                },
+                                current + 1..0,
+                                self.source,
+                            ));
+                            self.builder.finish_node();
+                            break;
+                        }
+                        CloseBrace => {
+                            self.bump();
+                            break;
+                        }
+                        _ => {
+                            let s = self.statement();
+                            if s.has_not_recovered_by(0) {
+                                self.recovery.pop();
+                                self.builder.finish_node();
+                                self.builder.finish_node();
+                                return s;
+                            }
+                        }
+                    }
+                }
+
+                self.recovery.pop();
+                self.builder.finish_node();
+                self.builder.finish_node();
+                return ParseRecovery::Ok;
             }
             _ => {
-                self.expression(&[]);
+                let s = self.expression();
+                if s.is_not_ok() {
+                    return s;
+                }
             }
         }
 
-        let end = self.current_span_location();
+        let end = self.current_syntax_location();
         self.skip_space();
         if self.current_syntax() != SemiColon {
             self.errors.push(Error::error(
@@ -152,125 +289,119 @@ impl<'a> Parser<'a> {
         }
 
         self.skip_syntax(&[Whitespace, Comment, SemiColon]);
+        ParseRecovery::Ok
     }
 
-    fn expression(&mut self, recovery: &[SyntaxKind]) -> ParseRecovery {
+    fn expression(&mut self) -> ParseRecovery {
         let start = self.builder.checkpoint();
         match self.current_syntax() {
             LessThan => {
                 self.builder.start_node(Cast.into());
+                self.recovery.push(GreaterThan);
                 self.bump_space();
 
-                let mut r = Vec::from(recovery);
-                r.push(GreaterThan);
-                let s = self.kind(&r);
-                if s.is_end() {
+                let s = self.kind();
+                if s.has_not_recovered_by(0) {
                     self.builder.finish_node();
                     return s;
                 }
 
                 self.skip_space();
 
-                let current = self.current_span_location();
                 if self.current_syntax() != GreaterThan {
-                    let mut r = Vec::from(recovery);
-                    r.push(GreaterThan);
-                    let s = self.unexpected_syntax(current, GreaterThan, &r);
-
-                    if s.is_end() {
+                    let s = self.unexpected_syntax(GreaterThan);
+                    if s.has_not_recovered_by(0) {
+                        self.recovery.pop();
                         self.builder.finish_node();
                         return s;
                     }
                 }
+                self.recovery.pop();
 
                 self.bump_space();
-                self.expression(recovery);
+                self.expression();
 
                 self.builder.finish_node();
             }
             _ => {
-                let s = self.value(recovery);
-                if s.is_end() {
+                let s = self.value();
+                if s.is_not_ok() {
                     return s;
                 }
             }
         }
 
-        self.current_syntax();
         if self.peek_space_skipped() == Question {
             self.skip_space();
             self.builder.start_node_at(start, Ternary.into());
+            self.recovery.push(Colon);
             self.bump_space();
-            let mut r = Vec::from(recovery);
-            r.push(Colon);
-            self.expression(&r);
+            self.expression();
             self.skip_space();
 
-            let current = self.current_span_location();
             if self.current_syntax() != Colon {
-                let s = self.unexpected_syntax(current, Colon, &r);
-                if s.is_end() {
+                let s = self.unexpected_syntax(Colon);
+                if s.has_not_recovered_by(0) {
+                    self.recovery.pop();
                     self.builder.finish_node();
                     return s;
                 }
             }
+            self.recovery.pop();
             self.bump_space();
-            self.expression(recovery);
+            self.expression();
             self.builder.finish_node();
         }
 
         ParseRecovery::Ok
     }
 
-    fn value(&mut self, recovery: &[SyntaxKind]) -> ParseRecovery {
+    fn value(&mut self) -> ParseRecovery {
         match self.current_syntax() {
             Number | Char | String | SemiColon | InKw | Identifier => self.bump(),
             Error => {
-                let start = self.current_span_location();
+                let span = self.current_syntax_span();
                 self.bump();
-                let current = self.current_span_location();
-                self.errors.push(Error::error(
-                    ErrorKind::UnknownSyntax,
-                    start..current,
-                    self.source,
-                ));
+                self.errors
+                    .push(Error::error(ErrorKind::UnknownSyntax, span, self.source));
             }
             OpenParen => {
                 self.bump_space();
-                self.expression(recovery);
+                self.recovery.push(CloseParen);
+                self.expression();
 
                 let mut s = ParseRecovery::Ok;
                 if self.current_syntax() != CloseParen {
-                    let current = self.current_span_location();
-                    s = self.unexpected_syntax(current, CloseParen, recovery);
+                    s = self.unexpected_syntax(CloseParen);
                 }
 
+                self.recovery.pop();
                 self.bump();
                 return s;
             }
             OpenBrace => {
                 self.builder.start_node(Pointer.into());
+                self.recovery.push(CloseBrace);
                 self.bump_space();
-                self.expression(recovery);
+                self.expression();
 
                 let mut s = ParseRecovery::Ok;
                 if self.current_syntax() != CloseBrace {
-                    let current = self.current_span_location();
-                    s = self.unexpected_syntax(current, CloseParen, recovery);
+                    s = self.unexpected_syntax(CloseBrace);
                 }
                 self.bump();
+                self.recovery.pop();
                 self.builder.finish_node();
                 return s;
             }
             _ => {
-                let current = self.current_span_location();
-                self.unexpected_syntax(current, Value, &[]);
+                self.unexpected_syntax(Value);
             }
         }
         ParseRecovery::Ok
     }
 
-    fn kind(&mut self, recovery: &[SyntaxKind]) -> ParseRecovery {
+    fn kind(&mut self) -> ParseRecovery {
         match self.current_syntax() {
             ByteKw | Identifier | SemiColon => {
                 self.builder.start_node(Kind.into());
@@ -281,33 +412,25 @@ impl<'a> Parser<'a> {
             And | Mul => {
                 self.builder.start_node(Kind.into());
                 self.bump_space();
-                let s = self.kind(recovery);
+                let s = self.kind();
                 self.builder.finish_node();
                 s
             }
-            _ => {
-                let current = self.current_span_location();
-                self.unexpected_syntax(current, Kind, recovery)
-            }
+            _ => self.unexpected_syntax(Kind),
         }
     }
 
     /// Creates an UnexpectedSyntax error
-    fn unexpected_syntax(
-        &mut self,
-        start: usize,
-        expected: SyntaxKind,
-        skip_until: &[SyntaxKind],
-    ) -> ParseRecovery {
+    fn unexpected_syntax(&mut self, expected: SyntaxKind) -> ParseRecovery {
         self.builder.start_node(Error.into());
+        let span = self.current_syntax_span();
         self.bump();
-        let current = self.current_span_location();
         self.errors.push(Error::error(
             ErrorKind::UnexpectedSyntax { expected },
-            start..current,
+            span,
             self.source,
         ));
-        let s = self.skip_till_syntax(skip_until);
+        let s = self.recover();
         self.builder.finish_node();
         s
     }
@@ -317,6 +440,7 @@ impl<'a> Parser<'a> {
         self.skip_syntax(&[Whitespace, Comment])
     }
 
+    /// Peek the syntax after whitespace
     fn peek_space_skipped(&mut self) -> SyntaxKind {
         self.tokens
             .peek_till_cloned(|(kind, _)| ![Comment, Whitespace].contains(kind))
@@ -324,16 +448,19 @@ impl<'a> Parser<'a> {
             .unwrap_or(Eof)
     }
 
-    /// Skips until the specified syntax is encountered.
-    /// Returns true if the syntax was found else false if eof was found
-    fn skip_till_syntax(&mut self, syntaxs: &[SyntaxKind]) -> ParseRecovery {
+    /// Bumps till a recoverable syntax is found
+    fn recover(&mut self) -> ParseRecovery {
         loop {
             match self.current_syntax() {
                 Eof => return ParseRecovery::Eof,
                 SemiColon => return ParseRecovery::SemiColon,
                 s => {
-                    if let Some((i, _)) =
-                        syntaxs.iter().enumerate().find(|(_, &syntax)| syntax == s)
+                    if let Some((i, _)) = self
+                        .recovery
+                        .iter()
+                        .rev()
+                        .enumerate()
+                        .find(|(_, &syntax)| syntax == s)
                     {
                         return ParseRecovery::Recovered(i);
                     }
@@ -357,6 +484,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Bump and then skip space. Returns the current syntax
     fn bump_space(&mut self) -> SyntaxKind {
         self.bump();
         self.skip_space();
@@ -368,10 +496,19 @@ impl<'a> Parser<'a> {
         self.tokens.peek(1).map(|&(kind, _)| kind).unwrap_or(Eof)
     }
 
-    fn current_span_location(&mut self) -> usize {
+    /// Current location of the parser
+    fn current_syntax_location(&mut self) -> usize {
         self.tokens
             .peek(1)
             .map(|(_, span)| span.start)
             .unwrap_or(self.source.len())
+    }
+
+    /// Current location of the parser
+    fn current_syntax_span(&mut self) -> Span {
+        self.tokens
+            .peek(1)
+            .map(|(_, span)| span.clone())
+            .unwrap_or(self.source.len() - 1..self.source.len())
     }
 }
