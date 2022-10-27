@@ -80,6 +80,9 @@ pub enum SyntaxKind {
     Scope,
     Let,
     Loop,
+    BinaryOp,
+    UnaryOp,
+    Call,
 
     /// Is never Instantiated in parse tree
     Value,
@@ -149,6 +152,9 @@ impl Display for SyntaxKind {
                 SyntaxKind::Kind => "kind",
                 SyntaxKind::Pointer => "pointer",
                 SyntaxKind::Value => "value",
+                SyntaxKind::Call => "CALL",
+                SyntaxKind::BinaryOp => "BINARY OPERATION",
+                SyntaxKind::UnaryOp => "UNARY OPERATION",
                 SyntaxKind::Let => "LET",
                 SyntaxKind::Loop => "LOOP",
                 SyntaxKind::Scope => "SCOPE",

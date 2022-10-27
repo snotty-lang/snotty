@@ -78,7 +78,7 @@ impl<'a> Parser<'a> {
 
     fn statement(&mut self) -> ParseRecovery {
         match self.current_syntax() {
-            LetKw => {
+            LetKw | ConstKw => {
                 self.builder.start_node(Let.into());
                 self.recovery.push(Assign);
                 if self.bump_space() != Identifier {
@@ -295,36 +295,8 @@ impl<'a> Parser<'a> {
     fn expression(&mut self) -> ParseRecovery {
         let start = self.builder.checkpoint();
         match self.current_syntax() {
-            LessThan => {
-                self.builder.start_node(Cast.into());
-                self.recovery.push(GreaterThan);
-                self.bump_space();
-
-                let s = self.kind();
-                if s.has_not_recovered_by(0) {
-                    self.builder.finish_node();
-                    return s;
-                }
-
-                self.skip_space();
-
-                if self.current_syntax() != GreaterThan {
-                    let s = self.unexpected_syntax(GreaterThan);
-                    if s.has_not_recovered_by(0) {
-                        self.recovery.pop();
-                        self.builder.finish_node();
-                        return s;
-                    }
-                }
-                self.recovery.pop();
-
-                self.bump_space();
-                self.expression();
-
-                self.builder.finish_node();
-            }
             _ => {
-                let s = self.value();
+                let s = self.binary_op(Self::comparison, &[And, Or, Xor], Self::comparison);
                 if s.is_not_ok() {
                     return s;
                 }
@@ -353,6 +325,123 @@ impl<'a> Parser<'a> {
             self.builder.finish_node();
         }
 
+        ParseRecovery::Ok
+    }
+
+    fn comparison(&mut self) -> ParseRecovery {
+        match self.current_syntax() {
+            Not => {
+                self.builder.start_node(UnaryOp.into());
+                self.bump_space();
+                let s = self.expression();
+                self.builder.finish_node();
+                s
+            }
+            _ => self.binary_op(
+                Self::bitwise,
+                &[
+                    Equal,
+                    NotEqual,
+                    GreaterThan,
+                    GreaterEqual,
+                    LessThan,
+                    LessEqual,
+                ],
+                Self::bitwise,
+            ),
+        }
+    }
+
+    fn bitwise(&mut self) -> ParseRecovery {
+        self.binary_op(Self::arithmetic, &[Shr, Shl], Self::arithmetic)
+    }
+
+    fn arithmetic(&mut self) -> ParseRecovery {
+        self.binary_op(Self::term, &[Add, Sub], Self::term)
+    }
+
+    fn term(&mut self) -> ParseRecovery {
+        self.binary_op(Self::factor, &[Mul, Div, Mod], Self::factor)
+    }
+
+    fn factor(&mut self) -> ParseRecovery {
+        match self.current_syntax() {
+            Sub | Add | Inc | Dec => {
+                self.builder.start_node(UnaryOp.into());
+                self.bump_space();
+                let s = self.factor();
+                self.builder.finish_node();
+                s
+            }
+            _ => {
+                self.recovery.extend([Inc, Dec]);
+                let start = self.builder.checkpoint();
+                let s = self.cast();
+                if s.has_not_recovered_by(1) {
+                    self.recovery.pop();
+                    self.recovery.pop();
+                    return s;
+                }
+                if matches!(self.peek_space_skipped(), Inc | Dec) {
+                    self.builder.start_node_at(start, UnaryOp.into());
+                    self.skip_space();
+                    self.bump();
+                    self.builder.finish_node();
+                }
+                ParseRecovery::Ok
+            }
+        }
+    }
+
+    fn cast(&mut self) -> ParseRecovery {
+        match self.current_syntax() {
+            LessThan => {
+                self.builder.start_node(Cast.into());
+                self.recovery.push(GreaterThan);
+                self.bump_space();
+
+                let s = self.kind();
+                if s.has_not_recovered_by(0) {
+                    self.builder.finish_node();
+                    return s;
+                }
+
+                self.skip_space();
+
+                if self.current_syntax() != GreaterThan {
+                    let s = self.unexpected_syntax(GreaterThan);
+                    if s.has_not_recovered_by(0) {
+                        self.recovery.pop();
+                        self.builder.finish_node();
+                        return s;
+                    }
+                }
+                self.recovery.pop();
+
+                self.bump_space();
+                let s = self.call();
+                self.builder.finish_node();
+                s
+            }
+            _ => {
+                todo!()
+            }
+        }
+    }
+
+    fn call(&mut self) -> ParseRecovery {
+        let start = self.builder.checkpoint();
+        self.recovery.push(OpenParen);
+        let s = self.value();
+        self.recovery.pop();
+        if s.has_not_recovered_by(0) {
+            return s;
+        }
+        if self.peek_space_skipped() == OpenParen {
+            self.builder.start_node_at(start, Call.into());
+            todo!(); // TODO
+                     // self.builder.finish_node();
+        }
         ParseRecovery::Ok
     }
 
@@ -394,6 +483,13 @@ impl<'a> Parser<'a> {
                 self.builder.finish_node();
                 return s;
             }
+            And | Mul => {
+                self.builder.start_node(UnaryOp.into());
+                self.bump_space();
+                let s = self.value();
+                self.builder.finish_node();
+                return s;
+            }
             _ => {
                 self.unexpected_syntax(Value);
             }
@@ -418,6 +514,31 @@ impl<'a> Parser<'a> {
             }
             _ => self.unexpected_syntax(Kind),
         }
+    }
+
+    fn binary_op(
+        &mut self,
+        func1: fn(&mut Self) -> ParseRecovery,
+        ops: &[SyntaxKind],
+        func2: fn(&mut Self) -> ParseRecovery,
+    ) -> ParseRecovery {
+        let start = self.builder.checkpoint();
+        self.recovery.extend(ops);
+        let s = func1(self);
+        if s.has_not_recovered_by(ops.len() - 1) {
+            self.recovery.drain(self.recovery.len() - ops.len()..);
+        }
+        while ops.contains(&self.peek_space_skipped()) {
+            self.builder.start_node_at(start, BinaryOp.into());
+            self.skip_space();
+            self.bump_space();
+            let s = func2(self);
+            self.builder.finish_node();
+            if s.has_not_recovered_by(ops.len() - 1) {
+                self.recovery.drain(self.recovery.len() - ops.len()..);
+            }
+        }
+        ParseRecovery::Ok
     }
 
     /// Creates an UnexpectedSyntax error
