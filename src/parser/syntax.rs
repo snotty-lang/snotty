@@ -13,7 +13,7 @@ pub enum SyntaxKind {
     #[token("return")] ReturnKw,
     #[token("box")] BoxKw,
     #[token("loop")] LoopKw,
-    #[token("otherwise")] OtherwiseKw,
+    #[token("else")] ElseKw,
     #[token("if")] IfKw,
     #[token("out")] OutKw,
     #[token("let")] LetKw,
@@ -83,6 +83,7 @@ pub enum SyntaxKind {
     BinaryOp,
     UnaryOp,
     Call,
+    If,
 
     /// Is never Instantiated in parse tree
     Value,
@@ -101,7 +102,7 @@ impl Display for SyntaxKind {
                 SyntaxKind::ReturnKw => "'return'",
                 SyntaxKind::BoxKw => "'box'",
                 SyntaxKind::LoopKw => "'loop'",
-                SyntaxKind::OtherwiseKw => "'otherwise'",
+                SyntaxKind::ElseKw => "'else'",
                 SyntaxKind::IfKw => "'if'",
                 SyntaxKind::OutKw => "'out'",
                 SyntaxKind::LetKw => "'let'",
@@ -156,6 +157,7 @@ impl Display for SyntaxKind {
                 SyntaxKind::BinaryOp => "BINARY OPERATION",
                 SyntaxKind::UnaryOp => "UNARY OPERATION",
                 SyntaxKind::Let => "LET",
+                SyntaxKind::If => "IF",
                 SyntaxKind::Loop => "LOOP",
                 SyntaxKind::Scope => "SCOPE",
                 SyntaxKind::Eof => "EOF",
