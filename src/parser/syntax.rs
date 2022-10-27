@@ -60,17 +60,15 @@ pub enum SyntaxKind {
     #[token("<<")] Shl,
     #[token(">>")] Shr,
 
-    #[regex(r#"'[^']|\\(["ntrf\\b/']|x[0-9A-Fa-f]+|[0-7][0-7]?[0-7]?)'"#)]Char,
+    #[regex(r#"'[^']|\\(["ntrf\\b/']|x[0-9A-Fa-f]+|[0-7][0-7]?[0-7]?)'"#)] Char,
     #[regex(r#""([^"]|\\(["ntrf\\b/']|x[0-9A-Fa-f]+|[0-7][0-7]?[0-7]?))*""#)] String,
     #[regex(r"[a-zA-Z_][a-zA-Z_0-9]*")] Identifier,
-    #[regex(r"\d+")]Number,
+    #[regex(r"\d+")] Number,
+    #[regex(r"[ \t\n\f]+")] Whitespace,
 
     #[regex(r"\\\\.*\n")]
     #[regex(r"\\\*.*\*\\")]
     Comment,
-
-    #[regex(r"[ \t\n\f]+")]
-    Whitespace,
 
     Eof,
 
@@ -81,6 +79,8 @@ pub enum SyntaxKind {
     Ternary,
     Pointer,
     Scope,
+    /// Is never Instantiated in parse tree
+    Value,
 
     #[error]
     Error,
@@ -147,7 +147,7 @@ impl Display for SyntaxKind {
                 SyntaxKind::Whitespace => "space",
                 SyntaxKind::Kind => "kind",
                 SyntaxKind::Pointer => "pointer",
-
+                SyntaxKind::Value => "value",
                 SyntaxKind::Scope => "SCOPE",
                 SyntaxKind::Eof => "EOF",
                 SyntaxKind::Root => "ROOT",

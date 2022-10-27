@@ -1,32 +1,31 @@
+mod peekable;
 pub mod syntax;
 
-use crate::{
-    error::{Error, ErrorKind},
-    Spanned,
-};
+use crate::error::{Error, ErrorKind};
+use peekable::Peekable;
 use syntax::{Parse, SyntaxKind};
 use SyntaxKind::*;
 
-use logos::Logos;
+use logos::{Logos, SpannedIter};
 use rowan::GreenNodeBuilder;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-enum ParseResult {
+enum ParseRecovery {
     Recovered(usize),
     SemiColon,
     Eof,
     Ok,
 }
 
-impl ParseResult {
+impl ParseRecovery {
     fn is_end(&self) -> bool {
-        matches!(self, ParseResult::Eof | ParseResult::SemiColon)
+        matches!(self, ParseRecovery::Eof | ParseRecovery::SemiColon)
     }
 }
 
 pub struct Parser<'a> {
     source: &'a str,
-    tokens: Vec<Spanned<SyntaxKind>>,
+    tokens: Peekable<SpannedIter<'a, SyntaxKind>>,
     builder: GreenNodeBuilder<'static>,
     errors: Vec<Error<'a>>,
 }
@@ -35,13 +34,7 @@ impl<'a> Parser<'a> {
     pub fn new(source: &'a str) -> Parser {
         Self {
             source,
-            tokens: SyntaxKind::lexer(source)
-                .spanned()
-                .map(Spanned::from)
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-                .collect(),
+            tokens: Peekable::new(SyntaxKind::lexer(source).spanned()),
             builder: GreenNodeBuilder::new(),
             errors: Vec::new(),
         }
@@ -52,7 +45,7 @@ impl<'a> Parser<'a> {
 
         while {
             self.skip_space();
-            !self.tokens.is_empty()
+            self.tokens.peek(1).is_some()
         } {
             self.statement();
         }
@@ -74,20 +67,14 @@ impl<'a> Parser<'a> {
                 let ident = self.bump_space();
 
                 if ident != Identifier {
-                    match self.unexpected_syntax(
-                        self.current_span_location(),
-                        Identifier,
-                        &[Identifier, Assign],
-                    ) {
-                        ParseResult::SemiColon | ParseResult::Eof => {
-                            self.builder.finish_node();
-                            self.bump_space();
-                            return;
-                        }
-                        ParseResult::Recovered(0) => {
-                            self.bump_space();
-                        }
-                        _ => (),
+                    let current = self.current_span_location();
+                    if self
+                        .unexpected_syntax(current, Identifier, &[Assign])
+                        .is_end()
+                    {
+                        self.builder.finish_node();
+                        self.bump_space();
+                        return;
                     }
                 } else {
                     self.bump_space();
@@ -102,14 +89,13 @@ impl<'a> Parser<'a> {
                 }
 
                 self.bump_space();
-                self.expression();
-
+                self.expression(&[]);
                 self.builder.finish_node();
             }
             a @ (OutKw | ReturnKw) => {
                 self.builder.start_node(a.into());
                 self.bump_space();
-                self.expression();
+                self.expression(&[]);
                 self.builder.finish_node();
             }
             FileKw => {
@@ -119,8 +105,8 @@ impl<'a> Parser<'a> {
                 if self.current_syntax() != String {
                     self.unexpected_syntax(start, String, &[]);
                 }
+                self.bump();
                 self.builder.finish_node();
-                self.bump_space();
             }
             OpenBrace => {
                 self.builder.start_node(Scope.into());
@@ -129,18 +115,19 @@ impl<'a> Parser<'a> {
                     match self.current_syntax() {
                         Eof => {
                             self.builder.start_node(Error.into());
+                            let current = self.current_span_location();
                             self.errors.push(Error::error(
                                 ErrorKind::UnexpectedSyntax {
                                     expected: CloseBrace,
                                 },
-                                self.current_span_location() + 1..0,
+                                current + 1..0,
                                 self.source,
                             ));
                             self.builder.finish_node();
                             break;
                         }
                         CloseBrace => {
-                            self.bump_space();
+                            self.bump();
                             break;
                         }
                         _ => self.statement(),
@@ -149,13 +136,17 @@ impl<'a> Parser<'a> {
                 self.builder.finish_node();
                 return;
             }
-            _ => self.expression(),
+            _ => {
+                self.expression(&[]);
+            }
         }
 
+        let end = self.current_span_location();
+        self.skip_space();
         if self.current_syntax() != SemiColon {
             self.errors.push(Error::error(
                 ErrorKind::MissingSemicolon,
-                self.current_span_location()..0,
+                end..end + 1,
                 self.source,
             ))
         }
@@ -163,92 +154,129 @@ impl<'a> Parser<'a> {
         self.skip_syntax(&[Whitespace, Comment, SemiColon]);
     }
 
-    fn expression(&mut self) {
+    fn expression(&mut self, recovery: &[SyntaxKind]) -> ParseRecovery {
+        let start = self.builder.checkpoint();
         match self.current_syntax() {
             LessThan => {
                 self.builder.start_node(Cast.into());
                 self.bump_space();
 
-                if self.kind(&[GreaterThan]).is_end() {
+                let mut r = Vec::from(recovery);
+                r.push(GreaterThan);
+                let s = self.kind(&r);
+                if s.is_end() {
                     self.builder.finish_node();
-                    self.bump_space();
-                    return;
+                    return s;
                 }
 
-                if self.current_syntax() != GreaterThan
-                    && self
-                        .unexpected_syntax(self.current_span_location(), Assign, &[GreaterThan])
-                        .is_end()
-                {
-                    self.builder.finish_node();
-                    self.bump_space();
-                    return;
+                self.skip_space();
+
+                let current = self.current_span_location();
+                if self.current_syntax() != GreaterThan {
+                    let mut r = Vec::from(recovery);
+                    r.push(GreaterThan);
+                    let s = self.unexpected_syntax(current, GreaterThan, &r);
+
+                    if s.is_end() {
+                        self.builder.finish_node();
+                        return s;
+                    }
                 }
 
                 self.bump_space();
-                self.expression();
+                self.expression(recovery);
 
                 self.builder.finish_node();
             }
             _ => {
-                self.value(&[]);
+                let s = self.value(recovery);
+                if s.is_end() {
+                    return s;
+                }
             }
         }
+
+        self.current_syntax();
+        if self.peek_space_skipped() == Question {
+            self.skip_space();
+            self.builder.start_node_at(start, Ternary.into());
+            self.bump_space();
+            let mut r = Vec::from(recovery);
+            r.push(Colon);
+            self.expression(&r);
+            self.skip_space();
+
+            let current = self.current_span_location();
+            if self.current_syntax() != Colon {
+                let s = self.unexpected_syntax(current, Colon, &r);
+                if s.is_end() {
+                    self.builder.finish_node();
+                    return s;
+                }
+            }
+            self.bump_space();
+            self.expression(recovery);
+            self.builder.finish_node();
+        }
+
+        ParseRecovery::Ok
     }
 
-    fn value(&mut self, recovery: &[SyntaxKind]) -> ParseResult {
+    fn value(&mut self, recovery: &[SyntaxKind]) -> ParseRecovery {
         match self.current_syntax() {
-            Number | Char | String | SemiColon | InKw | Identifier => {
-                self.bump_space();
-            }
+            Number | Char | String | SemiColon | InKw | Identifier => self.bump(),
             Error => {
                 let start = self.current_span_location();
                 self.bump();
+                let current = self.current_span_location();
                 self.errors.push(Error::error(
                     ErrorKind::UnknownSyntax,
-                    start..self.current_span_location(),
+                    start..current,
                     self.source,
                 ));
-                self.skip_space();
             }
             OpenParen => {
                 self.bump_space();
-                self.expression();
+                self.expression(recovery);
 
-                let mut s = ParseResult::Ok;
+                let mut s = ParseRecovery::Ok;
                 if self.current_syntax() != CloseParen {
-                    s = self.unexpected_syntax(self.current_span_location(), CloseParen, recovery);
+                    let current = self.current_span_location();
+                    s = self.unexpected_syntax(current, CloseParen, recovery);
                 }
 
-                self.bump_space();
+                self.bump();
                 return s;
             }
             OpenBrace => {
                 self.builder.start_node(Pointer.into());
                 self.bump_space();
-                self.expression();
+                self.expression(recovery);
 
-                let mut s = ParseResult::Ok;
+                let mut s = ParseRecovery::Ok;
                 if self.current_syntax() != CloseBrace {
-                    s = self.unexpected_syntax(self.current_span_location(), CloseParen, recovery);
+                    let current = self.current_span_location();
+                    s = self.unexpected_syntax(current, CloseParen, recovery);
                 }
-
+                self.bump();
                 self.builder.finish_node();
-                self.bump_space();
                 return s;
             }
-            x => todo!("{}", x),
+            _ => {
+                let current = self.current_span_location();
+                self.unexpected_syntax(current, Value, &[]);
+            }
         }
-        ParseResult::Ok
+        ParseRecovery::Ok
     }
 
-    fn kind(&mut self, recovery: &[SyntaxKind]) -> ParseResult {
+    fn kind(&mut self, recovery: &[SyntaxKind]) -> ParseRecovery {
         match self.current_syntax() {
             ByteKw | Identifier | SemiColon => {
                 self.builder.start_node(Kind.into());
-                self.bump_space();
+                self.bump();
                 self.builder.finish_node();
-                ParseResult::Ok
+                ParseRecovery::Ok
             }
             And | Mul => {
                 self.builder.start_node(Kind.into());
@@ -258,9 +286,8 @@ impl<'a> Parser<'a> {
                 s
             }
             _ => {
-                let s = self.unexpected_syntax(self.current_span_location(), Kind, &[]);
-                self.bump_space();
-                s
+                let current = self.current_span_location();
+                self.unexpected_syntax(current, Kind, recovery)
             }
         }
     }
@@ -271,12 +298,13 @@ impl<'a> Parser<'a> {
         start: usize,
         expected: SyntaxKind,
         skip_until: &[SyntaxKind],
-    ) -> ParseResult {
+    ) -> ParseRecovery {
         self.builder.start_node(Error.into());
         self.bump();
+        let current = self.current_span_location();
         self.errors.push(Error::error(
             ErrorKind::UnexpectedSyntax { expected },
-            start..self.current_span_location(),
+            start..current,
             self.source,
         ));
         let s = self.skip_till_syntax(skip_until);
@@ -289,18 +317,25 @@ impl<'a> Parser<'a> {
         self.skip_syntax(&[Whitespace, Comment])
     }
 
+    fn peek_space_skipped(&mut self) -> SyntaxKind {
+        self.tokens
+            .peek_till_cloned(|(kind, _)| ![Comment, Whitespace].contains(kind))
+            .map(|(kind, _)| kind)
+            .unwrap_or(Eof)
+    }
+
     /// Skips until the specified syntax is encountered.
     /// Returns true if the syntax was found else false if eof was found
-    fn skip_till_syntax(&mut self, syntaxs: &[SyntaxKind]) -> ParseResult {
+    fn skip_till_syntax(&mut self, syntaxs: &[SyntaxKind]) -> ParseRecovery {
         loop {
             match self.current_syntax() {
-                Eof => return ParseResult::Eof,
-                SemiColon => return ParseResult::SemiColon,
+                Eof => return ParseRecovery::Eof,
+                SemiColon => return ParseRecovery::SemiColon,
                 s => {
                     if let Some((i, _)) =
                         syntaxs.iter().enumerate().find(|(_, &syntax)| syntax == s)
                     {
-                        return ParseResult::Recovered(i);
+                        return ParseRecovery::Recovered(i);
                     }
                 }
             }
@@ -317,8 +352,8 @@ impl<'a> Parser<'a> {
 
     /// Consume current syntax and push to builder.
     fn bump(&mut self) {
-        if let Some(Spanned { span, value }) = self.tokens.pop() {
-            self.builder.token(value.into(), &self.source[span]);
+        if let Some((kind, span)) = self.tokens.next() {
+            self.builder.token(kind.into(), &self.source[span]);
         }
     }
 
@@ -329,17 +364,14 @@ impl<'a> Parser<'a> {
     }
 
     /// Peeks the current syntax
-    fn current_syntax(&self) -> SyntaxKind {
-        self.tokens
-            .last()
-            .map(|spanned| spanned.value)
-            .unwrap_or(Eof)
+    fn current_syntax(&mut self) -> SyntaxKind {
+        self.tokens.peek(1).map(|&(kind, _)| kind).unwrap_or(Eof)
     }
 
-    fn current_span_location(&self) -> usize {
+    fn current_span_location(&mut self) -> usize {
         self.tokens
-            .last()
-            .map(|spanned| spanned.span.start)
-            .unwrap_or(self.source.len() - 1)
+            .peek(1)
+            .map(|(_, span)| span.start)
+            .unwrap_or(self.source.len())
     }
 }
