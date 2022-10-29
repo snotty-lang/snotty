@@ -1,4 +1,5 @@
-pub mod compiler;
+// pub mod compiler;
+pub mod analyzer;
 pub mod error;
 pub mod ir;
 pub mod parser;

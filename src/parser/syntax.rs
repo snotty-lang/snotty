@@ -37,10 +37,10 @@ pub enum SyntaxKind {
     #[token("?")] Question,
     #[token("=>")] FatArrow,
     #[token("->")] Arrow,
+    #[token("=")] Assign,
 
     #[token("<")] LessThan,
     #[token(">")] GreaterThan,
-    #[token("=")] Assign,
     #[token("<=")] LessEqual,
     #[token(">=")] GreaterEqual,
     #[token("&")] And,
@@ -84,8 +84,7 @@ pub enum SyntaxKind {
     UnaryOp,
     Call,
     If,
-
-    /// Is never Instantiated in parse tree
+    Statement,
     Value,
 
     #[error]
@@ -153,6 +152,7 @@ impl Display for SyntaxKind {
                 SyntaxKind::Kind => "kind",
                 SyntaxKind::Pointer => "pointer",
                 SyntaxKind::Value => "value",
+                SyntaxKind::Statement => "statement",
                 SyntaxKind::Call => "CALL",
                 SyntaxKind::BinaryOp => "BINARY OPERATION",
                 SyntaxKind::UnaryOp => "UNARY OPERATION",
