@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
+use cstree::GreenNode;
 use logos::Logos;
-use rowan::GreenNode;
 
 use crate::error::Error;
 
@@ -63,6 +63,7 @@ pub enum SyntaxKind {
     #[regex(r#""([^"]|\\(["ntrf\\b/']|x[0-9A-Fa-f]+|[0-7][0-7]?[0-7]?))*""#)] String,
     #[regex(r"[a-zA-Z_][a-zA-Z_0-9]*")] Identifier,
     #[regex(r"\d+")] Number,
+
     #[regex(r"[ \t\n\f]+")] Whitespace,
 
     #[regex(r"\\\\.*\n")]
@@ -170,7 +171,7 @@ impl Display for SyntaxKind {
     }
 }
 
-impl From<SyntaxKind> for rowan::SyntaxKind {
+impl From<SyntaxKind> for cstree::SyntaxKind {
     fn from(kind: SyntaxKind) -> Self {
         Self(kind as u16)
     }
@@ -178,20 +179,20 @@ impl From<SyntaxKind> for rowan::SyntaxKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Lang {}
-impl rowan::Language for Lang {
+impl cstree::Language for Lang {
     type Kind = SyntaxKind;
-    fn kind_from_raw(raw: rowan::SyntaxKind) -> Self::Kind {
+    fn kind_from_raw(raw: cstree::SyntaxKind) -> Self::Kind {
         assert!(raw.0 <= SyntaxKind::Error as u16);
         unsafe { std::mem::transmute::<u16, SyntaxKind>(raw.0) }
     }
-    fn kind_to_raw(kind: Self::Kind) -> rowan::SyntaxKind {
+    fn kind_to_raw(kind: Self::Kind) -> cstree::SyntaxKind {
         kind.into()
     }
 }
 
-pub type SyntaxNode = rowan::SyntaxNode<Lang>;
-pub type SyntaxToken = rowan::SyntaxToken<Lang>;
-pub type SyntaxElement = rowan::NodeOrToken<SyntaxNode, SyntaxToken>;
+pub type SyntaxNode = cstree::SyntaxNode<Lang>;
+pub type SyntaxToken = cstree::SyntaxToken<Lang>;
+pub type SyntaxElement = cstree::NodeOrToken<SyntaxNode, SyntaxToken>;
 
 pub struct Parse<'a> {
     pub green_node: GreenNode,

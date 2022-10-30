@@ -9,8 +9,8 @@ use peekable::Peekable;
 use syntax::{Parse, SyntaxKind};
 use SyntaxKind::*;
 
+use cstree::GreenNodeBuilder;
 use logos::{Logos, SpannedIter};
-use rowan::GreenNodeBuilder;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 enum ParseRecovery {
@@ -30,7 +30,7 @@ enum ParseAction {
 pub struct Parser<'a> {
     source: &'a str,
     tokens: Peekable<SpannedIter<'a, SyntaxKind>>,
-    builder: GreenNodeBuilder<'static>,
+    builder: GreenNodeBuilder<'static, 'static>,
     errors: Vec<Error<'a>>,
     recovery: Vec<SyntaxKind>,
 }
@@ -53,10 +53,8 @@ impl<'a> Parser<'a> {
             self.skip_space();
             self.current_syntax() != Eof
         } {
-            assert!(matches!(
-                self.statement(),
-                ParseRecovery::Ok | ParseRecovery::Eof
-            ));
+            let s = self.statement();
+            assert!(matches!(s, ParseRecovery::Ok | ParseRecovery::Eof), "{s:?}");
         }
 
         assert_eq!(self.current_syntax(), Eof);
@@ -64,7 +62,7 @@ impl<'a> Parser<'a> {
         self.builder.finish_node();
 
         Parse {
-            green_node: self.builder.finish(),
+            green_node: self.builder.finish().0,
             errors: self.errors,
         }
     }
@@ -104,7 +102,6 @@ impl<'a> Parser<'a> {
                     return s;
                 }
                 self.recovery.pop();
-                self.bump();
                 self.builder.finish_node();
                 ParseRecovery::Ok
             }
@@ -384,7 +381,6 @@ impl<'a> Parser<'a> {
                 return s;
             }
             self.recovery.pop();
-            self.bump();
             self.builder.finish_node();
         }
         ParseRecovery::Ok
@@ -414,7 +410,6 @@ impl<'a> Parser<'a> {
                     return s;
                 }
                 self.recovery.pop();
-                self.bump();
                 ParseRecovery::Ok
             }
             OpenBrace => {
@@ -427,7 +422,6 @@ impl<'a> Parser<'a> {
                 if let ParseAction::Return(s) = self.expect(CloseBrace, 1, 1) {
                     return s;
                 }
-                self.bump();
                 self.recovery.pop();
                 self.builder.finish_node();
                 ParseRecovery::Ok
@@ -509,7 +503,10 @@ impl<'a> Parser<'a> {
                     self.recovery.drain(self.recovery.len() - n..);
                     ParseAction::Return(s)
                 }
-                ParseRecovery::Recovered(s) => ParseAction::Recovered(s),
+                ParseRecovery::Recovered(s) => {
+                    self.bump();
+                    ParseAction::Recovered(s)
+                }
                 ParseRecovery::Ok => unreachable!(),
             }
         } else {

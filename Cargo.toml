@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 logos = "0.12.1"
-rowan = "0.15.10"
+cstree = "0.11.1"

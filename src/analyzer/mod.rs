@@ -1,6 +1,6 @@
 pub mod tree;
 
-use rowan::NodeOrToken;
+use cstree::NodeOrToken;
 use std::collections::HashMap;
 
 use crate::error::Error;
@@ -12,6 +12,7 @@ use tree::Analysis;
 
 use self::tree::{AnalyzedTreeBuilder, Leaf};
 
+#[derive(Debug, Default)]
 pub struct Analyzer<'a> {
     errors: Vec<Error<'a>>,
     table: Vec<HashMap<&'a str, ()>>,
@@ -48,25 +49,26 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn deal_with_node(&mut self, node: SyntaxNode) {
+    fn deal_with_node(&mut self, node: &SyntaxNode) {
         match node.kind() {
             Kind => {
                 self.builder.start_node(node.clone());
-                self.analyze_inner(&node);
+                self.analyze_inner(node);
                 self.builder.finish_node();
             }
             _ => todo!(),
         }
     }
 
-    fn deal_with_token(&mut self, token: SyntaxToken) -> Option<Leaf> {
+    fn deal_with_token(&mut self, token: &SyntaxToken) -> Option<Leaf> {
         match token.kind() {
             Whitespace | Comment => None,
             Error => None,
             Mul | Div | Mod | Add | Sub | And | Or | Xor | Not | LessEqual | LessThan
             | GreaterEqual | GreaterThan | Equal | NotEqual | Shl | Shr | Inc | Dec => {
-                Some(Leaf::Operator(token))
+                Some(Leaf::Operator(token.clone()))
             }
+            InKw => Some(Leaf::Literal(token.clone())),
             _ => unreachable!(),
         }
     }
