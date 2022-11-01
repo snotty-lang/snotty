@@ -18,6 +18,7 @@ pub enum ErrorKind {
     UnexpectedSyntax { expected: SyntaxKind },
     UnknownSyntax,
     MissingSemicolon,
+    UnsupportedOperation { operation: SyntaxKind },
     Custom { message: String },
 }
 
@@ -180,6 +181,13 @@ impl Display for ErrorKind {
             ErrorKind::MissingSemicolon => write!(f, "I think you forgot that semicolon there"),
             ErrorKind::UnexpectedSyntax { expected } => {
                 write!(f, "Expected to see a {} there instead", expected)
+            }
+            ErrorKind::UnsupportedOperation { operation } => {
+                write!(
+                    f,
+                    "Operation {} is not supported between these types",
+                    operation
+                )
             }
         }
     }

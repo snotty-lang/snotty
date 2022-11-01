@@ -2,24 +2,24 @@ use std::collections::VecDeque;
 
 use crate::{
     error::Error,
-    parser::syntax::{SyntaxKind, SyntaxNode, SyntaxToken},
+    parser::syntax::{SyntaxKind, SyntaxNode},
     Span,
 };
 
-pub struct Analysis<'a> {
+pub struct Analysis<'a, L: Leaf> {
     pub errors: Vec<Error<'a>>,
-    pub analyzed: AnalyzedTree,
+    pub analyzed: AnalyzedTree<L>,
 }
 
 #[derive(Default, Debug)]
-pub struct AnalyzedTree {
-    leaves: Vec<Leaf>,
+pub struct AnalyzedTree<L: Leaf> {
+    leaves: Vec<L>,
     nodes: Vec<Node>,
 }
 
-#[derive(Default, Debug)]
-pub struct AnalyzedTreeBuilder {
-    leaves: Vec<Leaf>,
+#[derive(Debug)]
+pub struct AnalyzedTreeBuilder<L: Leaf> {
+    leaves: Vec<L>,
     nodes: Vec<Node>,
     current: Vec<usize>,
 }
@@ -40,13 +40,7 @@ pub struct Node {
 #[repr(transparent)]
 pub struct NodeId(usize);
 
-#[derive(Debug)]
-pub enum Leaf {
-    Operator(SyntaxToken),
-    Literal(SyntaxToken),
-    Identifier(SyntaxToken),
-}
-
+pub trait Leaf {}
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct LeafId(usize);
@@ -57,8 +51,18 @@ pub enum NodeOrLeaf<N, L> {
     Leaf(L),
 }
 
-impl AnalyzedTreeBuilder {
-    pub fn new() -> AnalyzedTreeBuilder {
+impl<L: Leaf> Default for AnalyzedTreeBuilder<L> {
+    fn default() -> Self {
+        Self {
+            leaves: Vec::new(),
+            nodes: Vec::new(),
+            current: Vec::new(),
+        }
+    }
+}
+
+impl<L: Leaf> AnalyzedTreeBuilder<L> {
+    pub fn new() -> AnalyzedTreeBuilder<L> {
         Self::default()
     }
 
@@ -87,7 +91,7 @@ impl AnalyzedTreeBuilder {
         });
     }
 
-    pub fn push(&mut self, leaf: Leaf) {
+    pub fn push(&mut self, leaf: L) {
         self.leaves.push(leaf);
     }
 
@@ -96,7 +100,7 @@ impl AnalyzedTreeBuilder {
         self.nodes[current].leaf_span.end = self.leaves.len();
     }
 
-    pub fn finish(self) -> AnalyzedTree {
+    pub fn finish(self) -> AnalyzedTree<L> {
         assert!(self.current.is_empty());
         assert!(!self.nodes.is_empty());
         AnalyzedTree {
@@ -135,7 +139,10 @@ impl Node {
         unsafe { std::mem::transmute(&self.children) }
     }
 
-    pub fn children_with_leaves<'a>(&self, tree: &'a AnalyzedTree) -> ChildLeafIter<'a> {
+    pub fn children_with_leaves<'a, L: Leaf>(
+        &self,
+        tree: &'a AnalyzedTree<L>,
+    ) -> ChildLeafIter<'a, L> {
         ChildLeafIter {
             tree,
             leaf: self.leaf_span.start,
@@ -144,18 +151,18 @@ impl Node {
         }
     }
 
-    pub fn leaves<'a>(&self, tree: &'a AnalyzedTree) -> &'a [Leaf] {
+    pub fn leaves<'a, L: Leaf>(&self, tree: &'a AnalyzedTree<L>) -> &'a [L] {
         &tree.leaves[self.leaf_span.clone()]
     }
 
-    pub fn iter_bfs<'a>(&self, tree: &'a AnalyzedTree) -> AnalyzedTreeIterBfs<'a> {
+    pub fn iter_bfs<'a, L: Leaf>(&self, tree: &'a AnalyzedTree<L>) -> AnalyzedTreeIterBfs<'a, L> {
         AnalyzedTreeIterBfs {
             tree,
             queue: VecDeque::from([NodeOrLeaf::Node(NodeId(self.id))]),
         }
     }
 
-    pub fn iter_dfs<'a>(&self, tree: &'a AnalyzedTree) -> AnalyzedTreeIterDfs<'a> {
+    pub fn iter_dfs<'a, L: Leaf>(&self, tree: &'a AnalyzedTree<L>) -> AnalyzedTreeIterDfs<'a, L> {
         AnalyzedTreeIterDfs {
             tree,
             stack: Vec::from([NodeOrLeaf::Node(NodeId(self.id))]),
@@ -163,19 +170,19 @@ impl Node {
     }
 }
 
-impl AnalyzedTree {
+impl<L: Leaf> AnalyzedTree<L> {
     pub fn node(&self, id: NodeId) -> Option<&Node> {
         self.nodes.get(id.0)
     }
 
-    pub fn iter_bfs(&self) -> AnalyzedTreeIterBfs<'_> {
+    pub fn iter_bfs(&self) -> AnalyzedTreeIterBfs<'_, L> {
         AnalyzedTreeIterBfs {
             tree: self,
             queue: VecDeque::from([NodeOrLeaf::Node(NodeId(0))]),
         }
     }
 
-    pub fn iter_dfs(&self) -> AnalyzedTreeIterDfs<'_> {
+    pub fn iter_dfs(&self) -> AnalyzedTreeIterDfs<'_, L> {
         AnalyzedTreeIterDfs {
             tree: self,
             stack: Vec::from([NodeOrLeaf::Node(NodeId(0))]),
@@ -183,13 +190,13 @@ impl AnalyzedTree {
     }
 }
 
-pub struct AnalyzedTreeIterBfs<'a> {
-    tree: &'a AnalyzedTree,
+pub struct AnalyzedTreeIterBfs<'a, L: Leaf> {
+    tree: &'a AnalyzedTree<L>,
     queue: VecDeque<NodeOrLeaf<NodeId, LeafId>>,
 }
 
-impl<'a> Iterator for AnalyzedTreeIterBfs<'a> {
-    type Item = NodeOrLeaf<&'a Node, &'a Leaf>;
+impl<'a, L: Leaf> Iterator for AnalyzedTreeIterBfs<'a, L> {
+    type Item = NodeOrLeaf<&'a Node, &'a L>;
     fn next(&mut self) -> Option<Self::Item> {
         let node = match self.queue.pop_front()? {
             NodeOrLeaf::Leaf(LeafId(l)) => return Some(NodeOrLeaf::Leaf(&self.tree.leaves[l])),
@@ -200,13 +207,13 @@ impl<'a> Iterator for AnalyzedTreeIterBfs<'a> {
     }
 }
 
-pub struct AnalyzedTreeIterDfs<'a> {
-    tree: &'a AnalyzedTree,
+pub struct AnalyzedTreeIterDfs<'a, L: Leaf> {
+    tree: &'a AnalyzedTree<L>,
     stack: Vec<NodeOrLeaf<NodeId, LeafId>>,
 }
 
-impl<'a> Iterator for AnalyzedTreeIterDfs<'a> {
-    type Item = NodeOrLeaf<&'a Node, &'a Leaf>;
+impl<'a, L: Leaf> Iterator for AnalyzedTreeIterDfs<'a, L> {
+    type Item = NodeOrLeaf<&'a Node, &'a L>;
     fn next(&mut self) -> Option<Self::Item> {
         let node = match self.stack.pop()? {
             NodeOrLeaf::Leaf(LeafId(l)) => return Some(NodeOrLeaf::Leaf(&self.tree.leaves[l])),
@@ -217,14 +224,14 @@ impl<'a> Iterator for AnalyzedTreeIterDfs<'a> {
     }
 }
 
-pub struct ChildLeafIter<'a> {
-    tree: &'a AnalyzedTree,
+pub struct ChildLeafIter<'a, L: Leaf> {
+    tree: &'a AnalyzedTree<L>,
     leaf: usize,
     child: usize,
     node: usize,
 }
 
-impl<'a> Iterator for ChildLeafIter<'a> {
+impl<'a, L: Leaf> Iterator for ChildLeafIter<'a, L> {
     type Item = NodeOrLeaf<NodeId, LeafId>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.leaf >= self.tree.nodes[self.node].leaf_span.end {
