@@ -19,6 +19,7 @@ pub enum ErrorKind {
     UnknownSyntax,
     MissingSemicolon,
     UnsupportedOperation { operation: SyntaxKind },
+    ByteOverflow,
     Custom { message: String },
 }
 
@@ -188,6 +189,9 @@ impl Display for ErrorKind {
                     "Operation {} is not supported between these types",
                     operation
                 )
+            }
+            ErrorKind::ByteOverflow => {
+                write!(f, "This shit is too big to fit in a byte")
             }
         }
     }

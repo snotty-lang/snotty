@@ -1,18 +1,14 @@
-pub mod tree;
 pub mod value;
 
-use cstree::NodeOrToken;
 use std::collections::HashMap;
 
 use crate::error::{Error, ErrorKind};
 
-use crate::parser::syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
+use crate::parser::syntax::{Syntax, SyntaxKind};
 use SyntaxKind::*;
 
-use tree::{Analysis, AnalyzedTreeBuilder};
-use value::{Leaf, Value};
-
-use self::value::ValueKind;
+use crate::tree::{Result, TreeBuilder, TreeElement, Tree};
+use value::{Leaf, Value, ValueKind, ValueType};
 
 #[derive(Debug, Default)]
 pub struct Analyzer<'a> {
@@ -20,7 +16,7 @@ pub struct Analyzer<'a> {
     errors: Vec<Error<'a>>,
     lookup: Vec<HashMap<&'a str, usize>>,
     memory: Vec<Value>,
-    builder: AnalyzedTreeBuilder<Leaf>,
+    builder: TreeBuilder<Leaf>,
 }
 
 impl<'a> Analyzer<'a> {
@@ -30,59 +26,72 @@ impl<'a> Analyzer<'a> {
             errors: Vec::new(),
             lookup: Vec::new(),
             memory: Vec::new(),
-            builder: AnalyzedTreeBuilder::new(),
+            builder: TreeBuilder::new(),
         }
     }
 
-    pub fn analyze(mut self, syntax_node: &SyntaxNode) -> Analysis<'a, Leaf> {
+    pub fn analyze(mut self, syntax_node: &Tree) -> Result<'a, Leaf> {
         self.analyze_inner(syntax_node);
-        Analysis {
+        Result {
             errors: self.errors,
-            analyzed: self.builder.finish(),
+            output: self.builder.finish(),
         }
     }
 
-    fn analyze_inner(&mut self, node: &SyntaxNode) {
+    fn analyze_inner(&mut self, node: &Syntax) {
         let mut iter = node.children_with_tokens();
         while self.deal_with_node_or_token(&mut iter).is_some() {}
     }
 
-    fn deal_with_node_or_token<'b>(
+    fn deal_with_node_or_token(
         &mut self,
-        iter: &mut impl Iterator<Item = NodeOrToken<&'b SyntaxNode, &'b SyntaxToken>>,
-    ) -> Option<Option<usize>> {
+        iter: &mut impl Iterator<Item = TreeElement>,
+    ) -> Option<TreeElement<usize, usize>> {
         loop {
-            return match iter.next() {
-                None => None,
-                Some(s) => Some(match s {
-                    NodeOrToken::Node(n) if matches!(n.kind(), Whitespace | Comment) => continue,
-                    NodeOrToken::Token(t) if matches!(t.kind(), Whitespace | Comment) => continue,
-                    NodeOrToken::Node(n) => self.deal_with_node(n),
-                    NodeOrToken::Token(t) => {
-                        if let Some(leaf) = self.deal_with_token(t) {
-                            self.builder.push(leaf);
-                        }
-                        None
+            return Some(match iter.next()? {
+                TreeElement::Node(n) if matches!(n.kind, Whitespace | Comment) => continue,
+                TreeElement::Leaf(t) if matches!(t.kind, Whitespace | Comment) => continue,
+                TreeElement::Node(n) => TreeElement::Node(self.deal_with_node(n)),
+                TreeElement::Leaf(t) => {
+                    let leaf = self.deal_with_token(t);
+                    if let Leaf::Value(v) = &leaf {
+                        self.memory.push(v.clone());
                     }
-                }),
-            };
+                    self.builder.push(leaf);
+                    TreeElement::Leaf(self.builder.leaf_count() - 1)
+                }
+            });
         }
     }
 
-    fn deal_with_node(&mut self, node: &SyntaxNode) -> Option<usize> {
+    fn deal_with_node(&mut self, node: Syntax) -> usize {
         match node.kind() {
+            Statement | Value => {
+                match self.deal_with_node_or_token(&mut node.children_with_tokens()) {
+                    Some(TreeElement::Leaf(i) | TreeElement::Node(i)) => i,
+                    _ => 0,
+                }
+            }
             BinaryOp => {
                 self.builder.start_node(node.clone());
                 let mut iter = node.children_with_tokens();
-                let a = self.deal_with_node_or_token(&mut iter).unwrap().unwrap();
-                let op = match self
-                    .deal_with_token(iter.next().unwrap().as_token().unwrap())
+                let a = self
+                    .deal_with_node_or_token(&mut iter)
                     .unwrap()
-                {
-                    Leaf::Operator(op) => op,
+                    .as_node()
+                    .unwrap();
+                let op = match self.deal_with_node_or_token(&mut iter) {
+                    Some(TreeElement::Leaf(i)) => match self.builder.leaf(i) {
+                        Leaf::Operator(op) => op.clone(),
+                        _ => unreachable!(),
+                    },
                     _ => unreachable!(),
                 };
-                let b = self.deal_with_node_or_token(&mut iter).unwrap().unwrap();
+                let b = self
+                    .deal_with_node_or_token(&mut iter)
+                    .unwrap()
+                    .as_node()
+                    .unwrap();
                 if !self
                     .get_value(a)
                     .type_
@@ -97,22 +106,44 @@ impl<'a> Analyzer<'a> {
                     ))
                 }
                 self.builder.finish_node();
-                Some(0)
+                0
             }
-            _ => todo!(),
+            s => todo!("{s:?}"),
         }
     }
 
-    fn deal_with_token(&mut self, token: &SyntaxToken) -> Option<Leaf> {
+    fn deal_with_token(&mut self, token: Syntax) -> Leaf {
         match token.kind() {
-            Whitespace | Comment => None,
-            Error => None,
             Mul | Div | Mod | Add | Sub | And | Or | Xor | Not | LessEqual | LessThan
             | GreaterEqual | GreaterThan | Equal | NotEqual | Shl | Shr | Inc | Dec => {
-                Some(Leaf::Operator(token.clone()))
+                Leaf::Operator(token)
             }
-            InKw => Some(Leaf::Input(token.clone())),
-            _ => unreachable!(),
+            InKw => Leaf::Input(token),
+            Number => {
+                match self.source[token.text_range()]
+                    .parse()
+                    .map(ValueKind::Number)
+                {
+                    Ok(value) => Leaf::Value(Value {
+                        value,
+                        element: TreeElement::Token(token),
+                        type_: ValueType::Number,
+                    }),
+                    Err(_) => {
+                        self.errors.push(Error::error(
+                            ErrorKind::ByteOverflow,
+                            token.text_range().into(),
+                            self.source,
+                        ));
+                        Leaf::Value(Value {
+                            value: ValueKind::None,
+                            element: TreeElement::Token(token),
+                            type_: ValueType::Number,
+                        })
+                    }
+                }
+            }
+            s => todo!("{s:?}"),
         }
     }
 

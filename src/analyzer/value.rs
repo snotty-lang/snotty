@@ -1,13 +1,13 @@
-use crate::parser::syntax::{SyntaxElement, SyntaxToken};
+use crate::{parser::syntax::Syntax, tree::TreeElement};
 
 #[derive(Debug, Clone)]
 pub enum Leaf {
-    Operator(SyntaxToken),
-    Input(SyntaxToken),
+    Operator(Syntax),
+    Input(Syntax),
     Value(Value),
 }
 
-impl super::tree::Leaf for Leaf {}
+impl crate::tree::Leaf for Leaf {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u16)]
@@ -32,8 +32,8 @@ pub enum ValueKind {
 }
 
 impl ValueType {
-    pub fn can_operate_binary(&self, op: &SyntaxToken, other: &ValueType) -> bool {
-        match (self, op.kind(), other) {
+    pub fn can_operate_binary(&self, op: &Syntax, other: &ValueType) -> bool {
+        match (self, op.kind, other) {
             (ValueType::Number, _, ValueType::Number) => true,
             _ => false,
         }
@@ -43,6 +43,6 @@ impl ValueType {
 #[derive(Debug, Clone)]
 pub struct Value {
     pub value: ValueKind,
-    pub element: SyntaxElement,
+    pub element: TreeElement,
     pub type_: ValueType,
 }

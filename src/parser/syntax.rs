@@ -1,9 +1,6 @@
 use std::fmt::Display;
 
-use cstree::GreenNode;
 use logos::Logos;
-
-use crate::error::Error;
 
 #[rustfmt::skip]
 #[derive(Logos, Debug, PartialEq, Clone, Eq, Hash, Copy, PartialOrd, Ord)]
@@ -64,10 +61,10 @@ pub enum SyntaxKind {
     #[regex(r"[a-zA-Z_][a-zA-Z_0-9]*")] Identifier,
     #[regex(r"\d+")] Number,
 
-    #[regex(r"[ \t\n\f]+")] Whitespace,
+    #[regex(r"[ \t\n\f]+", logos::skip)] Whitespace,
 
-    #[regex(r"\\\\.*\n")]
-    #[regex(r"\\\*.*\*\\")]
+    #[regex(r"\\\\.*\n", logos::skip)]
+    #[regex(r"\\\*.*\*\\", logos::skip)]
     Comment,
 
     Eof,
@@ -171,36 +168,10 @@ impl Display for SyntaxKind {
     }
 }
 
-impl From<SyntaxKind> for cstree::SyntaxKind {
-    fn from(kind: SyntaxKind) -> Self {
-        Self(kind as u16)
-    }
+#[derive(Debug, Clone)]
+pub struct Syntax {
+    pub span: crate::Span,
+    pub kind: SyntaxKind,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Lang {}
-impl cstree::Language for Lang {
-    type Kind = SyntaxKind;
-    fn kind_from_raw(raw: cstree::SyntaxKind) -> Self::Kind {
-        assert!(raw.0 <= SyntaxKind::Error as u16);
-        unsafe { std::mem::transmute::<u16, SyntaxKind>(raw.0) }
-    }
-    fn kind_to_raw(kind: Self::Kind) -> cstree::SyntaxKind {
-        kind.into()
-    }
-}
-
-pub type SyntaxNode = cstree::SyntaxNode<Lang>;
-pub type SyntaxToken = cstree::SyntaxToken<Lang>;
-pub type SyntaxElement = cstree::NodeOrToken<SyntaxNode, SyntaxToken>;
-
-pub struct Parse<'a> {
-    pub green_node: GreenNode,
-    pub errors: Vec<Error<'a>>,
-}
-
-impl<'a> Parse<'a> {
-    pub fn syntax(&self) -> SyntaxNode {
-        SyntaxNode::new_root(self.green_node.clone())
-    }
-}
+impl crate::tree::Leaf for Syntax {}
