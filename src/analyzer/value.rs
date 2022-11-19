@@ -1,13 +1,23 @@
+use std::fmt::Display;
+
 use crate::{parser::syntax::Syntax, tree::TreeElement};
 
 #[derive(Debug, Clone)]
 pub enum Leaf {
     Operator(Syntax),
-    Input(Syntax),
     Value(Value),
+    Other(Syntax),
 }
 
 impl crate::tree::Leaf for Leaf {}
+impl Display for Leaf {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Leaf::Operator(a) | Leaf::Other(a) => write!(f, "{}", a),
+            Leaf::Value(v) => write!(f, "{}", v),
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u16)]
@@ -43,6 +53,12 @@ impl ValueType {
 #[derive(Debug, Clone)]
 pub struct Value {
     pub value: ValueKind,
-    pub element: TreeElement,
+    pub element: TreeElement<Syntax, Syntax>,
     pub type_: ValueType,
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.element)
+    }
 }

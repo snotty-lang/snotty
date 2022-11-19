@@ -53,10 +53,7 @@ impl<'a> Parser<'a> {
     pub fn parse(mut self) -> Result<'a, Syntax> {
         self.builder.start_node(Root, 0);
 
-        while {
-            self.skip_space();
-            self.current_syntax() != Eof
-        } {
+        while self.current_syntax() != Eof {
             let s = self.statement();
             assert!(matches!(s, ParseRecovery::Ok | ParseRecovery::Eof), "{s:?}");
         }
@@ -77,32 +74,32 @@ impl<'a> Parser<'a> {
             LetKw | ConstKw => {
                 self.builder.start_node(Let, loc!(self));
                 self.recovery.push(Assign);
-                self.bump_space();
-                if let ParseAction::Return(s) = self.expect(Identifier, 1, 2) {
+                self.pass();
+                if let ParseAction::Return(s) = self.expect(Identifier, 1, 2, true) {
                     return s;
                 }
-                self.skip_space();
-                if let ParseAction::Return(s) = self.expect(Assign, 1, 2) {
+
+                if let ParseAction::Return(s) = self.expect(Assign, 1, 2, false) {
                     return s;
                 }
                 self.recovery.pop();
-                self.skip_space();
+
                 self.expression();
                 self.builder.finish_node(loc!(self));
                 ParseRecovery::Ok
             }
             a @ (OutKw | ReturnKw) => {
                 self.builder.start_node(a, loc!(self));
-                self.bump_space();
+                self.pass();
                 self.expression();
                 self.builder.finish_node(loc!(self));
                 ParseRecovery::Ok
             }
             FileKw => {
                 self.builder.start_node(FileKw, loc!(self));
-                self.bump_space();
+                self.pass();
                 self.recovery.push(String);
-                if let ParseAction::Return(s) = self.expect(String, 1, 2) {
+                if let ParseAction::Return(s) = self.expect(String, 1, 2, true) {
                     return s;
                 }
                 self.recovery.pop();
@@ -112,7 +109,7 @@ impl<'a> Parser<'a> {
             OpenBrace => {
                 self.builder.start_node(Scope, loc!(self));
                 self.recovery.push(CloseBrace);
-                self.bump_space();
+                self.pass();
                 loop {
                     match self.current_syntax() {
                         Eof => {
@@ -129,7 +126,7 @@ impl<'a> Parser<'a> {
                             break;
                         }
                         CloseBrace => {
-                            self.bump();
+                            self.pass();
                             break;
                         }
                         _ => {
@@ -147,11 +144,11 @@ impl<'a> Parser<'a> {
             LoopKw => {
                 self.builder.start_node(Loop, loc!(self));
                 self.recovery.extend([CloseParen, OpenParen]);
-                self.bump_space();
-                if let ParseAction::Return(s) = self.expect(OpenParen, 2, 2) {
+                self.pass();
+                if let ParseAction::Return(s) = self.expect(OpenParen, 2, 2, false) {
                     return s;
                 }
-                self.skip_space();
+
                 self.recovery.pop();
 
                 if self.current_syntax() != SemiColon {
@@ -160,13 +157,12 @@ impl<'a> Parser<'a> {
                         self.recovery.pop();
                         self.builder.finish_node(loc!(self));
                         self.builder.finish_node(loc!(self));
-                        self.bump_space();
+                        self.bump();
                         return s;
                     }
                 } else {
                     self.bump();
                 }
-                self.skip_space();
 
                 if self.current_syntax() != SemiColon {
                     let s = self.expression();
@@ -174,13 +170,12 @@ impl<'a> Parser<'a> {
                         self.recovery.pop();
                         self.builder.finish_node(loc!(self));
                         self.builder.finish_node(loc!(self));
-                        self.bump_space();
+                        self.bump();
                         return s;
                     }
                 } else {
                     self.bump();
                 }
-                self.skip_space();
 
                 if self.current_syntax() != SemiColon {
                     let s = self.statement();
@@ -188,18 +183,17 @@ impl<'a> Parser<'a> {
                         self.recovery.pop();
                         self.builder.finish_node(loc!(self));
                         self.builder.finish_node(loc!(self));
-                        self.bump_space();
+                        self.bump();
                         return s;
                     }
                 } else {
                     self.bump();
                 }
-                self.skip_space();
 
-                if let ParseAction::Return(s) = self.expect(CloseParen, 1, 2) {
+                if let ParseAction::Return(s) = self.expect(CloseParen, 1, 2, false) {
                     return s;
                 }
-                self.skip_space();
+
                 self.recovery.pop();
 
                 let s = self.statement();
@@ -208,23 +202,22 @@ impl<'a> Parser<'a> {
             }
             IfKw => {
                 self.builder.start_node(If, loc!(self));
-                self.bump_space();
+                self.pass();
                 self.recovery.push(ElseKw);
                 match self.expect_func(Self::expression, 1, 2) {
                     ParseAction::Return(s) => return s,
                     ParseAction::Found => {
-                        self.skip_space();
                         if let ParseAction::Return(s) = self.expect_func(Self::statement, 1, 2) {
                             return s;
                         }
                     }
                     ParseAction::Recovered(_) => (),
                 }
-                self.skip_space();
+
                 self.recovery.pop();
                 let mut s = ParseRecovery::Ok;
                 if self.current_syntax() == ElseKw {
-                    self.bump_space();
+                    self.pass();
                     s = self.statement();
                 }
                 self.builder.finish_node(loc!(self));
@@ -239,7 +232,7 @@ impl<'a> Parser<'a> {
             }
         };
         self.builder.finish_node(loc!(self));
-        self.skip_syntax(&[Whitespace, Comment, SemiColon]);
+        self.skip_syntax(&[SemiColon]);
         s
     }
 
@@ -252,17 +245,15 @@ impl<'a> Parser<'a> {
         }
 
         if self.current_syntax() == Question {
-            self.skip_space();
             self.builder.start_node_at(start, Ternary);
             self.recovery.push(Colon);
-            self.bump_space();
+            self.pass();
             self.expression();
-            self.skip_space();
-            if let ParseAction::Return(s) = self.expect(Colon, 1, 1) {
+
+            if let ParseAction::Return(s) = self.expect(Colon, 1, 1, false) {
                 return s;
             }
             self.recovery.pop();
-            self.skip_space();
             self.expression();
             self.builder.finish_node(loc!(self));
         }
@@ -274,7 +265,7 @@ impl<'a> Parser<'a> {
         match self.current_syntax() {
             Not => {
                 self.builder.start_node(UnaryOp, loc!(self));
-                self.bump_space();
+                self.pass();
                 let s = self.expression();
                 self.builder.finish_node(loc!(self));
                 s
@@ -309,7 +300,7 @@ impl<'a> Parser<'a> {
         match self.current_syntax() {
             Sub | Add | Inc | Dec => {
                 self.builder.start_node(UnaryOp, loc!(self));
-                self.bump_space();
+                self.bump();
                 let s = self.factor();
                 self.builder.finish_node(loc!(self));
                 s
@@ -322,7 +313,6 @@ impl<'a> Parser<'a> {
                 }
                 if matches!(self.current_syntax(), Inc | Dec) {
                     self.builder.start_node_at(start, UnaryOp);
-                    self.skip_space();
                     self.bump();
                     self.builder.finish_node(loc!(self));
                 }
@@ -338,16 +328,14 @@ impl<'a> Parser<'a> {
             LessThan => {
                 self.builder.start_node(Cast, loc!(self));
                 self.recovery.push(GreaterThan);
-                self.bump_space();
+                self.pass();
                 if let ParseAction::Return(s) = self.expect_func(Self::kind, 1, 1) {
                     return s;
                 }
-                self.skip_space();
-                if let ParseAction::Return(s) = self.expect(GreaterThan, 1, 1) {
+                if let ParseAction::Return(s) = self.expect(GreaterThan, 1, 1, false) {
                     return s;
                 }
                 self.recovery.pop();
-                self.skip_space();
                 let s = self.call();
                 self.builder.finish_node(loc!(self));
                 s
@@ -365,8 +353,7 @@ impl<'a> Parser<'a> {
         self.recovery.pop();
         if self.current_syntax() == OpenParen {
             self.builder.start_node_at(start, Call);
-            self.skip_space();
-            self.bump_space();
+            self.pass();
             self.recovery.extend([CloseParen, Comma]);
             while self.current_syntax() != CloseParen {
                 match self.expect_func(Self::expression, 2, 1) {
@@ -374,14 +361,13 @@ impl<'a> Parser<'a> {
                     ParseAction::Recovered(_) => break,
                     ParseAction::Return(s) => return s,
                 }
-                self.skip_space();
                 if self.current_syntax() != Comma {
                     break;
                 }
-                self.bump_space();
+                self.pass();
             }
             self.recovery.pop();
-            if let ParseAction::Return(s) = self.expect(CloseParen, 1, 1) {
+            if let ParseAction::Return(s) = self.expect(CloseParen, 1, 1, false) {
                 return s;
             }
             self.recovery.pop();
@@ -405,12 +391,12 @@ impl<'a> Parser<'a> {
                 ParseRecovery::Ok
             }
             OpenParen => {
-                self.bump_space();
+                self.pass();
                 self.recovery.push(CloseParen);
                 if let ParseAction::Return(s) = self.expect_func(Self::expression, 1, 0) {
                     return s;
                 }
-                if let ParseAction::Return(s) = self.expect(CloseParen, 1, 0) {
+                if let ParseAction::Return(s) = self.expect(CloseParen, 1, 0, false) {
                     return s;
                 }
                 self.recovery.pop();
@@ -419,11 +405,11 @@ impl<'a> Parser<'a> {
             OpenBrace => {
                 self.builder.start_node(Pointer, loc!(self));
                 self.recovery.push(CloseBrace);
-                self.bump_space();
+                self.pass();
                 if let ParseAction::Return(s) = self.expect_func(Self::expression, 1, 1) {
                     return s;
                 }
-                if let ParseAction::Return(s) = self.expect(CloseBrace, 1, 1) {
+                if let ParseAction::Return(s) = self.expect(CloseBrace, 1, 1, false) {
                     return s;
                 }
                 self.recovery.pop();
@@ -432,7 +418,7 @@ impl<'a> Parser<'a> {
             }
             And | Mul => {
                 self.builder.start_node(UnaryOp, loc!(self));
-                self.bump_space();
+                self.bump();
                 let s = self.value();
                 self.builder.finish_node(loc!(self));
                 s
@@ -453,7 +439,7 @@ impl<'a> Parser<'a> {
             }
             And | Mul => {
                 self.builder.start_node(Kind, loc!(self));
-                self.bump_space();
+                self.bump();
                 let s = self.kind();
                 self.builder.finish_node(loc!(self));
                 s
@@ -475,8 +461,7 @@ impl<'a> Parser<'a> {
         }
         while ops.contains(&self.current_syntax()) {
             self.builder.start_node_at(start, BinaryOp);
-            self.skip_space();
-            self.bump_space();
+            self.bump();
             if let ParseAction::Return(s) = self.expect_func(func, ops.len(), 1) {
                 return s;
             }
@@ -487,9 +472,9 @@ impl<'a> Parser<'a> {
     }
 
     /// Checks for a token.
-    /// If the token was found, bumps to the next one, else finishes node and cleans recovery
+    /// If the token was found, bumps or passes to the next one, else finishes node and cleans recovery
     /// Returns the Action to be performed
-    fn expect(&mut self, expect: SyntaxKind, n: usize, node: usize) -> ParseAction {
+    fn expect(&mut self, expect: SyntaxKind, n: usize, node: usize, bump: bool) -> ParseAction {
         if self.current_syntax() != expect {
             let s = self.unexpected_syntax(expect);
             match s {
@@ -508,13 +493,21 @@ impl<'a> Parser<'a> {
                     ParseAction::Return(s)
                 }
                 ParseRecovery::Recovered(s) => {
-                    self.bump();
+                    if bump {
+                        self.bump()
+                    } else {
+                        self.pass()
+                    }
                     ParseAction::Recovered(s)
                 }
                 ParseRecovery::Ok => unreachable!(),
             }
         } else {
-            self.bump();
+            if bump {
+                self.bump()
+            } else {
+                self.pass()
+            }
             ParseAction::Found
         }
     }
@@ -563,11 +556,6 @@ impl<'a> Parser<'a> {
         s
     }
 
-    /// Skip Whitespace and Comments
-    fn skip_space(&mut self) {
-        self.skip_syntax(&[Whitespace, Comment])
-    }
-
     /// Bumps till a recoverable syntax is found
     fn recover(&mut self) -> ParseRecovery {
         loop {
@@ -597,18 +585,16 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Consume current syntax and push to builder.
+    /// Consumes current syntax and push to builder.
     fn bump(&mut self) {
         if let Some((kind, span)) = self.tokens.next() {
             self.builder.push(Syntax { kind, span });
         }
     }
 
-    /// Bump and then skip space. Returns the current syntax
-    fn bump_space(&mut self) -> SyntaxKind {
-        self.bump();
-        self.skip_space();
-        self.current_syntax()
+    /// Consumes the current syntax
+    fn pass(&mut self) {
+        self.tokens.next();
     }
 
     /// Peeks the current syntax

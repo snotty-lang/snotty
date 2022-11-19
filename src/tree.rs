@@ -16,8 +16,12 @@ pub struct Tree<L: Leaf> {
 }
 
 impl<L: Leaf> Tree<L> {
-    pub fn node(&self, id: NodeId) -> Option<&Node> {
-        self.nodes.get(id.0)
+    pub fn root(&self) -> NodeId {
+        NodeId(0)
+    }
+
+    pub fn node(&self, id: NodeId) -> &Node {
+        &self.nodes[id.0]
     }
 
     pub fn iter_bfs(&self) -> TreeIterBfs<'_, L> {
