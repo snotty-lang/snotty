@@ -20,7 +20,7 @@ pub fn compile(file: String, contents: &str) -> Result<String, Vec<Error>> {
         eprintln!("{}", error);
     }
     let parse = parsed.output;
-    println!("PARSE:\n{}", parse);
+    println!("PARSE:\n{:?}", parse);
 
     let analyzer = Analyzer::new(contents);
     let mut analyzed = analyzer.analyze(&parse);
@@ -29,6 +29,6 @@ pub fn compile(file: String, contents: &str) -> Result<String, Vec<Error>> {
         eprintln!("{}", error);
     }
     let analysis = analyzed.output;
-    println!("TREE:\n{}", analysis);
+    println!("TREE:\n{:?}", analysis);
     todo!()
 }

@@ -1,20 +1,19 @@
 use std::fmt::Display;
 
-use crate::{parser::syntax::Syntax, tree::TreeElement};
+use crate::{parser::syntax::SyntaxKind, tree::Leaf};
 
 #[derive(Debug, Clone)]
-pub enum Leaf {
-    Operator(Syntax),
+pub enum LeafType {
+    Operator,
     Value(Value),
-    Other(Syntax),
+    Other,
 }
 
-impl crate::tree::Leaf for Leaf {}
-impl Display for Leaf {
+impl Display for LeafType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Leaf::Operator(a) | Leaf::Other(a) => write!(f, "{}", a),
-            Leaf::Value(v) => write!(f, "{}", v),
+            LeafType::Operator | LeafType::Other => Ok(()),
+            LeafType::Value(v) => write!(f, "{}", v),
         }
     }
 }
@@ -42,8 +41,8 @@ pub enum ValueKind {
 }
 
 impl ValueType {
-    pub fn can_operate_binary(&self, op: &Syntax, other: &ValueType) -> bool {
-        match (self, op.kind, other) {
+    pub fn can_operate_binary(&self, op: &SyntaxKind, other: &ValueType) -> bool {
+        match (self, op, other) {
             (ValueType::Number, _, ValueType::Number) => true,
             _ => false,
         }
@@ -53,12 +52,12 @@ impl ValueType {
 #[derive(Debug, Clone)]
 pub struct Value {
     pub value: ValueKind,
-    pub element: TreeElement<Syntax, Syntax>,
+    pub syntax: Leaf<SyntaxKind>,
     pub type_: ValueType,
 }
 
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.element)
+        write!(f, "{:?}", self.value)
     }
 }

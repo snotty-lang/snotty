@@ -2,6 +2,8 @@ use std::fmt::Display;
 
 use logos::Logos;
 
+use crate::tree::{Result, Tree, TreeBuilder};
+
 #[rustfmt::skip]
 #[derive(Logos, Debug, PartialEq, Clone, Eq, Hash, Copy, PartialOrd, Ord)]
 #[repr(u16)]
@@ -168,16 +170,6 @@ impl Display for SyntaxKind {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Syntax {
-    pub span: crate::Span,
-    pub kind: SyntaxKind,
-}
-
-impl crate::tree::Leaf for Syntax {}
-
-impl Display for Syntax {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}@{}..{}", self.kind, self.span.start, self.span.end)
-    }
-}
+pub type ParseTree = Tree<(), SyntaxKind>;
+pub type ParseTreeBuilder = TreeBuilder<(), SyntaxKind>;
+pub type ParseResult<'a> = Result<'a, (), SyntaxKind>;

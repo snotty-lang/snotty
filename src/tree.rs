@@ -1,37 +1,41 @@
-use std::collections::VecDeque;
 use std::fmt::Display;
+use std::{collections::VecDeque, fmt::Debug};
 
 use crate::{error::Error, parser::syntax::SyntaxKind, Span};
 
 #[derive(Default, Debug)]
-pub struct Result<'a, L: Leaf> {
+pub struct Result<'a, N, L> {
     pub errors: Vec<Error<'a>>,
-    pub output: Tree<L>,
+    pub output: Tree<N, L>,
 }
 
-#[derive(Default, Debug)]
-pub struct Tree<L: Leaf> {
-    leaves: Vec<L>,
-    nodes: Vec<Node>,
+#[derive(Default)]
+pub struct Tree<N, L> {
+    leaves: Vec<Leaf<L>>,
+    nodes: Vec<Node<N>>,
 }
 
-impl<L: Leaf> Tree<L> {
+impl<N, L> Tree<N, L> {
     pub fn root(&self) -> NodeId {
         NodeId(0)
     }
 
-    pub fn node(&self, id: NodeId) -> &Node {
+    pub fn node(&self, id: NodeId) -> &Node<N> {
         &self.nodes[id.0]
     }
 
-    pub fn iter_bfs(&self) -> TreeIterBfs<'_, L> {
+    pub fn leaf(&self, id: LeafId) -> &Leaf<L> {
+        &self.leaves[id.0]
+    }
+
+    pub fn iter_bfs(&self) -> TreeIterBfs<'_, N, L> {
         TreeIterBfs {
             tree: self,
             queue: VecDeque::from([TreeElement::Node(NodeId(0))]),
         }
     }
 
-    pub fn iter_dfs(&self) -> TreeIterDfs<'_, L> {
+    pub fn iter_dfs(&self) -> TreeIterDfs<'_, N, L> {
         TreeIterDfs {
             tree: self,
             stack: Vec::from([TreeElement::Node(NodeId(0))]),
@@ -39,10 +43,10 @@ impl<L: Leaf> Tree<L> {
     }
 }
 
-impl<L: Leaf + Display> Display for Tree<L> {
+impl<N: Display, L: Display> Display for Tree<N, L> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn write_children<L: Leaf + Display>(
-            tree: &Tree<L>,
+        fn write_children<N: Display, L: Display>(
+            tree: &Tree<N, L>,
             node: usize,
             indent: usize,
             f: &mut std::fmt::Formatter<'_>,
@@ -53,12 +57,7 @@ impl<L: Leaf + Display> Display for Tree<L> {
                         writeln!(f, "{}{}", " ".repeat(indent * 2), tree.leaves[l.0])?
                     }
                     TreeElement::Node(n) => {
-                        writeln!(
-                            f,
-                            "{}{}:",
-                            " ".repeat(indent * 2),
-                            tree.nodes[n.0].kind.to_string().to_uppercase()
-                        )?;
+                        writeln!(f, "{}{}:", " ".repeat(indent * 2), tree.nodes[n.0])?;
                         write_children(tree, n.0, indent + 1, f)?
                     }
                 }
@@ -69,8 +68,32 @@ impl<L: Leaf + Display> Display for Tree<L> {
     }
 }
 
-#[derive(Debug)]
-pub struct Node {
+impl<N: Debug, L: Debug> Debug for Tree<N, L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn write_children<N: Debug, L: Debug>(
+            tree: &Tree<N, L>,
+            node: usize,
+            indent: usize,
+            f: &mut std::fmt::Formatter<'_>,
+        ) -> std::fmt::Result {
+            for child in tree.nodes[node].children_with_leaves(tree) {
+                match child {
+                    TreeElement::Leaf(l) => {
+                        writeln!(f, "{}{:?}", " ".repeat(indent * 2), tree.leaves[l.0])?
+                    }
+                    TreeElement::Node(n) => {
+                        writeln!(f, "{}{:?}:", " ".repeat(indent * 2), tree.nodes[n.0])?;
+                        write_children(tree, n.0, indent + 1, f)?
+                    }
+                }
+            }
+            Ok(())
+        }
+        write_children(self, 0, 0, f)
+    }
+}
+
+pub struct Node<N> {
     kind: SyntaxKind,
     span: Span,
     leaf_span: Span,
@@ -79,9 +102,10 @@ pub struct Node {
     prev: Option<usize>,
     next: Option<usize>,
     id: usize,
+    data: Option<N>,
 }
 
-impl Node {
+impl<N> Node<N> {
     pub fn kind(&self) -> SyntaxKind {
         self.kind
     }
@@ -110,7 +134,7 @@ impl Node {
         unsafe { std::mem::transmute(&self.children) }
     }
 
-    pub fn children_with_leaves<'a, L: Leaf>(&self, tree: &'a Tree<L>) -> ChildLeafIter<'a, L> {
+    pub fn children_with_leaves<'a, L>(&self, tree: &'a Tree<N, L>) -> ChildLeafIter<'a, N, L> {
         ChildLeafIter {
             tree,
             leaf: self.leaf_span.start,
@@ -119,22 +143,92 @@ impl Node {
         }
     }
 
-    pub fn leaves<'a, L: Leaf>(&self, tree: &'a Tree<L>) -> &'a [L] {
+    pub fn leaves<'a, L>(&self, tree: &'a Tree<N, L>) -> &'a [Leaf<L>] {
         &tree.leaves[self.leaf_span.clone()]
     }
 
-    pub fn iter_bfs<'a, L: Leaf>(&self, tree: &'a Tree<L>) -> TreeIterBfs<'a, L> {
+    pub fn iter_bfs<'a, L>(&self, tree: &'a Tree<N, L>) -> TreeIterBfs<'a, N, L> {
         TreeIterBfs {
             tree,
             queue: VecDeque::from([TreeElement::Node(NodeId(self.id))]),
         }
     }
 
-    pub fn iter_dfs<'a, L: Leaf>(&self, tree: &'a Tree<L>) -> TreeIterDfs<'a, L> {
+    pub fn iter_dfs<'a, L>(&self, tree: &'a Tree<N, L>) -> TreeIterDfs<'a, N, L> {
         TreeIterDfs {
             tree,
             stack: Vec::from([TreeElement::Node(NodeId(self.id))]),
         }
+    }
+
+    pub fn data(&self) -> &Option<N> {
+        &self.data
+    }
+}
+
+impl<N: Display> Display for Node<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}@{}..{}", self.kind, self.span.start, self.span.end)?;
+        if let Some(data) = &self.data {
+            write!(f, " = {}", data)?;
+        }
+        Ok(())
+    }
+}
+
+impl<N: Debug> Debug for Node<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}@{}..{}", self.kind, self.span.start, self.span.end)?;
+        if let Some(data) = &self.data {
+            write!(f, " = {:?}", data)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct Leaf<L> {
+    kind: SyntaxKind,
+    span: Span,
+    id: usize,
+    data: Option<L>,
+}
+
+impl<L> Leaf<L> {
+    pub fn kind(&self) -> SyntaxKind {
+        self.kind
+    }
+
+    pub fn span(&self) -> Span {
+        self.span.clone()
+    }
+
+    pub fn id(&self) -> LeafId {
+        LeafId(self.id)
+    }
+
+    pub fn data(&self) -> &Option<L> {
+        &self.data
+    }
+}
+
+impl<L: Display> Display for Leaf<L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}@{}..{}", self.kind, self.span.start, self.span.end)?;
+        if let Some(data) = &self.data {
+            write!(f, " = {}", data)?;
+        }
+        Ok(())
+    }
+}
+
+impl<L: Debug> Debug for Leaf<L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}@{}..{}", self.kind, self.span.start, self.span.end)?;
+        if let Some(data) = &self.data {
+            write!(f, " = {:?}", data)?;
+        }
+        Ok(())
     }
 }
 
@@ -142,7 +236,6 @@ impl Node {
 #[repr(transparent)]
 pub struct NodeId(usize);
 
-pub trait Leaf {}
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct LeafId(usize);
@@ -171,14 +264,23 @@ impl<N, L> TreeElement<N, L> {
     }
 }
 
+impl TreeElement<NodeId, LeafId> {
+    pub fn get<'a, N, L>(&self, tree: &'a Tree<N, L>) -> TreeElement<&'a Node<N>, &'a Leaf<L>> {
+        match self {
+            TreeElement::Node(node) => TreeElement::Node(&tree.nodes[node.0]),
+            TreeElement::Leaf(leaf) => TreeElement::Leaf(&tree.leaves[leaf.0]),
+        }
+    }
+}
+
 #[derive(Debug)]
-pub struct TreeBuilder<L: Leaf> {
-    leaves: Vec<L>,
-    nodes: Vec<Node>,
+pub struct TreeBuilder<N, L> {
+    leaves: Vec<Leaf<L>>,
+    nodes: Vec<Node<N>>,
     current: Vec<usize>,
 }
 
-impl<L: Leaf> Default for TreeBuilder<L> {
+impl<N, L> Default for TreeBuilder<N, L> {
     fn default() -> Self {
         Self {
             leaves: Vec::new(),
@@ -188,17 +290,17 @@ impl<L: Leaf> Default for TreeBuilder<L> {
     }
 }
 
-impl<L: Leaf> TreeBuilder<L> {
-    pub fn new() -> TreeBuilder<L> {
+impl<N, L> TreeBuilder<N, L> {
+    pub fn new() -> TreeBuilder<N, L> {
         Self::default()
     }
 
-    pub fn leaf_count(&self) -> usize {
-        self.leaves.len()
+    pub fn leaf(&self, id: LeafId) -> &Leaf<L> {
+        &self.leaves[id.0]
     }
 
-    pub fn leaf(&self, i: usize) -> &L {
-        &self.leaves[i]
+    pub fn node(&self, id: NodeId) -> &Node<N> {
+        &self.nodes[id.0]
     }
 
     pub fn start_node(&mut self, kind: SyntaxKind, start: usize) {
@@ -223,20 +325,29 @@ impl<L: Leaf> TreeBuilder<L> {
             prev,
             next: None,
             id: current,
+            data: None,
         });
     }
 
-    pub fn push(&mut self, leaf: L) {
-        self.leaves.push(leaf);
+    pub fn push(&mut self, kind: SyntaxKind, span: Span, data: Option<L>) -> LeafId {
+        self.leaves.push(Leaf {
+            kind,
+            span,
+            id: self.leaves.len(),
+            data,
+        });
+        LeafId(self.leaves.len())
     }
 
-    pub fn finish_node(&mut self, end: usize) {
+    pub fn finish_node(&mut self, end: usize, data: Option<N>) -> NodeId {
         let current = self.current.pop().unwrap();
         self.nodes[current].leaf_span.end = self.leaves.len();
         self.nodes[current].span.end = end;
+        self.nodes[current].data = data;
+        NodeId(current)
     }
 
-    pub fn finish(self) -> Tree<L> {
+    pub fn finish(self) -> Tree<N, L> {
         assert!(self.current.is_empty());
         assert!(!self.nodes.is_empty());
         Tree {
@@ -305,6 +416,7 @@ impl<L: Leaf> TreeBuilder<L> {
             prev,
             next: None,
             id: current,
+            data: None,
         });
     }
 }
@@ -317,13 +429,13 @@ pub struct Checkpoint {
     parent: Option<usize>,
 }
 
-pub struct TreeIterBfs<'a, L: Leaf> {
-    tree: &'a Tree<L>,
+pub struct TreeIterBfs<'a, N, L> {
+    tree: &'a Tree<N, L>,
     queue: VecDeque<TreeElement<NodeId, LeafId>>,
 }
 
-impl<'a, L: Leaf> Iterator for TreeIterBfs<'a, L> {
-    type Item = TreeElement<&'a Node, &'a L>;
+impl<'a, N, L> Iterator for TreeIterBfs<'a, N, L> {
+    type Item = TreeElement<&'a Node<N>, &'a Leaf<L>>;
     fn next(&mut self) -> Option<Self::Item> {
         let node = match self.queue.pop_front()? {
             TreeElement::Leaf(LeafId(l)) => return Some(TreeElement::Leaf(&self.tree.leaves[l])),
@@ -334,13 +446,13 @@ impl<'a, L: Leaf> Iterator for TreeIterBfs<'a, L> {
     }
 }
 
-pub struct TreeIterDfs<'a, L: Leaf> {
-    tree: &'a Tree<L>,
+pub struct TreeIterDfs<'a, N, L> {
+    tree: &'a Tree<N, L>,
     stack: Vec<TreeElement<NodeId, LeafId>>,
 }
 
-impl<'a, L: Leaf> Iterator for TreeIterDfs<'a, L> {
-    type Item = TreeElement<&'a Node, &'a L>;
+impl<'a, N, L> Iterator for TreeIterDfs<'a, N, L> {
+    type Item = TreeElement<&'a Node<N>, &'a Leaf<L>>;
     fn next(&mut self) -> Option<Self::Item> {
         let node = match self.stack.pop()? {
             TreeElement::Leaf(LeafId(l)) => return Some(TreeElement::Leaf(&self.tree.leaves[l])),
@@ -351,14 +463,14 @@ impl<'a, L: Leaf> Iterator for TreeIterDfs<'a, L> {
     }
 }
 
-pub struct ChildLeafIter<'a, L: Leaf> {
-    tree: &'a Tree<L>,
+pub struct ChildLeafIter<'a, N, L> {
+    tree: &'a Tree<N, L>,
     leaf: usize,
     child: usize,
     node: usize,
 }
 
-impl<'a, L: Leaf> Iterator for ChildLeafIter<'a, L> {
+impl<'a, N, L> Iterator for ChildLeafIter<'a, N, L> {
     type Item = TreeElement<NodeId, LeafId>;
     fn next(&mut self) -> Option<Self::Item> {
         let current = &self.tree.nodes[self.node];
