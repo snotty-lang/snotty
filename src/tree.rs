@@ -1,17 +1,16 @@
 use std::collections::VecDeque;
+use std::fmt::Display;
 
 use crate::{error::Error, parser::syntax::SyntaxKind, Span};
 
-use crate::parser::syntax::Syntax;
-
 #[derive(Default, Debug)]
-pub struct Result<'a, L: Leaf = Syntax> {
+pub struct Result<'a, L: Leaf> {
     pub errors: Vec<Error<'a>>,
     pub output: Tree<L>,
 }
 
 #[derive(Default, Debug)]
-pub struct Tree<L: Leaf = Syntax> {
+pub struct Tree<L: Leaf> {
     leaves: Vec<L>,
     nodes: Vec<Node>,
 }
@@ -33,6 +32,36 @@ impl<L: Leaf> Tree<L> {
             tree: self,
             stack: Vec::from([TreeElement::Node(NodeId(0))]),
         }
+    }
+}
+
+impl<L: Leaf + Display> Display for Tree<L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn write_children<L: Leaf + Display>(
+            tree: &Tree<L>,
+            node: usize,
+            indent: usize,
+            f: &mut std::fmt::Formatter<'_>,
+        ) -> std::fmt::Result {
+            for child in tree.nodes[node].children_with_leaves(tree) {
+                match child {
+                    TreeElement::Leaf(l) => {
+                        writeln!(f, "{}{}", " ".repeat(indent * 2), tree.leaves[l.0])?
+                    }
+                    TreeElement::Node(n) => {
+                        writeln!(
+                            f,
+                            "{}{}:",
+                            " ".repeat(indent * 2),
+                            tree.nodes[n.0].kind.to_string().to_uppercase()
+                        )?;
+                        write_children(tree, n.0, indent + 1, f)?
+                    }
+                }
+            }
+            Ok(())
+        }
+        write_children(self, 0, 0, f)
     }
 }
 
@@ -115,7 +144,7 @@ pub trait Leaf {}
 pub struct LeafId(usize);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum TreeElement<N = Syntax, L = Syntax> {
+pub enum TreeElement<N, L> {
     Node(N),
     Leaf(L),
 }
@@ -139,7 +168,7 @@ impl<N, L> TreeElement<N, L> {
 }
 
 #[derive(Debug)]
-pub struct TreeBuilder<L: Leaf = Syntax> {
+pub struct TreeBuilder<L: Leaf> {
     leaves: Vec<L>,
     nodes: Vec<Node>,
     current: Vec<usize>,
@@ -214,7 +243,10 @@ impl<L: Leaf> TreeBuilder<L> {
 
     pub fn checkpoint(&self, start: usize) -> Checkpoint {
         Checkpoint {
-            current: self.nodes.len(),
+            child_no: self.nodes[self.current.last().copied().unwrap_or_default()]
+                .children
+                .len(),
+            leaf: self.leaves.len(),
             start,
             parent: self.current.last().copied(),
         }
@@ -222,16 +254,40 @@ impl<L: Leaf> TreeBuilder<L> {
 
     pub fn start_node_at(&mut self, checkpoint: Checkpoint, kind: SyntaxKind) {
         let Checkpoint {
-            current,
+            child_no,
             start,
+            leaf,
             parent,
         } = checkpoint;
-        // self.current.push(current);
+        let current = self.nodes.len();
+        self.current.push(current);
+
         let mut prev = None;
+        let mut children = Vec::new();
+
         if let Some(parent) = parent {
-            if let Some(p) = self.nodes[parent].children.last().copied() {
-                prev = Some(p);
-                self.nodes[p].next = Some(current);
+            let nodes = self.nodes[parent]
+                .children
+                .drain(child_no..)
+                .collect::<Vec<_>>();
+            let mut nodes = nodes.iter();
+
+            if let Some(&first) = nodes.next() {
+                self.nodes[first].prev = None;
+                self.nodes[first].parent = Some(current);
+                children.push(first);
+            }
+
+            for &node in nodes {
+                self.nodes[node].parent = Some(current);
+                children.push(node);
+            }
+
+            if child_no != 0 {
+                if let Some(&p) = self.nodes[parent].children.get(child_no - 1) {
+                    prev = Some(p);
+                    self.nodes[p].next = Some(current);
+                }
             }
 
             self.nodes[parent].children.push(current);
@@ -240,8 +296,8 @@ impl<L: Leaf> TreeBuilder<L> {
             kind,
             span: Span { start, end: start },
             parent,
-            leaf_span: self.leaves.len()..0,
-            children: Vec::new(),
+            leaf_span: leaf..0,
+            children,
             prev,
             next: None,
             id: current,
@@ -251,7 +307,8 @@ impl<L: Leaf> TreeBuilder<L> {
 
 #[derive(Copy, Clone)]
 pub struct Checkpoint {
-    current: usize,
+    child_no: usize,
+    leaf: usize,
     start: usize,
     parent: Option<usize>,
 }
@@ -300,19 +357,23 @@ pub struct ChildLeafIter<'a, L: Leaf> {
 impl<'a, L: Leaf> Iterator for ChildLeafIter<'a, L> {
     type Item = TreeElement<NodeId, LeafId>;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.leaf >= self.tree.nodes[self.node].leaf_span.end {
+        let current = &self.tree.nodes[self.node];
+        if self.leaf >= current.leaf_span.end {
             return None;
         }
-        let child_id = self.tree.nodes[self.node].children[self.child];
-        let child = &self.tree.nodes[child_id];
-        if child.leaf_span.start != self.leaf {
-            let out = self.leaf;
-            self.leaf += 1;
-            Some(TreeElement::Leaf(LeafId(out)))
-        } else {
-            self.leaf = child.leaf_span.end;
-            self.child += 1;
-            Some(TreeElement::Node(NodeId(child_id)))
+        let child_id = current.children.get(self.child).copied();
+        let child_span = child_id.map(|id| self.tree.nodes[id].leaf_span.clone());
+        match (child_id, child_span) {
+            (Some(id), Some(Span { start, end })) if start == self.leaf => {
+                self.leaf = end;
+                self.child += 1;
+                Some(TreeElement::Node(NodeId(id)))
+            }
+            _ => {
+                let out = self.leaf;
+                self.leaf += 1;
+                Some(TreeElement::Leaf(LeafId(out)))
+            }
         }
     }
 }

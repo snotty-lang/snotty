@@ -34,7 +34,7 @@ enum ParseAction {
 pub struct Parser<'a> {
     source: &'a str,
     tokens: Peekable<SpannedIter<'a, SyntaxKind>>,
-    builder: TreeBuilder,
+    builder: TreeBuilder<Syntax>,
     errors: Vec<Error<'a>>,
     recovery: Vec<SyntaxKind>,
 }
@@ -50,7 +50,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(mut self) -> Result<'a> {
+    pub fn parse(mut self) -> Result<'a, Syntax> {
         self.builder.start_node(Root, 0);
 
         while {

@@ -175,3 +175,9 @@ pub struct Syntax {
 }
 
 impl crate::tree::Leaf for Syntax {}
+
+impl Display for Syntax {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}@{}..{}", self.kind, self.span.start, self.span.end)
+    }
+}

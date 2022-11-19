@@ -20,7 +20,7 @@ pub fn compile(file: String, contents: &str) -> Result<String, Vec<Error>> {
         eprintln!("{}", error);
     }
     let syntax = parse.output;
-    println!("PARSE:\n{:#?}", syntax);
+    println!("PARSE:\n{}", syntax);
 
     // let analyzer = Analyzer::new(contents);
     // let tree = analyzer.analyze(&syntax);
