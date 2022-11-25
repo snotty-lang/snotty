@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{parser::syntax::SyntaxKind, Span};
+use crate::{analyzer::value::ValueType, parser::syntax::SyntaxKind, Span};
 
 /// Error
 #[derive(Debug, Clone)]
@@ -21,6 +21,7 @@ pub enum ErrorKind {
     UnsupportedOperation { operation: SyntaxKind },
     ByteOverflow,
     Custom { message: String },
+    TypeError { type_: ValueType },
 }
 
 /// Location of the error
@@ -181,17 +182,20 @@ impl Display for ErrorKind {
             ErrorKind::UnknownSyntax => write!(f, "I don't recognize this syntax"),
             ErrorKind::MissingSemicolon => write!(f, "I think you forgot that semicolon there"),
             ErrorKind::UnexpectedSyntax { expected } => {
-                write!(f, "Expected to see a {} there instead", expected)
+                write!(f, "Expected to see a `{}` there instead", expected)
             }
             ErrorKind::UnsupportedOperation { operation } => {
                 write!(
                     f,
-                    "Operation {} is not supported between these types",
+                    "Operation `{}` is not supported between these types",
                     operation
                 )
             }
             ErrorKind::ByteOverflow => {
                 write!(f, "This shit is too big to fit in a byte")
+            }
+            ErrorKind::TypeError { type_ } => {
+                write!(f, "Did not expect to see a `{type_}` there")
             }
         }
     }

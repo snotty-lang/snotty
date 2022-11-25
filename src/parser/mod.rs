@@ -56,7 +56,7 @@ impl<'a> Parser<'a> {
 
         assert_eq!(self.current_syntax(), Eof);
         assert!(self.recovery.is_empty(), "{:?}", self.recovery);
-        self.builder.finish_node(loc!(self), None);
+        self.builder.finish_node(loc!(self), |_| None);
 
         ParseResult {
             output: self.builder.finish(),
@@ -81,14 +81,14 @@ impl<'a> Parser<'a> {
                 self.recovery.pop();
 
                 self.expression();
-                self.builder.finish_node(loc!(self), None);
+                self.builder.finish_node(loc!(self), |_| None);
                 ParseRecovery::Ok
             }
             a @ (OutKw | ReturnKw) => {
                 self.builder.start_node(a, loc!(self));
                 self.pass();
                 self.expression();
-                self.builder.finish_node(loc!(self), None);
+                self.builder.finish_node(loc!(self), |_| None);
                 ParseRecovery::Ok
             }
             FileKw => {
@@ -99,7 +99,7 @@ impl<'a> Parser<'a> {
                     return s;
                 }
                 self.recovery.pop();
-                self.builder.finish_node(loc!(self), None);
+                self.builder.finish_node(loc!(self), |_| None);
                 ParseRecovery::Ok
             }
             OpenBrace => {
@@ -118,7 +118,7 @@ impl<'a> Parser<'a> {
                                 current + 1..0,
                                 self.source,
                             ));
-                            self.builder.finish_node(loc!(self), None);
+                            self.builder.finish_node(loc!(self), |_| None);
                             break;
                         }
                         CloseBrace => {
@@ -134,7 +134,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 self.recovery.pop();
-                self.builder.finish_node(loc!(self), None);
+                self.builder.finish_node(loc!(self), |_| None);
                 ParseRecovery::Ok
             }
             LoopKw => {
@@ -151,8 +151,8 @@ impl<'a> Parser<'a> {
                     let s = self.statement();
                     if matches!(s, ParseRecovery::Recovered(2..) | ParseRecovery::Eof) {
                         self.recovery.pop();
-                        self.builder.finish_node(loc!(self), None);
-                        self.builder.finish_node(loc!(self), None);
+                        self.builder.finish_node(loc!(self), |_| None);
+                        self.builder.finish_node(loc!(self), |_| None);
                         self.bump();
                         return s;
                     }
@@ -164,8 +164,8 @@ impl<'a> Parser<'a> {
                     let s = self.expression();
                     if matches!(s, ParseRecovery::Recovered(2..) | ParseRecovery::Eof) {
                         self.recovery.pop();
-                        self.builder.finish_node(loc!(self), None);
-                        self.builder.finish_node(loc!(self), None);
+                        self.builder.finish_node(loc!(self), |_| None);
+                        self.builder.finish_node(loc!(self), |_| None);
                         self.bump();
                         return s;
                     }
@@ -177,8 +177,8 @@ impl<'a> Parser<'a> {
                     let s = self.statement();
                     if matches!(s, ParseRecovery::Recovered(2..) | ParseRecovery::Eof) {
                         self.recovery.pop();
-                        self.builder.finish_node(loc!(self), None);
-                        self.builder.finish_node(loc!(self), None);
+                        self.builder.finish_node(loc!(self), |_| None);
+                        self.builder.finish_node(loc!(self), |_| None);
                         self.bump();
                         return s;
                     }
@@ -193,7 +193,7 @@ impl<'a> Parser<'a> {
                 self.recovery.pop();
 
                 let s = self.statement();
-                self.builder.finish_node(loc!(self), None);
+                self.builder.finish_node(loc!(self), |_| None);
                 s
             }
             IfKw => {
@@ -216,18 +216,18 @@ impl<'a> Parser<'a> {
                     self.pass();
                     s = self.statement();
                 }
-                self.builder.finish_node(loc!(self), None);
+                self.builder.finish_node(loc!(self), |_| None);
                 s
             }
             _ => {
                 if let ParseAction::Return(s) = self.expect_func(Self::expression, 0, 1) {
-                    s
+                    return s;
                 } else {
                     ParseRecovery::Ok
                 }
             }
         };
-        self.builder.finish_node(loc!(self), None);
+        self.builder.finish_node(loc!(self), |_| None);
         self.skip_syntax(&[SemiColon]);
         s
     }
@@ -251,7 +251,7 @@ impl<'a> Parser<'a> {
             }
             self.recovery.pop();
             self.expression();
-            self.builder.finish_node(loc!(self), None);
+            self.builder.finish_node(loc!(self), |_| None);
         }
 
         ParseRecovery::Ok
@@ -263,7 +263,7 @@ impl<'a> Parser<'a> {
                 self.builder.start_node(UnaryOp, loc!(self));
                 self.pass();
                 let s = self.expression();
-                self.builder.finish_node(loc!(self), None);
+                self.builder.finish_node(loc!(self), |_| None);
                 s
             }
             _ => self.binary_op(
@@ -298,7 +298,7 @@ impl<'a> Parser<'a> {
                 self.builder.start_node(UnaryOp, loc!(self));
                 self.bump();
                 let s = self.factor();
-                self.builder.finish_node(loc!(self), None);
+                self.builder.finish_node(loc!(self), |_| None);
                 s
             }
             _ => {
@@ -310,7 +310,7 @@ impl<'a> Parser<'a> {
                 if matches!(self.current_syntax(), Inc | Dec) {
                     self.builder.start_node_at(start, UnaryOp);
                     self.bump();
-                    self.builder.finish_node(loc!(self), None);
+                    self.builder.finish_node(loc!(self), |_| None);
                 }
                 self.recovery.pop();
                 self.recovery.pop();
@@ -333,7 +333,7 @@ impl<'a> Parser<'a> {
                 }
                 self.recovery.pop();
                 let s = self.call();
-                self.builder.finish_node(loc!(self), None);
+                self.builder.finish_node(loc!(self), |_| None);
                 s
             }
             _ => self.call(),
@@ -367,7 +367,7 @@ impl<'a> Parser<'a> {
                 return s;
             }
             self.recovery.pop();
-            self.builder.finish_node(loc!(self), None);
+            self.builder.finish_node(loc!(self), |_| None);
         }
         ParseRecovery::Ok
     }
@@ -409,19 +409,19 @@ impl<'a> Parser<'a> {
                     return s;
                 }
                 self.recovery.pop();
-                self.builder.finish_node(loc!(self), None);
+                self.builder.finish_node(loc!(self), |_| None);
                 ParseRecovery::Ok
             }
             And | Mul => {
                 self.builder.start_node(UnaryOp, loc!(self));
                 self.bump();
                 let s = self.value();
-                self.builder.finish_node(loc!(self), None);
+                self.builder.finish_node(loc!(self), |_| None);
                 s
             }
             _ => self.unexpected_syntax(Value),
         };
-        self.builder.finish_node(loc!(self), None);
+        self.builder.finish_node(loc!(self), |_| None);
         s
     }
 
@@ -430,14 +430,14 @@ impl<'a> Parser<'a> {
             ByteKw | Identifier | SemiColon => {
                 self.builder.start_node(Kind, loc!(self));
                 self.bump();
-                self.builder.finish_node(loc!(self), None);
+                self.builder.finish_node(loc!(self), |_| None);
                 ParseRecovery::Ok
             }
             And | Mul => {
                 self.builder.start_node(Kind, loc!(self));
                 self.bump();
                 let s = self.kind();
-                self.builder.finish_node(loc!(self), None);
+                self.builder.finish_node(loc!(self), |_| None);
                 s
             }
             _ => self.unexpected_syntax(Kind),
@@ -461,7 +461,7 @@ impl<'a> Parser<'a> {
             if let ParseAction::Return(s) = self.expect_func(func, ops.len(), 1) {
                 return s;
             }
-            self.builder.finish_node(loc!(self), None);
+            self.builder.finish_node(loc!(self), |_| None);
         }
         self.recovery.drain(self.recovery.len() - ops.len()..);
         ParseRecovery::Ok
@@ -476,14 +476,14 @@ impl<'a> Parser<'a> {
             match s {
                 ParseRecovery::Eof | ParseRecovery::SemiColon => {
                     for _ in 0..node {
-                        self.builder.finish_node(loc!(self), None);
+                        self.builder.finish_node(loc!(self), |_| None);
                     }
                     self.recovery.drain(self.recovery.len() - n..);
                     ParseAction::Return(s)
                 }
                 ParseRecovery::Recovered(r) if r >= n => {
                     for _ in 0..node {
-                        self.builder.finish_node(loc!(self), None);
+                        self.builder.finish_node(loc!(self), |_| None);
                     }
                     self.recovery.drain(self.recovery.len() - n..);
                     ParseAction::Return(s)
@@ -520,14 +520,14 @@ impl<'a> Parser<'a> {
         match s {
             ParseRecovery::Eof | ParseRecovery::SemiColon => {
                 for _ in 0..node {
-                    self.builder.finish_node(loc!(self), None);
+                    self.builder.finish_node(loc!(self), |_| None);
                 }
                 self.recovery.drain(self.recovery.len() - n..);
                 ParseAction::Return(s)
             }
             ParseRecovery::Recovered(r) if r >= n => {
                 for _ in 0..node {
-                    self.builder.finish_node(loc!(self), None);
+                    self.builder.finish_node(loc!(self), |_| None);
                 }
                 self.recovery.drain(self.recovery.len() - n..);
                 ParseAction::Return(s)
@@ -548,7 +548,7 @@ impl<'a> Parser<'a> {
             self.source,
         ));
         let s = self.recover();
-        self.builder.finish_node(loc!(self), None);
+        self.builder.finish_node(loc!(self), |_| None);
         s
     }
 
@@ -584,7 +584,8 @@ impl<'a> Parser<'a> {
     /// Consumes current syntax and push to builder.
     fn bump(&mut self) {
         if let Some((kind, span)) = self.tokens.next() {
-            self.builder.push(kind, span, None);
+            println!("`{kind}`:{span:?}");
+            self.builder.push(kind, span, |_| None);
         }
     }
 

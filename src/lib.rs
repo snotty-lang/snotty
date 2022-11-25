@@ -29,6 +29,6 @@ pub fn compile(file: String, contents: &str) -> Result<String, Vec<Error>> {
         eprintln!("{}", error);
     }
     let analysis = analyzed.output;
-    println!("TREE:\n{:?}", analysis);
+    println!("TREE:\n{}", analysis);
     todo!()
 }

@@ -93,6 +93,7 @@ impl<N: Debug, L: Debug> Debug for Tree<N, L> {
     }
 }
 
+#[derive(Clone)]
 pub struct Node<N> {
     kind: SyntaxKind,
     span: Span,
@@ -271,6 +272,16 @@ impl TreeElement<NodeId, LeafId> {
             TreeElement::Leaf(leaf) => TreeElement::Leaf(&tree.leaves[leaf.0]),
         }
     }
+
+    pub fn get_from_builder<'a, N, L>(
+        &self,
+        builder: &'a TreeBuilder<N, L>,
+    ) -> TreeElement<&'a Node<N>, &'a Leaf<L>> {
+        match self {
+            TreeElement::Node(node) => TreeElement::Node(&builder.nodes[node.0]),
+            TreeElement::Leaf(leaf) => TreeElement::Leaf(&builder.leaves[leaf.0]),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -290,7 +301,7 @@ impl<N, L> Default for TreeBuilder<N, L> {
     }
 }
 
-impl<N, L> TreeBuilder<N, L> {
+impl<N: Debug, L> TreeBuilder<N, L> {
     pub fn new() -> TreeBuilder<N, L> {
         Self::default()
     }
@@ -329,22 +340,31 @@ impl<N, L> TreeBuilder<N, L> {
         });
     }
 
-    pub fn push(&mut self, kind: SyntaxKind, span: Span, data: Option<L>) -> LeafId {
+    pub fn push(
+        &mut self,
+        kind: SyntaxKind,
+        span: Span,
+        data: impl Fn(LeafId) -> Option<L>,
+    ) -> LeafId {
+        let current = self.leaves.len();
+        let id = LeafId(current);
         self.leaves.push(Leaf {
             kind,
             span,
-            id: self.leaves.len(),
-            data,
+            id: current,
+            data: data(id),
         });
-        LeafId(self.leaves.len())
+        id
     }
 
-    pub fn finish_node(&mut self, end: usize, data: Option<N>) -> NodeId {
-        let current = self.current.pop().unwrap();
+    #[track_caller]
+    pub fn finish_node(&mut self, end: usize, data: impl Fn(NodeId) -> Option<N>) -> NodeId {
+        let current = self.current.pop().expect("No node to finish");
+        let id = NodeId(current);
         self.nodes[current].leaf_span.end = self.leaves.len();
         self.nodes[current].span.end = end;
-        self.nodes[current].data = data;
-        NodeId(current)
+        self.nodes[current].data = data(id);
+        id
     }
 
     pub fn finish(self) -> Tree<N, L> {
