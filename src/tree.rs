@@ -344,7 +344,7 @@ impl<N: Debug, L> TreeBuilder<N, L> {
         &mut self,
         kind: SyntaxKind,
         span: Span,
-        data: impl Fn(LeafId) -> Option<L>,
+        data: impl FnOnce(LeafId) -> Option<L>,
     ) -> LeafId {
         let current = self.leaves.len();
         let id = LeafId(current);
@@ -358,7 +358,7 @@ impl<N: Debug, L> TreeBuilder<N, L> {
     }
 
     #[track_caller]
-    pub fn finish_node(&mut self, end: usize, data: impl Fn(NodeId) -> Option<N>) -> NodeId {
+    pub fn finish_node(&mut self, end: usize, data: impl FnOnce(NodeId) -> Option<N>) -> NodeId {
         let current = self.current.pop().expect("No node to finish");
         let id = NodeId(current);
         self.nodes[current].leaf_span.end = self.leaves.len();

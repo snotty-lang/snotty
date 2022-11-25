@@ -71,7 +71,7 @@ impl Display for ValueData {
         match self {
             ValueData::None => write!(f, "None"),
             ValueData::Number(n) => write!(f, "{n}"),
-            &ValueData::Char(c) => write!(f, "{}", c as char),
+            &ValueData::Char(c) => write!(f, "{:?}", c as char),
             ValueData::String(s) => write!(f, "{}", std::str::from_utf8(s).unwrap()),
             ValueData::Array(_) => todo!(),
             ValueData::Pointer(_) => todo!(),

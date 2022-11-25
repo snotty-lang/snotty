@@ -135,6 +135,63 @@ impl<'a> Analyzer<'a> {
                     type_: ValueType::None,
                 }))
             }),
+            Char => {
+                let s = &self.source[leaf.span()];
+                let mut s = s[1..s.len() - 1].chars();
+                let c = match s.next().unwrap() {
+                    '\\' => match s.next().unwrap() {
+                        'n' => '\n',
+                        't' => '\t',
+                        'r' => '\r',
+                        c @ ('\\' | '\'' | '\"') => c,
+                        'x' => {
+                            todo!()
+                        }
+                        '0'..='7' => {
+                            todo!()
+                        }
+                        _ => unreachable!(),
+                    },
+                    c => c,
+                };
+                self.builder.push(leaf.kind(), leaf.span(), |_| {
+                    Some(LeafType::Value(Value {
+                        value: Some(ValueData::Char(c as u8)),
+                        syntax: TreeElement::Leaf(id),
+                        type_: ValueType::Number,
+                    }))
+                })
+            }
+            String => {
+                let mut new = Vec::new();
+                let s = &self.source[leaf.span()];
+                let mut s = s[1..s.len() - 1].chars();
+                while let Some(c) = s.next() {
+                    new.push(match c {
+                        '\\' => match s.next().unwrap() {
+                            'n' => '\n',
+                            't' => '\t',
+                            'r' => '\r',
+                            c @ ('\\' | '\'' | '\"') => c,
+                            'x' => {
+                                todo!()
+                            }
+                            '0'..='7' => {
+                                todo!()
+                            }
+                            _ => unreachable!(),
+                        },
+                        c => c,
+                    } as u8);
+                }
+                self.builder.push(leaf.kind(), leaf.span(), move |_| {
+                    Some(LeafType::Value(Value {
+                        value: Some(ValueData::String(new)),
+                        syntax: TreeElement::Leaf(id),
+                        type_: ValueType::Pointer(0),
+                    }))
+                })
+            }
             s => todo!("{s}"),
         }
     }

@@ -58,8 +58,8 @@ pub enum SyntaxKind {
     #[token("<<")] Shl,
     #[token(">>")] Shr,
 
-    #[regex(r#"'([^']|\\(["ntrf\\b/']|x[0-9A-Fa-f]+|[0-7][0-7]?[0-7]?))'"#)] Char,
-    #[regex(r#""([^"]|\\(["ntrf\\b/']|x[0-9A-Fa-f]+|[0-7][0-7]?[0-7]?))*""#)] String,
+    #[regex(r#"'(\\(["ntr\\']|x[0-9A-Fa-f]+|[0-7][0-7]?[0-7]?|[^']))'"#)] Char,
+    #[regex(r#""(\\(["ntr\\']|x[0-9A-Fa-f]+|[0-7][0-7]?[0-7]?|[^"]))*""#)] String,
     #[regex(r"[a-zA-Z_][a-zA-Z_0-9]*")] Identifier,
     #[regex(r"\d+")] Number,
 
