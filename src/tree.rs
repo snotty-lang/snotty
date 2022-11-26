@@ -237,9 +237,29 @@ impl<L: Debug> Debug for Leaf<L> {
 #[repr(transparent)]
 pub struct NodeId(usize);
 
+impl NodeId {
+    pub fn get<N, L>(self, tree: &Tree<N, L>) -> &Node<N> {
+        &tree.nodes[self.0]
+    }
+
+    pub fn get_from_builder<N, L>(self, tree: &TreeBuilder<N, L>) -> &Node<N> {
+        &tree.nodes[self.0]
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct LeafId(usize);
+
+impl LeafId {
+    pub fn get<N, L>(self, tree: &Tree<N, L>) -> &Leaf<L> {
+        &tree.leaves[self.0]
+    }
+
+    pub fn get_from_builder<N, L>(self, tree: &TreeBuilder<N, L>) -> &Leaf<L> {
+        &tree.leaves[self.0]
+    }
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TreeElement<N, L> {

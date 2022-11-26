@@ -20,14 +20,38 @@ impl Display for LeafType {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Debug, Clone)]
+pub enum NodeType {
+    Value(Value),
+    Kind(ValueType),
+}
+
+impl Display for NodeType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NodeType::Kind(v) => write!(f, "`{}`", v),
+            NodeType::Value(v) => write!(f, "{}", v),
+        }
+    }
+}
+
+impl NodeType {
+    pub fn type_(&self) -> &ValueType {
+        match self {
+            NodeType::Kind(v) => v,
+            NodeType::Value(v) => &v.type_,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u16)]
 pub enum ValueType {
     None,
     Number,
     Unknown,
     Posisoned,
-    Pointer(u16),
+    Pointer(Box<ValueType>),
 }
 
 #[derive(Debug, Clone)]
@@ -45,12 +69,27 @@ pub enum ValueData {
 }
 
 impl ValueType {
-    pub fn operate_binary(self, op: SyntaxKind, other: ValueType) -> Option<ValueType> {
+    pub fn operate_binary(&self, op: SyntaxKind, other: &ValueType) -> Option<ValueType> {
         match (self, op, other) {
             (ValueType::Number, _, ValueType::Number) => Some(ValueType::Number),
             (ValueType::Posisoned, _, _) => Some(ValueType::Posisoned),
             _ => None,
         }
+    }
+
+    pub fn operate_unary(&self, op: SyntaxKind) -> Option<ValueType> {
+        match (self, op) {
+            (
+                ValueType::Number,
+                SyntaxKind::Not | SyntaxKind::Inc | SyntaxKind::Dec | SyntaxKind::Sub,
+            ) => Some(ValueType::Number),
+            (ValueType::Posisoned, _) => Some(ValueType::Posisoned),
+            _ => None,
+        }
+    }
+
+    pub fn can_be_bool(&self) -> bool {
+        matches!(self, ValueType::Number)
     }
 }
 
@@ -59,7 +98,7 @@ impl Display for ValueType {
         match self {
             ValueType::None => write!(f, "None"),
             ValueType::Number => write!(f, "Number"),
-            ValueType::Pointer(t) => write!(f, "*{{{t}}}"),
+            ValueType::Pointer(t) => write!(f, "*{t}"),
             ValueType::Unknown => write!(f, "?"),
             ValueType::Posisoned => write!(f, "\u{1F480}"),
         }
@@ -72,7 +111,7 @@ impl Display for ValueData {
             ValueData::None => write!(f, "None"),
             ValueData::Number(n) => write!(f, "{n}"),
             &ValueData::Char(c) => write!(f, "{:?}", c as char),
-            ValueData::String(s) => write!(f, "{}", std::str::from_utf8(s).unwrap()),
+            ValueData::String(s) => write!(f, "{:?}", std::str::from_utf8(s).unwrap()),
             ValueData::Array(_) => todo!(),
             ValueData::Pointer(_) => todo!(),
             ValueData::Variable(_) => todo!(),
