@@ -1,13 +1,8 @@
 use std::fmt::Display;
 use std::{collections::VecDeque, fmt::Debug};
 
-use crate::{error::Error, parser::syntax::SyntaxKind, Span};
-
-#[derive(Default, Debug)]
-pub struct Result<'a, N, L> {
-    pub errors: Vec<Error<'a>>,
-    pub output: Tree<N, L>,
-}
+use crate::analyzer::value::{LeafType, NodeType, Value, ValueType};
+use crate::{parser::syntax::SyntaxKind, Span};
 
 #[derive(Default)]
 pub struct Tree<N, L> {
@@ -300,6 +295,26 @@ impl TreeElement<NodeId, LeafId> {
         match self {
             TreeElement::Node(node) => TreeElement::Node(&builder.nodes[node.0]),
             TreeElement::Leaf(leaf) => TreeElement::Leaf(&builder.leaves[leaf.0]),
+        }
+    }
+}
+
+impl<'a> TreeElement<&'a Node<NodeType>, &'a Leaf<LeafType>> {
+    /// **PANICS** when data of the node/leaf is none or type of leaf is not `LeafType::Value`
+    pub fn type_(&self) -> &'a ValueType {
+        match self {
+            TreeElement::Leaf(leaf) => match leaf.data().as_ref().unwrap() {
+                LeafType::Value(Value { type_, .. }) => type_,
+                _ => panic!(),
+            },
+            TreeElement::Node(node) => node.data().as_ref().unwrap().type_(),
+        }
+    }
+
+    pub fn span(&self) -> Span {
+        match self {
+            TreeElement::Node(node) => node.span.clone(),
+            TreeElement::Leaf(leaf) => leaf.span.clone(),
         }
     }
 }

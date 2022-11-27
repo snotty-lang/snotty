@@ -84,11 +84,16 @@ impl ValueType {
                 SyntaxKind::Not | SyntaxKind::Inc | SyntaxKind::Dec | SyntaxKind::Sub,
             ) => Some(ValueType::Number),
             (ValueType::Posisoned, _) => Some(ValueType::Posisoned),
+            (_, SyntaxKind::Mul) => Some(ValueType::Pointer(Box::new(self.clone()))),
             _ => None,
         }
     }
 
     pub fn can_be_bool(&self) -> bool {
+        matches!(self, ValueType::Number)
+    }
+
+    pub fn can_be_displayed(&self) -> bool {
         matches!(self, ValueType::Number)
     }
 }

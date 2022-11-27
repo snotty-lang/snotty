@@ -2,7 +2,10 @@ use std::fmt::Display;
 
 use logos::Logos;
 
-use crate::tree::{Result, Tree, TreeBuilder};
+use crate::{
+    error::Error,
+    tree::{Tree, TreeBuilder},
+};
 
 #[rustfmt::skip]
 #[derive(Logos, Debug, PartialEq, Clone, Eq, Hash, Copy, PartialOrd, Ord)]
@@ -18,7 +21,6 @@ pub enum SyntaxKind {
     #[token("let")] LetKw,
     #[token("file")] FileKw,
     #[token("byte")] ByteKw,
-    #[token("const")] ConstKw,
     #[token("in")] InKw,
 
     #[token("{")] OpenBrace,
@@ -72,9 +74,10 @@ pub enum SyntaxKind {
     Eof,
 
     Root,
-    Kind,
 
+    Kind,
     Cast,
+
     Ternary,
     Pointer,
     Scope,
@@ -107,7 +110,6 @@ impl Display for SyntaxKind {
                 SyntaxKind::LetKw => "'let'",
                 SyntaxKind::FileKw => "'file'",
                 SyntaxKind::ByteKw => "'byte'",
-                SyntaxKind::ConstKw => "'const",
                 SyntaxKind::InKw => "'in'",
                 SyntaxKind::OpenBrace => "{",
                 SyntaxKind::CloseBrace => "}",
@@ -172,4 +174,7 @@ impl Display for SyntaxKind {
 
 pub type ParseTree = Tree<(), SyntaxKind>;
 pub type ParseTreeBuilder = TreeBuilder<(), SyntaxKind>;
-pub type ParseResult<'a> = Result<'a, (), SyntaxKind>;
+pub struct ParseResult<'a> {
+    pub errors: Vec<Error<'a>>,
+    pub parse: ParseTree,
+}

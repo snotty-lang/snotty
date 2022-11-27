@@ -1,15 +1,19 @@
 pub mod value;
 
 use std::collections::HashMap;
+use std::num::IntErrorKind;
 
 use crate::error::{Error, ErrorKind};
 use crate::parser::syntax::{ParseTree, SyntaxKind};
-use crate::tree::{Leaf, LeafId, Node, NodeId, Result, TreeBuilder, TreeElement};
+use crate::tree::{Leaf, LeafId, Node, NodeId, Tree, TreeBuilder, TreeElement};
 
-use value::{LeafType, Value, ValueData, ValueType};
+use value::{LeafType, NodeType, Value, ValueData, ValueType};
 use SyntaxKind::*;
 
-use self::value::NodeType;
+pub struct AnalysisResult<'a> {
+    pub errors: Vec<Error<'a>>,
+    pub analyzed: Tree<NodeType, LeafType>,
+}
 
 #[derive(Debug, Default)]
 pub struct Analyzer<'a> {
@@ -25,13 +29,40 @@ impl<'a> Analyzer<'a> {
         Analyzer {
             source,
             errors: Vec::new(),
-            lookup: Vec::new(),
+            lookup: vec![HashMap::new()],
             memory: Vec::new(),
             builder: TreeBuilder::new(),
         }
     }
 
-    pub fn analyze(mut self, tree: &ParseTree) -> Result<'a, NodeType, LeafType> {
+    #[inline]
+    fn get(&self, ident: &'a str) -> Option<&Value> {
+        self.lookup
+            .iter()
+            .rev()
+            .find_map(|map| map.get(ident))
+            .map(|&i| &self.memory[i])
+    }
+
+    #[inline]
+    fn get_mut(&mut self, ident: &'a str) -> Option<&mut Value> {
+        self.lookup
+            .iter_mut()
+            .rev()
+            .find_map(|map| map.get_mut(ident))
+            .map(|&mut i| &mut self.memory[i])
+    }
+
+    #[inline]
+    fn insert(&mut self, ident: &'a str, value: Value) {
+        self.memory.push(value);
+        self.lookup
+            .last_mut()
+            .unwrap()
+            .insert(ident, self.memory.len() - 1);
+    }
+
+    pub fn analyze(mut self, tree: &ParseTree) -> AnalysisResult<'a> {
         let root = tree.node(tree.root());
         self.builder.start_node(root.kind(), root.span().start);
         for child in root.children_with_leaves(tree) {
@@ -39,9 +70,9 @@ impl<'a> Analyzer<'a> {
         }
         self.builder.finish_node(root.span().end, |_| None);
 
-        Result {
+        AnalysisResult {
             errors: self.errors,
-            output: self.builder.finish(),
+            analyzed: self.builder.finish(),
         }
     }
 
@@ -58,11 +89,37 @@ impl<'a> Analyzer<'a> {
 
     fn analyze_node(&mut self, tree: &ParseTree, node: &Node<()>) -> NodeId {
         match node.kind() {
-            Statement | Scope => {
+            Statement => {
                 self.builder.start_node(node.kind(), node.span().start);
                 for &child in node.children() {
                     self.analyze_node(tree, tree.node(child));
                 }
+                self.builder.finish_node(node.span().end, |_| None)
+            }
+            OutKw => {
+                self.builder.start_node(node.kind(), node.span().start);
+                let child = self
+                    .analyze_element(tree, node.children_with_leaves(tree).next().unwrap())
+                    .get_from_builder(&self.builder);
+                let type_ = child.type_();
+                if !type_.can_be_displayed() {
+                    self.errors.push(Error::error(
+                        ErrorKind::TypeError {
+                            type_: type_.clone(),
+                        },
+                        child.span(),
+                        self.source,
+                    ))
+                }
+                self.builder.finish_node(node.span().end, |_| None)
+            }
+            Scope => {
+                self.builder.start_node(node.kind(), node.span().start);
+                self.lookup.push(HashMap::new());
+                for &child in node.children() {
+                    self.analyze_node(tree, tree.node(child));
+                }
+                self.lookup.pop();
                 self.builder.finish_node(node.span().end, |_| None)
             }
             BinaryOp => {
@@ -81,17 +138,29 @@ impl<'a> Analyzer<'a> {
                     .analyze_element(tree, iter.next().unwrap())
                     .as_node()
                     .unwrap();
-                let type_a = self.builder.node(a).data().as_ref().unwrap().type_();
-                let type_b = self.builder.node(b).data().as_ref().unwrap().type_();
-                let type_ = match type_a.operate_binary(op, type_b) {
-                    Some(t) => t,
-                    None => {
-                        self.errors.push(Error::error(
-                            ErrorKind::UnsupportedOperation { operation: op },
-                            node.span(),
-                            self.source,
-                        ));
-                        ValueType::Posisoned
+                let a = self.builder.node(a);
+                let b = self.builder.node(b);
+                let type_a = a.data().as_ref().unwrap().type_();
+                let type_b = b.data().as_ref().unwrap().type_();
+                let type_ = if *type_a == ValueType::Unknown {
+                    self.errors
+                        .push(Error::error(ErrorKind::UnknownType, a.span(), self.source));
+                    ValueType::Unknown
+                } else if *type_b == ValueType::Unknown {
+                    self.errors
+                        .push(Error::error(ErrorKind::UnknownType, b.span(), self.source));
+                    ValueType::Unknown
+                } else {
+                    match type_a.operate_binary(op, type_b) {
+                        Some(t) => t,
+                        None => {
+                            self.errors.push(Error::error(
+                                ErrorKind::UnsupportedOperation { operation: op },
+                                node.span(),
+                                self.source,
+                            ));
+                            ValueType::Posisoned
+                        }
                     }
                 };
                 self.builder.finish_node(node.span().end, |id| {
@@ -118,15 +187,21 @@ impl<'a> Analyzer<'a> {
                 };
 
                 let type_a = a.data().as_ref().unwrap().type_();
-                let type_ = match type_a.operate_unary(op) {
-                    Some(t) => t,
-                    None => {
-                        self.errors.push(Error::error(
-                            ErrorKind::UnsupportedOperation { operation: op },
-                            node.span(),
-                            self.source,
-                        ));
-                        ValueType::Posisoned
+                let type_ = if *type_a == ValueType::Unknown {
+                    self.errors
+                        .push(Error::error(ErrorKind::UnknownType, a.span(), self.source));
+                    ValueType::Unknown
+                } else {
+                    match type_a.operate_unary(op) {
+                        Some(t) => t,
+                        None => {
+                            self.errors.push(Error::error(
+                                ErrorKind::UnsupportedOperation { operation: op },
+                                node.span(),
+                                self.source,
+                            ));
+                            ValueType::Posisoned
+                        }
                     }
                 };
 
@@ -138,19 +213,65 @@ impl<'a> Analyzer<'a> {
                     }))
                 })
             }
-            // Cast => {
-            //     self.builder.start_node(node.kind(), node.span().start);
-            //     let mut iter = node.children_with_leaves(tree);
-            //     let kind = self.analyze_element(tree, iter.next().unwrap()).as_node().unwrap();
-            //     let a = self.analyze_element(tree, iter.next().unwrap()).as_node().unwrap();
-            //     self.builder.finish_node(node.span().end, |id| {
-            //         Some(Value {
-            //             value: None,
-            //             syntax: TreeElement::Node(id),
-            //             type_,
-            //         })
-            //     })
-            // }
+            Cast => {
+                self.builder.start_node(node.kind(), node.span().start);
+                let mut iter = node.children_with_leaves(tree);
+                let type_ = self
+                    .analyze_element(tree, iter.next().unwrap())
+                    .as_node()
+                    .unwrap()
+                    .get_from_builder(&self.builder)
+                    .data()
+                    .as_ref()
+                    .unwrap()
+                    .type_()
+                    .clone();
+                self.analyze_element(tree, iter.next().unwrap());
+                self.builder.finish_node(node.span().end, |id| {
+                    Some(NodeType::Value(Value {
+                        value: None,
+                        syntax: TreeElement::Node(id),
+                        type_,
+                    }))
+                })
+            }
+            Let => {
+                self.builder.start_node(node.kind(), node.span().start);
+                let mut iter = node.children_with_leaves(tree);
+                let ident = iter.next().unwrap().as_leaf().unwrap().get(tree);
+                let id = self.builder.push(ident.kind(), ident.span(), |_| None);
+                let ident = &self.source[ident.span()];
+                let type_ = self
+                    .analyze_element(tree, iter.next().unwrap())
+                    .get_from_builder(&self.builder)
+                    .type_()
+                    .clone();
+                self.insert(
+                    ident,
+                    Value {
+                        value: None,
+                        syntax: TreeElement::Leaf(id),
+                        type_,
+                    },
+                );
+                self.builder.finish_node(node.span().end, |_| None)
+            }
+            Pointer => {
+                self.builder.start_node(node.kind(), node.span().start);
+                let type_ = ValueType::Pointer(Box::new(
+                    self.analyze_element(tree, node.children_with_leaves(tree).next().unwrap())
+                        .get_from_builder(&self.builder)
+                        .type_()
+                        .clone(),
+                ));
+                self.builder.finish_node(node.span().end, |id| {
+                    Some(NodeType::Value(Value {
+                        value: None,
+                        syntax: TreeElement::Node(id),
+                        type_,
+                    }))
+                })
+            }
             If => {
                 self.builder.start_node(node.kind(), node.span().start);
                 let mut iter = node.children_with_leaves(tree);
@@ -231,17 +352,35 @@ impl<'a> Analyzer<'a> {
             }
             Value => {
                 self.builder.start_node(node.kind(), node.span().start);
-                let type_ = match self
+                let type_ = self
                     .analyze_element(tree, node.children_with_leaves(tree).next().unwrap())
                     .get_from_builder(&self.builder)
+                    .type_()
+                    .clone();
+                self.builder.finish_node(node.span().end, |id| {
+                    Some(NodeType::Value(Value {
+                        value: None,
+                        syntax: TreeElement::Node(id),
+                        type_,
+                    }))
+                })
+            }
+            Kind => {
+                self.builder.start_node(node.kind(), node.span().start);
+                let type_ = match node
+                    .children_with_leaves(tree)
+                    .next()
+                    .unwrap()
+                    .as_leaf()
+                    .unwrap()
+                    .get(tree)
+                    .kind()
                 {
-                    TreeElement::Leaf(leaf) => match leaf.data().as_ref().unwrap() {
-                        LeafType::Value(Value { type_, .. }) => type_,
-                        _ => unreachable!(),
-                    },
-                    TreeElement::Node(node) => node.data().as_ref().unwrap().type_(),
-                }
-                .clone();
+                    ByteKw => ValueType::Number,
+                    SemiColon => ValueType::None,
+                    Identifier => todo!(),
+                    _ => unreachable!(),
+                };
                 self.builder.finish_node(node.span().end, |id| {
                     Some(NodeType::Value(Value {
                         value: None,
@@ -259,7 +398,7 @@ impl<'a> Analyzer<'a> {
                     Some(NodeType::Value(Value {
                         value: None,
                         syntax: TreeElement::Node(id),
-                        type_: ValueType::Unknown,
+                        type_: ValueType::Posisoned,
                     }))
                 })
             }
@@ -287,35 +426,62 @@ impl<'a> Analyzer<'a> {
                     type_: ValueType::None,
                 }))
             }),
+            InKw => self.builder.push(leaf.kind(), leaf.span(), |id| {
+                Some(LeafType::Value(Value {
+                    value: None,
+                    syntax: TreeElement::Leaf(id),
+                    type_: ValueType::Number,
+                }))
+            }),
             Error => self.builder.push(leaf.kind(), leaf.span(), |id| {
                 Some(LeafType::Value(Value {
                     value: None,
                     syntax: TreeElement::Leaf(id),
-                    type_: ValueType::Unknown,
+                    type_: ValueType::Posisoned,
                 }))
             }),
             Char => {
                 let s = &self.source[leaf.span()];
-                let mut s = s[1..s.len() - 1].chars();
-                let c = match s.next().unwrap() {
-                    '\\' => match s.next().unwrap() {
-                        'n' => '\n',
-                        't' => '\t',
-                        'r' => '\r',
-                        c @ ('\\' | '\'' | '\"') => c,
-                        'x' => {
-                            todo!()
-                        }
-                        '0'..='7' => {
-                            todo!()
-                        }
+                let mut chars = s[1..s.len() - 1].chars();
+                let c = match chars.next().unwrap() {
+                    '\\' => match chars.next().unwrap() {
+                        'n' => b'\n',
+                        't' => b'\t',
+                        'r' => b'\r',
+                        c @ ('\\' | '\'' | '\"') => c as u8,
+                        'x' => u8::from_str_radix(&s[3..s.len() - 1], 16).unwrap_or_else(|err| {
+                            match err.kind() {
+                                IntErrorKind::PosOverflow => {
+                                    self.errors.push(Error::error(
+                                        ErrorKind::ByteOverflow,
+                                        leaf.span(),
+                                        self.source,
+                                    ));
+                                    0
+                                }
+                                _ => unreachable!(),
+                            }
+                        }),
+                        '0'..='7' => u8::from_str_radix(&s[2..s.len() - 1], 8).unwrap_or_else(
+                            |err| match err.kind() {
+                                IntErrorKind::PosOverflow => {
+                                    self.errors.push(Error::error(
+                                        ErrorKind::ByteOverflow,
+                                        leaf.span(),
+                                        self.source,
+                                    ));
+                                    0
+                                }
+                                _ => unreachable!(),
+                            },
+                        ),
                         _ => unreachable!(),
                     },
-                    c => c,
+                    c => c as u8,
                 };
                 self.builder.push(leaf.kind(), leaf.span(), |id| {
                     Some(LeafType::Value(Value {
-                        value: Some(ValueData::Char(c as u8)),
+                        value: Some(ValueData::Char(c)),
                         syntax: TreeElement::Leaf(id),
                         type_: ValueType::Number,
                     }))
@@ -324,24 +490,61 @@ impl<'a> Analyzer<'a> {
             String => {
                 let mut new = Vec::new();
                 let s = &self.source[leaf.span()];
-                let mut s = s[1..s.len() - 1].chars();
-                while let Some(c) = s.next() {
+                let mut chars = s[1..s.len() - 1].chars().enumerate().peekable();
+                while let Some((i, c)) = chars.next() {
                     new.push(match c {
-                        '\\' => match s.next().unwrap() {
-                            'n' => '\n',
-                            't' => '\t',
-                            'r' => '\r',
-                            c @ ('\\' | '\'' | '\"') => c,
+                        '\\' => match chars.next().unwrap().1 {
+                            'n' => b'\n',
+                            't' => b'\t',
+                            'r' => b'\r',
+                            c @ ('\\' | '\'' | '\"') => c as u8,
                             'x' => {
-                                todo!()
+                                let i = i + 3;
+                                let mut j = i;
+                                while matches!(chars.peek(), Some((_, c)) if c.is_ascii_hexdigit())
+                                {
+                                    j += 1;
+                                    chars.next();
+                                }
+                                u8::from_str_radix(&s[i..j], 16).unwrap_or_else(|err| {
+                                    match err.kind() {
+                                        IntErrorKind::PosOverflow => {
+                                            self.errors.push(Error::error(
+                                                ErrorKind::ByteOverflow,
+                                                leaf.span(),
+                                                self.source,
+                                            ));
+                                            0
+                                        }
+                                        e => unreachable!("{e:?}"),
+                                    }
+                                })
                             }
                             '0'..='7' => {
-                                todo!()
+                                let i = i + 2;
+                                let mut j = i + 1;
+                                while matches!(chars.peek(), Some((_, '0'..='7'))) {
+                                    j += 1;
+                                    chars.next();
+                                }
+                                u8::from_str_radix(&s[i..j], 8).unwrap_or_else(|err| {
+                                    match err.kind() {
+                                        IntErrorKind::PosOverflow => {
+                                            self.errors.push(Error::error(
+                                                ErrorKind::ByteOverflow,
+                                                leaf.span(),
+                                                self.source,
+                                            ));
+                                            0
+                                        }
+                                        _ => unreachable!(),
+                                    }
+                                })
                             }
                             _ => unreachable!(),
                         },
-                        c => c,
-                    } as u8);
+                        c => c as u8,
+                    });
                 }
                 self.builder.push(leaf.kind(), leaf.span(), move |id| {
                     Some(LeafType::Value(Value {
@@ -351,7 +554,27 @@ impl<'a> Analyzer<'a> {
                     }))
                 })
             }
-            s => todo!("{s}"),
+            Identifier => {
+                let type_ = match self.get(&self.source[leaf.span()]) {
+                    Some(v) => v.type_.clone(),
+                    None => {
+                        self.errors.push(Error::error(
+                            ErrorKind::UndefinedReference,
+                            leaf.span(),
+                            self.source,
+                        ));
+                        ValueType::Posisoned
+                    }
+                };
+                self.builder.push(leaf.kind(), leaf.span(), |id| {
+                    Some(LeafType::Value(Value {
+                        value: None,
+                        syntax: TreeElement::Leaf(id),
+                        type_,
+                    }))
+                })
+            }
+            s => unreachable!("{s}"),
         }
     }
 }

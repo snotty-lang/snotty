@@ -1,6 +1,6 @@
 pub mod syntax;
 
-use std::iter::Peekable;
+use crate::peekable::Peekable;
 
 use crate::{
     error::{Error, ErrorKind},
@@ -40,7 +40,7 @@ impl<'a> Parser<'a> {
     pub fn new(source: &'a str) -> Parser {
         Self {
             source,
-            tokens: SyntaxKind::lexer(source).spanned().peekable(),
+            tokens: Peekable::new(SyntaxKind::lexer(source).spanned()),
             loc: 0,
             builder: ParseTreeBuilder::new(),
             errors: Vec::new(),
@@ -61,7 +61,7 @@ impl<'a> Parser<'a> {
         self.builder.finish_node(self.loc, |_| None);
 
         ParseResult {
-            output: self.builder.finish(),
+            parse: self.builder.finish(),
             errors: self.errors,
         }
     }
@@ -69,7 +69,7 @@ impl<'a> Parser<'a> {
     fn statement(&mut self) -> ParseRecovery {
         self.builder.start_node(Statement, self.loc);
         let s = match self.current_syntax() {
-            LetKw | ConstKw => {
+            LetKw => {
                 self.builder.start_node(Let, self.loc);
                 self.recovery.push(Assign);
                 self.pass();
@@ -415,7 +415,7 @@ impl<'a> Parser<'a> {
                 self.builder.finish_node(self.loc, |_| None);
                 ParseRecovery::Ok
             }
-            And | Mul => {
+            Mul => {
                 self.builder.start_node(UnaryOp, self.loc);
                 self.bump();
                 let s = self.value();
@@ -436,8 +436,8 @@ impl<'a> Parser<'a> {
                 self.builder.finish_node(self.loc, |_| None);
                 ParseRecovery::Ok
             }
-            And | Mul => {
-                self.builder.start_node(Kind, self.loc);
+            Mul => {
+                self.builder.start_node(UnaryOp, self.loc);
                 self.bump();
                 let s = self.kind();
                 self.builder.finish_node(self.loc, |_| None);
@@ -602,13 +602,13 @@ impl<'a> Parser<'a> {
 
     /// Peeks the current syntax
     fn current_syntax(&mut self) -> SyntaxKind {
-        self.tokens.peek().map(|&(kind, _)| kind).unwrap_or(Eof)
+        self.tokens.peek(1).map(|&(kind, _)| kind).unwrap_or(Eof)
     }
 
     /// Current location of the parser
     fn current_syntax_span(&mut self) -> Span {
         self.tokens
-            .peek()
+            .peek(1)
             .map(|(_, span)| span.clone())
             .unwrap_or(self.source.len() - 1..self.source.len())
     }

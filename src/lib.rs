@@ -3,7 +3,8 @@ pub mod analyzer;
 pub mod error;
 pub mod ir;
 pub mod parser;
-pub mod tree;
+mod peekable;
+mod tree;
 
 use analyzer::Analyzer;
 use parser::Parser;
@@ -19,7 +20,7 @@ pub fn compile(file: String, contents: &str) -> Result<String, Vec<Error>> {
         error.set_path(file.clone());
         eprintln!("{}", error);
     }
-    let parse = parsed.output;
+    let parse = parsed.parse;
     println!("\nPARSE:\n{:?}", parse);
 
     let analyzer = Analyzer::new(contents);
@@ -28,7 +29,7 @@ pub fn compile(file: String, contents: &str) -> Result<String, Vec<Error>> {
         error.set_path(file.clone());
         eprintln!("{}", error);
     }
-    let analysis = analyzed.output;
+    let analysis = analyzed.analyzed;
     println!("\nTREE:\n{}", analysis);
     todo!()
 }

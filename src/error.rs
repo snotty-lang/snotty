@@ -22,6 +22,8 @@ pub enum ErrorKind {
     ByteOverflow,
     Custom { message: String },
     TypeError { type_: ValueType },
+    UndefinedReference,
+    UnknownType,
 }
 
 /// Location of the error
@@ -196,6 +198,12 @@ impl Display for ErrorKind {
             }
             ErrorKind::TypeError { type_ } => {
                 write!(f, "Did not expect to see a `{type_}` there")
+            }
+            ErrorKind::UndefinedReference => {
+                write!(f, "This thing is not defined")
+            }
+            ErrorKind::UnknownType => {
+                write!(f, "The type of this thing is unknown")
             }
         }
     }
