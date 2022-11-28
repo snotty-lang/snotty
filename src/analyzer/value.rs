@@ -70,7 +70,7 @@ pub enum ValueData {
 
 impl ValueType {
     pub fn operate_binary(&self, op: SyntaxKind, other: &ValueType) -> Option<ValueType> {
-        match (self, op, other) {
+        match (&self, op, other) {
             (ValueType::Number, _, ValueType::Number) => Some(ValueType::Number),
             (ValueType::Posisoned, _, _) => Some(ValueType::Posisoned),
             _ => None,
@@ -85,6 +85,7 @@ impl ValueType {
             ) => Some(ValueType::Number),
             (ValueType::Posisoned, _) => Some(ValueType::Posisoned),
             (_, SyntaxKind::Mul) => Some(ValueType::Pointer(Box::new(self.clone()))),
+            (ValueType::Pointer(_), SyntaxKind::Inc | SyntaxKind::Dec) => Some(self.clone()),
             _ => None,
         }
     }
@@ -94,7 +95,7 @@ impl ValueType {
     }
 
     pub fn can_be_displayed(&self) -> bool {
-        matches!(self, ValueType::Number)
+        matches!(self, ValueType::Number | ValueType::Pointer(_))
     }
 }
 

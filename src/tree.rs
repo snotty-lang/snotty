@@ -263,7 +263,7 @@ pub enum TreeElement<N, L> {
 }
 
 impl<N, L> TreeElement<N, L> {
-    pub fn as_leaf(self) -> Option<L> {
+    pub fn into_leaf(self) -> Option<L> {
         if let Self::Leaf(l) = self {
             Some(l)
         } else {
@@ -271,7 +271,7 @@ impl<N, L> TreeElement<N, L> {
         }
     }
 
-    pub fn as_node(self) -> Option<N> {
+    pub fn into_node(self) -> Option<N> {
         if let Self::Node(n) = self {
             Some(n)
         } else {

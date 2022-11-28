@@ -127,16 +127,16 @@ impl<'a> Analyzer<'a> {
                 let mut iter = node.children_with_leaves(tree);
                 let a = self
                     .analyze_element(tree, iter.next().unwrap())
-                    .as_node()
+                    .into_node()
                     .unwrap();
                 let op = self
                     .analyze_element(tree, iter.next().unwrap())
-                    .as_leaf()
+                    .into_leaf()
                     .unwrap();
                 let op = self.builder.leaf(op).kind();
                 let b = self
                     .analyze_element(tree, iter.next().unwrap())
-                    .as_node()
+                    .into_node()
                     .unwrap();
                 let a = self.builder.node(a);
                 let b = self.builder.node(b);
@@ -218,7 +218,7 @@ impl<'a> Analyzer<'a> {
                 let mut iter = node.children_with_leaves(tree);
                 let type_ = self
                     .analyze_element(tree, iter.next().unwrap())
-                    .as_node()
+                    .into_node()
                     .unwrap()
                     .get_from_builder(&self.builder)
                     .data()
@@ -238,7 +238,7 @@ impl<'a> Analyzer<'a> {
             Let => {
                 self.builder.start_node(node.kind(), node.span().start);
                 let mut iter = node.children_with_leaves(tree);
-                let ident = iter.next().unwrap().as_leaf().unwrap().get(tree);
+                let ident = iter.next().unwrap().into_leaf().unwrap().get(tree);
                 let id = self.builder.push(ident.kind(), ident.span(), |_| None);
                 let ident = &self.source[ident.span()];
                 let type_ = self
@@ -272,12 +272,69 @@ impl<'a> Analyzer<'a> {
                     }))
                 })
             }
+            Loop => {
+                self.builder.start_node(node.kind(), node.span().start);
+                let mut elements = node.children_with_leaves(tree).collect::<Vec<_>>();
+                self.analyze_element(tree, elements.pop().unwrap());
+                let mut iter = elements.split(|s| {
+                    s.into_leaf()
+                        .map(|s| s.get(tree).kind() == SemiColon)
+                        .unwrap_or(false)
+                });
+                if let Some(&[e]) = iter.next() {
+                    self.analyze_element(tree, e);
+                } else {
+                    self.builder.push(Stuffing, 0..0, |id| {
+                        Some(LeafType::Value(Value {
+                            value: None,
+                            syntax: TreeElement::Leaf(id),
+                            type_: ValueType::None,
+                        }))
+                    });
+                }
+
+                if let Some(&[e]) = iter.next() {
+                    let cond = self.analyze_element(tree, e).into_node().unwrap();
+                    let cond = cond.get_from_builder(&self.builder);
+                    let type_ = cond.data().as_ref().unwrap().type_();
+                    if !type_.can_be_bool() {
+                        self.errors.push(Error::error(
+                            ErrorKind::TypeError {
+                                type_: type_.clone(),
+                            },
+                            cond.span(),
+                            self.source,
+                        ))
+                    }
+                } else {
+                    self.builder.push(Stuffing, 0..0, |id| {
+                        Some(LeafType::Value(Value {
+                            value: None,
+                            syntax: TreeElement::Leaf(id),
+                            type_: ValueType::Number,
+                        }))
+                    });
+                }
+
+                if let Some(&[e]) = iter.next() {
+                    self.analyze_element(tree, e);
+                } else {
+                    self.builder.push(Stuffing, 0..0, |id| {
+                        Some(LeafType::Value(Value {
+                            value: None,
+                            syntax: TreeElement::Leaf(id),
+                            type_: ValueType::None,
+                        }))
+                    });
+                }
+                self.builder.finish_node(node.span().end, |_| None)
+            }
             If => {
                 self.builder.start_node(node.kind(), node.span().start);
                 let mut iter = node.children_with_leaves(tree);
                 let cond = self
                     .analyze_element(tree, iter.next().unwrap())
-                    .as_node()
+                    .into_node()
                     .unwrap();
                 self.analyze_element(tree, iter.next().unwrap());
                 iter.next().map(|e| self.analyze_element(tree, e));
@@ -299,15 +356,15 @@ impl<'a> Analyzer<'a> {
                 let mut iter = node.children_with_leaves(tree);
                 let cond = self
                     .analyze_element(tree, iter.next().unwrap())
-                    .as_node()
+                    .into_node()
                     .unwrap();
                 let then = self
                     .analyze_element(tree, iter.next().unwrap())
-                    .as_node()
+                    .into_node()
                     .unwrap();
                 let else_ = self
                     .analyze_element(tree, iter.next().unwrap())
-                    .as_node()
+                    .into_node()
                     .unwrap();
 
                 let cond = cond.get_from_builder(&self.builder);
@@ -371,7 +428,7 @@ impl<'a> Analyzer<'a> {
                     .children_with_leaves(tree)
                     .next()
                     .unwrap()
-                    .as_leaf()
+                    .into_leaf()
                     .unwrap()
                     .get(tree)
                     .kind()

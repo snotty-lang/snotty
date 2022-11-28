@@ -90,6 +90,8 @@ pub enum SyntaxKind {
     Statement,
     Value,
 
+    Stuffing,
+
     #[error]
     Error,
 }
@@ -167,6 +169,7 @@ impl Display for SyntaxKind {
                 SyntaxKind::Cast => "CAST",
                 SyntaxKind::Ternary => "Ternary",
                 SyntaxKind::Error => "ERROR",
+                SyntaxKind::Stuffing => "STUFFING, yk",
             }
         )
     }
