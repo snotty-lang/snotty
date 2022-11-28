@@ -38,7 +38,18 @@ pub enum SyntaxKind {
     #[token("?")] Question,
     #[token("=>")] FatArrow,
     #[token("->")] Arrow,
+
     #[token("=")] Assign,
+    #[token("+=")] AddAssign,
+    #[token("-=")] SubAssign,
+    #[token("*=")] MulAssign,
+    #[token("/=")] DivAssign,
+    #[token("%=")] ModAssign,
+    #[token("&=")] AndAssign,
+    #[token("|=")] OrAssign,
+    #[token("^=")] XorAssign,
+    #[token(">>=")] ShrAssign,
+    #[token("<<=")] ShlAssign,
 
     #[token("<")] LessThan,
     #[token(">")] GreaterThan,
@@ -82,6 +93,7 @@ pub enum SyntaxKind {
     Pointer,
     Scope,
     Let,
+    ReLet,
     Loop,
     BinaryOp,
     UnaryOp,
@@ -94,6 +106,38 @@ pub enum SyntaxKind {
 
     #[error]
     Error,
+}
+
+impl SyntaxKind {
+    pub const ASSIGNMENT: [SyntaxKind; 11] = [
+        SyntaxKind::Assign,
+        SyntaxKind::AddAssign,
+        SyntaxKind::AndAssign,
+        SyntaxKind::OrAssign,
+        SyntaxKind::SubAssign,
+        SyntaxKind::MulAssign,
+        SyntaxKind::DivAssign,
+        SyntaxKind::ModAssign,
+        SyntaxKind::XorAssign,
+        SyntaxKind::ShlAssign,
+        SyntaxKind::ShrAssign,
+    ];
+
+    pub fn op_assignment(&self) -> Option<SyntaxKind> {
+        match self {
+            SyntaxKind::AddAssign => Some(SyntaxKind::Add),
+            SyntaxKind::AndAssign => Some(SyntaxKind::And),
+            SyntaxKind::SubAssign => Some(SyntaxKind::Sub),
+            SyntaxKind::DivAssign => Some(SyntaxKind::Div),
+            SyntaxKind::MulAssign => Some(SyntaxKind::Mul),
+            SyntaxKind::ModAssign => Some(SyntaxKind::Mod),
+            SyntaxKind::OrAssign => Some(SyntaxKind::Or),
+            SyntaxKind::XorAssign => Some(SyntaxKind::Xor),
+            SyntaxKind::ShlAssign => Some(SyntaxKind::Shl),
+            SyntaxKind::ShrAssign => Some(SyntaxKind::Shr),
+            _ => None,
+        }
+    }
 }
 
 impl Display for SyntaxKind {
@@ -130,6 +174,16 @@ impl Display for SyntaxKind {
                 SyntaxKind::LessThan => "<",
                 SyntaxKind::GreaterThan => ">",
                 SyntaxKind::Assign => "=",
+                SyntaxKind::AddAssign => "+=",
+                SyntaxKind::SubAssign => "-=",
+                SyntaxKind::MulAssign => "*=",
+                SyntaxKind::DivAssign => "/=",
+                SyntaxKind::ModAssign => "%=",
+                SyntaxKind::AndAssign => "&=",
+                SyntaxKind::OrAssign => "|=",
+                SyntaxKind::XorAssign => "^=",
+                SyntaxKind::ShrAssign => ">>=",
+                SyntaxKind::ShlAssign => "<<=",
                 SyntaxKind::LessEqual => "<=",
                 SyntaxKind::GreaterEqual => ">=",
                 SyntaxKind::And => "&",
@@ -161,6 +215,7 @@ impl Display for SyntaxKind {
                 SyntaxKind::BinaryOp => "BINARY OPERATION",
                 SyntaxKind::UnaryOp => "UNARY OPERATION",
                 SyntaxKind::Let => "LET",
+                SyntaxKind::ReLet => "ReLET",
                 SyntaxKind::If => "IF",
                 SyntaxKind::Loop => "LOOP",
                 SyntaxKind::Scope => "SCOPE",

@@ -10,12 +10,13 @@ pub struct Error<'source> {
     kind: ErrorKind,
     variant: ErrorVariant,
     path: String,
+    note: &'static str,
 }
 
 /// Kind of the error
 #[derive(Debug, Clone)]
 pub enum ErrorKind {
-    UnexpectedSyntax { expected: SyntaxKind },
+    UnexpectedSyntax { expected: Vec<SyntaxKind> },
     UnknownSyntax,
     MissingSemicolon,
     UnsupportedOperation { operation: SyntaxKind },
@@ -85,6 +86,7 @@ impl<'source> Error<'source> {
             source,
             kind,
             path: String::from("<program>"),
+            note: "Copium",
         }
     }
 
@@ -96,6 +98,7 @@ impl<'source> Error<'source> {
             source,
             kind,
             path: String::from("<program>"),
+            note: "Copium",
         }
     }
 
@@ -106,6 +109,15 @@ impl<'source> Error<'source> {
 
     pub fn set_path(&mut self, path: String) {
         self.path = path
+    }
+
+    pub fn with_note(mut self, note: &'static str) -> Self {
+        self.note = note;
+        self
+    }
+
+    pub fn set_note(&mut self, note: &'static str) {
+        self.note = note
     }
 }
 
@@ -168,11 +180,7 @@ impl Display for Error<'_> {
                 "_".repeat(self.location.column.end - 1),
             )?,
         }
-        writeln!(
-            f,
-            "\x1b[{}m    |\n    =\x1b[39m Man can't even write compilable code",
-            Color::BLUE
-        )?;
+        writeln!(f, "\x1b[{}m    |\n    =\x1b[39m {}", Color::BLUE, self.note)?;
         Ok(())
     }
 }
@@ -184,7 +192,12 @@ impl Display for ErrorKind {
             ErrorKind::UnknownSyntax => write!(f, "I don't recognize this syntax"),
             ErrorKind::MissingSemicolon => write!(f, "I think you forgot that semicolon there"),
             ErrorKind::UnexpectedSyntax { expected } => {
-                write!(f, "Expected to see a `{}` there instead", expected)
+                let mut expected = expected.iter();
+                write!(f, "Expected to see a `{}`", expected.next().unwrap())?;
+                for e in expected {
+                    write!(f, " or a `{}`", e)?;
+                }
+                write!(f, " there instead")
             }
             ErrorKind::UnsupportedOperation { operation } => {
                 write!(

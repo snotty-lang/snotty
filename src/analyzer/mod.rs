@@ -7,12 +7,12 @@ use crate::error::{Error, ErrorKind};
 use crate::parser::syntax::{ParseTree, SyntaxKind};
 use crate::tree::{Leaf, LeafId, Node, NodeId, Tree, TreeBuilder, TreeElement};
 
-use value::{LeafType, NodeType, Value, ValueData, ValueType};
+use value::{LeafData, LeafKind, NodeData, NodeKind, Value, ValueData, ValueType};
 use SyntaxKind::*;
 
 pub struct AnalysisResult<'a> {
     pub errors: Vec<Error<'a>>,
-    pub analyzed: Tree<NodeType, LeafType>,
+    pub analyzed: Tree<NodeData, LeafData>,
 }
 
 #[derive(Debug, Default)]
@@ -21,7 +21,7 @@ pub struct Analyzer<'a> {
     errors: Vec<Error<'a>>,
     lookup: Vec<HashMap<&'a str, usize>>,
     memory: Vec<Value>,
-    builder: TreeBuilder<NodeType, LeafType>,
+    builder: TreeBuilder<NodeData, LeafData>,
 }
 
 impl<'a> Analyzer<'a> {
@@ -164,11 +164,11 @@ impl<'a> Analyzer<'a> {
                     }
                 };
                 self.builder.finish_node(node.span().end, |id| {
-                    Some(NodeType::Value(Value {
+                    Some(NodeData::new(NodeKind::Value(Value {
                         value: None,
                         syntax: TreeElement::Node(id),
                         type_,
-                    }))
+                    })))
                 })
             }
             UnaryOp => {
@@ -206,11 +206,11 @@ impl<'a> Analyzer<'a> {
                 };
 
                 self.builder.finish_node(node.span().end, |id| {
-                    Some(NodeType::Value(Value {
+                    Some(NodeData::new(NodeKind::Value(Value {
                         value: None,
                         syntax: TreeElement::Node(id),
                         type_,
-                    }))
+                    })))
                 })
             }
             Cast => {
@@ -228,11 +228,11 @@ impl<'a> Analyzer<'a> {
                     .clone();
                 self.analyze_element(tree, iter.next().unwrap());
                 self.builder.finish_node(node.span().end, |id| {
-                    Some(NodeType::Value(Value {
+                    Some(NodeData::new(NodeKind::Value(Value {
                         value: None,
                         syntax: TreeElement::Node(id),
                         type_,
-                    }))
+                    })))
                 })
             }
             Let => {
@@ -265,11 +265,11 @@ impl<'a> Analyzer<'a> {
                         .clone(),
                 ));
                 self.builder.finish_node(node.span().end, |id| {
-                    Some(NodeType::Value(Value {
+                    Some(NodeData::new(NodeKind::Value(Value {
                         value: None,
                         syntax: TreeElement::Node(id),
                         type_,
-                    }))
+                    })))
                 })
             }
             Loop => {
@@ -285,11 +285,11 @@ impl<'a> Analyzer<'a> {
                     self.analyze_element(tree, e);
                 } else {
                     self.builder.push(Stuffing, 0..0, |id| {
-                        Some(LeafType::Value(Value {
+                        Some(LeafData::new(LeafKind::Value(Value {
                             value: None,
                             syntax: TreeElement::Leaf(id),
                             type_: ValueType::None,
-                        }))
+                        })))
                     });
                 }
 
@@ -308,11 +308,11 @@ impl<'a> Analyzer<'a> {
                     }
                 } else {
                     self.builder.push(Stuffing, 0..0, |id| {
-                        Some(LeafType::Value(Value {
+                        Some(LeafData::new(LeafKind::Value(Value {
                             value: None,
                             syntax: TreeElement::Leaf(id),
                             type_: ValueType::Number,
-                        }))
+                        })))
                     });
                 }
 
@@ -320,11 +320,11 @@ impl<'a> Analyzer<'a> {
                     self.analyze_element(tree, e);
                 } else {
                     self.builder.push(Stuffing, 0..0, |id| {
-                        Some(LeafType::Value(Value {
+                        Some(LeafData::new(LeafKind::Value(Value {
                             value: None,
                             syntax: TreeElement::Leaf(id),
                             type_: ValueType::None,
-                        }))
+                        })))
                     });
                 }
                 self.builder.finish_node(node.span().end, |_| None)
@@ -400,11 +400,11 @@ impl<'a> Analyzer<'a> {
                 }
 
                 self.builder.finish_node(node.span().end, |id| {
-                    Some(NodeType::Value(Value {
+                    Some(NodeData::new(NodeKind::Value(Value {
                         value: None,
                         syntax: TreeElement::Node(id),
                         type_: type_then,
-                    }))
+                    })))
                 })
             }
             Value => {
@@ -415,11 +415,11 @@ impl<'a> Analyzer<'a> {
                     .type_()
                     .clone();
                 self.builder.finish_node(node.span().end, |id| {
-                    Some(NodeType::Value(Value {
+                    Some(NodeData::new(NodeKind::Value(Value {
                         value: None,
                         syntax: TreeElement::Node(id),
                         type_,
-                    }))
+                    })))
                 })
             }
             Kind => {
@@ -439,11 +439,11 @@ impl<'a> Analyzer<'a> {
                     _ => unreachable!(),
                 };
                 self.builder.finish_node(node.span().end, |id| {
-                    Some(NodeType::Value(Value {
+                    Some(NodeData::new(NodeKind::Value(Value {
                         value: None,
                         syntax: TreeElement::Node(id),
                         type_,
-                    }))
+                    })))
                 })
             }
             Error => {
@@ -452,11 +452,11 @@ impl<'a> Analyzer<'a> {
                     self.analyze_element(tree, element);
                 }
                 self.builder.finish_node(node.span().end, |id| {
-                    Some(NodeType::Value(Value {
+                    Some(NodeData::new(NodeKind::Value(Value {
                         value: None,
                         syntax: TreeElement::Node(id),
                         type_: ValueType::Posisoned,
-                    }))
+                    })))
                 })
             }
             s => todo!("{s}"),
@@ -470,32 +470,32 @@ impl<'a> Analyzer<'a> {
                 self.builder.push(leaf.kind(), leaf.span(), |_| None)
             }
             Number => self.builder.push(leaf.kind(), leaf.span(), |id| {
-                Some(LeafType::Value(Value {
+                Some(LeafData::new(LeafKind::Value(Value {
                     value: Some(ValueData::Number(self.source[leaf.span()].parse().unwrap())),
                     syntax: TreeElement::Leaf(id),
                     type_: ValueType::Number,
-                }))
+                })))
             }),
             SemiColon => self.builder.push(leaf.kind(), leaf.span(), |id| {
-                Some(LeafType::Value(Value {
+                Some(LeafData::new(LeafKind::Value(Value {
                     value: Some(ValueData::None),
                     syntax: TreeElement::Leaf(id),
                     type_: ValueType::None,
-                }))
+                })))
             }),
             InKw => self.builder.push(leaf.kind(), leaf.span(), |id| {
-                Some(LeafType::Value(Value {
+                Some(LeafData::new(LeafKind::Value(Value {
                     value: None,
                     syntax: TreeElement::Leaf(id),
                     type_: ValueType::Number,
-                }))
+                })))
             }),
             Error => self.builder.push(leaf.kind(), leaf.span(), |id| {
-                Some(LeafType::Value(Value {
+                Some(LeafData::new(LeafKind::Value(Value {
                     value: None,
                     syntax: TreeElement::Leaf(id),
                     type_: ValueType::Posisoned,
-                }))
+                })))
             }),
             Char => {
                 let s = &self.source[leaf.span()];
@@ -537,11 +537,11 @@ impl<'a> Analyzer<'a> {
                     c => c as u8,
                 };
                 self.builder.push(leaf.kind(), leaf.span(), |id| {
-                    Some(LeafType::Value(Value {
+                    Some(LeafData::new(LeafKind::Value(Value {
                         value: Some(ValueData::Char(c)),
                         syntax: TreeElement::Leaf(id),
                         type_: ValueType::Number,
-                    }))
+                    })))
                 })
             }
             String => {
@@ -604,11 +604,11 @@ impl<'a> Analyzer<'a> {
                     });
                 }
                 self.builder.push(leaf.kind(), leaf.span(), move |id| {
-                    Some(LeafType::Value(Value {
+                    Some(LeafData::new(LeafKind::Value(Value {
                         value: Some(ValueData::String(new)),
                         syntax: TreeElement::Leaf(id),
                         type_: ValueType::Pointer(Box::new(ValueType::Number)),
-                    }))
+                    })))
                 })
             }
             Identifier => {
@@ -624,11 +624,11 @@ impl<'a> Analyzer<'a> {
                     }
                 };
                 self.builder.push(leaf.kind(), leaf.span(), |id| {
-                    Some(LeafType::Value(Value {
+                    Some(LeafData::new(LeafKind::Value(Value {
                         value: None,
                         syntax: TreeElement::Leaf(id),
                         type_,
-                    }))
+                    })))
                 })
             }
             s => unreachable!("{s}"),

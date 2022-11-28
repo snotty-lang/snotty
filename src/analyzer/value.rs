@@ -1,45 +1,123 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::Deref};
 
 use crate::{
     parser::syntax::SyntaxKind,
-    tree::{LeafId, NodeId, TreeElement},
+    tree::{Leaf, LeafId, Node, NodeId, TreeElement},
+    Span,
 };
 
 #[derive(Debug, Clone)]
-pub enum LeafType {
+pub struct LeafData {
+    pub kind: LeafKind,
+}
+
+impl LeafData {
+    pub fn new(kind: LeafKind) -> Self {
+        LeafData { kind }
+    }
+}
+
+impl Deref for LeafData {
+    type Target = LeafKind;
+    fn deref(&self) -> &Self::Target {
+        &self.kind
+    }
+}
+
+impl Display for LeafData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum LeafKind {
     Value(Value),
     Other,
 }
 
-impl Display for LeafType {
+impl Display for LeafKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LeafType::Other => Ok(()),
-            LeafType::Value(v) => write!(f, "{}", v),
+            LeafKind::Other => Ok(()),
+            LeafKind::Value(v) => write!(f, "{}", v),
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum NodeType {
+pub struct NodeData {
+    pub kind: NodeKind,
+    pub assignable: bool,
+}
+
+impl NodeData {
+    pub fn new(kind: NodeKind) -> Self {
+        NodeData {
+            kind,
+            assignable: false,
+        }
+    }
+
+    pub fn assignable(mut self) -> Self {
+        self.assignable = true;
+        self
+    }
+}
+
+impl Deref for NodeData {
+    type Target = NodeKind;
+    fn deref(&self) -> &Self::Target {
+        &self.kind
+    }
+}
+
+impl Display for NodeData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum NodeKind {
     Value(Value),
     Kind(ValueType),
 }
 
-impl Display for NodeType {
+impl Display for NodeKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NodeType::Kind(v) => write!(f, "`{}`", v),
-            NodeType::Value(v) => write!(f, "{}", v),
+            NodeKind::Kind(v) => write!(f, "`{}`", v),
+            NodeKind::Value(v) => write!(f, "{}", v),
         }
     }
 }
 
-impl NodeType {
+impl NodeKind {
     pub fn type_(&self) -> &ValueType {
         match self {
-            NodeType::Kind(v) => v,
-            NodeType::Value(v) => &v.type_,
+            NodeKind::Kind(v) => v,
+            NodeKind::Value(v) => &v.type_,
+        }
+    }
+}
+
+impl<'a> TreeElement<&'a Node<NodeData>, &'a Leaf<LeafData>> {
+    /// **PANICS** when data of the node/leaf is none or type of leaf is not `LeafType::Value`
+    pub fn type_(&self) -> &'a ValueType {
+        match self {
+            TreeElement::Leaf(leaf) => match &**leaf.data().as_ref().unwrap() {
+                LeafKind::Value(Value { type_, .. }) => type_,
+                _ => panic!(),
+            },
+            TreeElement::Node(node) => node.data().as_ref().unwrap().type_(),
+        }
+    }
+
+    pub fn span(&self) -> Span {
+        match self {
+            TreeElement::Node(node) => node.span(),
+            TreeElement::Leaf(leaf) => leaf.span(),
         }
     }
 }
