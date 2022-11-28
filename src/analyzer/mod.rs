@@ -45,15 +45,6 @@ impl<'a> Analyzer<'a> {
     }
 
     #[inline]
-    fn get_mut(&mut self, ident: &'a str) -> Option<&mut Value> {
-        self.lookup
-            .iter_mut()
-            .rev()
-            .find_map(|map| map.get_mut(ident))
-            .map(|&mut i| &mut self.memory[i])
-    }
-
-    #[inline]
     fn insert(&mut self, ident: &'a str, value: Value) {
         self.memory.push(value);
         self.lookup
@@ -206,11 +197,14 @@ impl<'a> Analyzer<'a> {
                 };
 
                 self.builder.finish_node(node.span().end, |id| {
-                    Some(NodeData::new(NodeKind::Value(Value {
-                        value: None,
-                        syntax: TreeElement::Node(id),
-                        type_,
-                    })))
+                    Some(
+                        NodeData::new(NodeKind::Value(Value {
+                            value: None,
+                            syntax: TreeElement::Node(id),
+                            type_,
+                        }))
+                        .assignable(op == SyntaxKind::Mul),
+                    )
                 })
             }
             Cast => {
@@ -254,6 +248,75 @@ impl<'a> Analyzer<'a> {
                         type_,
                     },
                 );
+                self.builder.finish_node(node.span().end, |_| None)
+            }
+            ReLet => {
+                self.builder.start_node(node.kind(), node.span().start);
+                let mut iter = node.children_with_leaves(tree);
+                let lhs = self
+                    .analyze_element(tree, iter.next().unwrap())
+                    .into_node()
+                    .unwrap();
+                let op = iter
+                    .next()
+                    .unwrap()
+                    .into_leaf()
+                    .unwrap()
+                    .get(tree)
+                    .kind()
+                    .op_assignment();
+                let rhs = self
+                    .analyze_element(tree, iter.next().unwrap())
+                    .into_node()
+                    .unwrap();
+                let lhs = lhs.get_from_builder(&self.builder);
+                let rhs = rhs.get_from_builder(&self.builder);
+                let data_lhs = lhs.data().as_ref().unwrap();
+                let type_lhs = data_lhs.type_();
+                let type_rhs = rhs.data().as_ref().unwrap().type_();
+                if !data_lhs.assignable {
+                    self.errors
+                        .push(Error::error(ErrorKind::InvalidLHS, lhs.span(), self.source));
+                }
+                if *type_lhs == ValueType::Unknown {
+                    self.errors.push(Error::error(
+                        ErrorKind::UnknownType,
+                        lhs.span(),
+                        self.source,
+                    ));
+                } else if *type_rhs == ValueType::Unknown {
+                    self.errors.push(Error::error(
+                        ErrorKind::UnknownType,
+                        rhs.span(),
+                        self.source,
+                    ));
+                } else {
+                    match op {
+                        Some(op) => {
+                            if type_lhs.operate_binary(op, type_rhs).is_none() {
+                                self.errors.push(Error::error(
+                                    ErrorKind::UnsupportedOperation { operation: op },
+                                    node.span(),
+                                    self.source,
+                                ));
+                            }
+                        }
+                        None => {
+                            if type_lhs != type_rhs
+                                && ![type_lhs, type_rhs].contains(&&ValueType::Posisoned)
+                            {
+                                self.errors.push(Error::error(
+                                    ErrorKind::TypeError {
+                                        type_: type_rhs.clone(),
+                                    },
+                                    rhs.span(),
+                                    self.source,
+                                ));
+                            }
+                        }
+                    }
+                }
+
                 self.builder.finish_node(node.span().end, |_| None)
             }
             Pointer => {
@@ -409,17 +472,22 @@ impl<'a> Analyzer<'a> {
             }
             Value => {
                 self.builder.start_node(node.kind(), node.span().start);
-                let type_ = self
+                let a = self
                     .analyze_element(tree, node.children_with_leaves(tree).next().unwrap())
-                    .get_from_builder(&self.builder)
-                    .type_()
-                    .clone();
+                    .get_from_builder(&self.builder);
+
+                let type_ = a.type_().clone();
+                let assignable = a.assignable();
+
                 self.builder.finish_node(node.span().end, |id| {
-                    Some(NodeData::new(NodeKind::Value(Value {
-                        value: None,
-                        syntax: TreeElement::Node(id),
-                        type_,
-                    })))
+                    Some(
+                        NodeData::new(NodeKind::Value(Value {
+                            value: None,
+                            syntax: TreeElement::Node(id),
+                            type_,
+                        }))
+                        .assignable(assignable),
+                    )
                 })
             }
             Kind => {
@@ -468,6 +536,11 @@ impl<'a> Analyzer<'a> {
             Add | Mul | Div | Sub | Mod | Inc | Dec | And | Or | Not | Shl | Shr | Equal
             | NotEqual | Xor | LessThan | LessEqual | GreaterThan | GreaterEqual => {
                 self.builder.push(leaf.kind(), leaf.span(), |_| None)
+            }
+            AddAssign | SubAssign | MulAssign | DivAssign | ModAssign | AndAssign | OrAssign
+            | XorAssign | ShlAssign | ShrAssign => {
+                self.builder
+                    .push(leaf.kind().op_assignment().unwrap(), leaf.span(), |_| None)
             }
             Number => self.builder.push(leaf.kind(), leaf.span(), |id| {
                 Some(LeafData::new(LeafKind::Value(Value {
@@ -624,11 +697,14 @@ impl<'a> Analyzer<'a> {
                     }
                 };
                 self.builder.push(leaf.kind(), leaf.span(), |id| {
-                    Some(LeafData::new(LeafKind::Value(Value {
-                        value: None,
-                        syntax: TreeElement::Leaf(id),
-                        type_,
-                    })))
+                    Some(
+                        LeafData::new(LeafKind::Value(Value {
+                            value: None,
+                            syntax: TreeElement::Leaf(id),
+                            type_,
+                        }))
+                        .assignable(true),
+                    )
                 })
             }
             s => unreachable!("{s}"),

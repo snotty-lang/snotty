@@ -9,11 +9,20 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct LeafData {
     pub kind: LeafKind,
+    pub assignable: bool,
 }
 
 impl LeafData {
     pub fn new(kind: LeafKind) -> Self {
-        LeafData { kind }
+        LeafData {
+            kind,
+            assignable: false,
+        }
+    }
+
+    pub fn assignable(mut self, assignable: bool) -> Self {
+        self.assignable = assignable;
+        self
     }
 }
 
@@ -59,8 +68,8 @@ impl NodeData {
         }
     }
 
-    pub fn assignable(mut self) -> Self {
-        self.assignable = true;
+    pub fn assignable(mut self, assignable: bool) -> Self {
+        self.assignable = assignable;
         self
     }
 }
@@ -120,6 +129,20 @@ impl<'a> TreeElement<&'a Node<NodeData>, &'a Leaf<LeafData>> {
             TreeElement::Leaf(leaf) => leaf.span(),
         }
     }
+
+    pub fn data(&self) -> TreeElement<&'a NodeData, &'a LeafData> {
+        match self {
+            TreeElement::Node(node) => TreeElement::Node(node.data().as_ref().unwrap()),
+            TreeElement::Leaf(leaf) => TreeElement::Leaf(leaf.data().as_ref().unwrap()),
+        }
+    }
+
+    pub fn assignable(&self) -> bool {
+        match self.data() {
+            TreeElement::Node(node) => node.assignable,
+            TreeElement::Leaf(leaf) => leaf.assignable,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -162,7 +185,7 @@ impl ValueType {
                 SyntaxKind::Not | SyntaxKind::Inc | SyntaxKind::Dec | SyntaxKind::Sub,
             ) => Some(ValueType::Number),
             (ValueType::Posisoned, _) => Some(ValueType::Posisoned),
-            (_, SyntaxKind::Mul) => Some(ValueType::Pointer(Box::new(self.clone()))),
+            (ValueType::Pointer(t), SyntaxKind::Mul) => Some((**t).clone()),
             (ValueType::Pointer(_), SyntaxKind::Inc | SyntaxKind::Dec) => Some(self.clone()),
             _ => None,
         }

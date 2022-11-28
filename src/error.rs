@@ -25,6 +25,7 @@ pub enum ErrorKind {
     TypeError { type_: ValueType },
     UndefinedReference,
     UnknownType,
+    InvalidLHS,
 }
 
 /// Location of the error
@@ -135,7 +136,7 @@ impl Display for Error<'_> {
             f,
             "\x1b[1;{color}m{text}\x1b[39m: {}\x1b[22m\n\
              \x1b[{blue}m   --> \x1b[39m{}:{}:{}\n\
-             \x1b[{blue}m    |\n{:0>3} |\x1b[39m {}",
+             \x1b[{blue}m    |\n{: >3} |\x1b[39m {}",
             self.kind,
             self.path,
             self.location.line.start + 1,
@@ -156,7 +157,7 @@ impl Display for Error<'_> {
                 f,
                 "\x1b[{blue}m    |\x1b[{color}m {}^{}\x1b[39m\n\
                      \x1b[{blue}m    |\n\
-                     {:0>3} |\x1b[39m {}\n\
+                     {: >3} |\x1b[39m {}\n\
                      \x1b[{blue}m    |\x1b[{color}m {}^\x1b[39m",
                 " ".repeat(self.location.column.start),
                 "_".repeat(start_line.len() - 1),
@@ -171,7 +172,7 @@ impl Display for Error<'_> {
                      \x1b[{blue}m    |\n\
                      ... |\x1b[39m ...\n\
                      \x1b[{blue}m    |\n\
-                     {:0>3} |\x1b[39m {}\n\
+                     {: >3} |\x1b[39m {}\n\
                      \x1b[{blue}m    |\x1b[{color}m {}^\x1b[39m",
                 " ".repeat(self.location.column.start),
                 "_".repeat(start_line.len() - 1),
@@ -200,11 +201,7 @@ impl Display for ErrorKind {
                 write!(f, " there instead")
             }
             ErrorKind::UnsupportedOperation { operation } => {
-                write!(
-                    f,
-                    "Operation `{}` is not supported between these types",
-                    operation
-                )
+                write!(f, "Operation `{}` is not doable here", operation)
             }
             ErrorKind::ByteOverflow => {
                 write!(f, "This shit is too big to fit in a byte")
@@ -217,6 +214,9 @@ impl Display for ErrorKind {
             }
             ErrorKind::UnknownType => {
                 write!(f, "The type of this thing is unknown")
+            }
+            ErrorKind::InvalidLHS => {
+                write!(f, "The left-hand side of the expression is unacceptable")
             }
         }
     }
