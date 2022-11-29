@@ -12,7 +12,11 @@ use SyntaxKind::*;
 
 pub struct AnalysisResult<'a> {
     pub errors: Vec<Error<'a>>,
-    pub analyzed: Tree<NodeData, LeafData>,
+    pub analyzed: Analyzed,
+}
+
+pub struct Analyzed {
+    pub tree: Tree<NodeData, LeafData>,
 }
 
 #[derive(Debug, Default)]
@@ -63,7 +67,9 @@ impl<'a> Analyzer<'a> {
 
         AnalysisResult {
             errors: self.errors,
-            analyzed: self.builder.finish(),
+            analyzed: Analyzed {
+                tree: self.builder.finish(),
+            },
         }
     }
 

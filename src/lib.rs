@@ -1,4 +1,3 @@
-// pub mod compiler;
 pub mod analyzer;
 pub mod error;
 pub mod ir;
@@ -29,6 +28,6 @@ pub fn compile(file: String, contents: &str) -> Result<String, Vec<Error>> {
         eprintln!("{}", error);
     }
     let analysis = analyzed.analyzed;
-    println!("\nTREE:\n{}", analysis);
+    println!("\nTREE:\n{}", analysis.tree);
     todo!()
 }
