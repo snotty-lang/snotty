@@ -10,9 +10,7 @@ pub struct Tree<N, L> {
 }
 
 impl<N, L> Tree<N, L> {
-    pub fn root(&self) -> NodeId {
-        NodeId(0)
-    }
+    pub const ROOT: NodeId = NodeId(0);
 
     pub fn node(&self, id: NodeId) -> &Node<N> {
         &self.nodes[id.0]
@@ -138,6 +136,18 @@ impl<N> Node<N> {
         }
     }
 
+    pub fn children_with_leaves_builder<'a, L>(
+        &self,
+        builder: &'a TreeBuilder<N, L>,
+    ) -> BuilderChildLeafIter<'a, N, L> {
+        BuilderChildLeafIter {
+            builder,
+            leaf: self.leaf_span.start,
+            child: 0,
+            node: self.id,
+        }
+    }
+
     pub fn leaves<'a, L>(&self, tree: &'a Tree<N, L>) -> &'a [Leaf<L>] {
         &tree.leaves[self.leaf_span.clone()]
     }
@@ -158,6 +168,10 @@ impl<N> Node<N> {
 
     pub fn data(&self) -> &Option<N> {
         &self.data
+    }
+
+    pub fn data_mut(&mut self) -> &mut Option<N> {
+        &mut self.data
     }
 }
 
@@ -204,6 +218,10 @@ impl<L> Leaf<L> {
 
     pub fn data(&self) -> &Option<L> {
         &self.data
+    }
+
+    pub fn data_mut(&mut self) -> &mut Option<L> {
+        &mut self.data
     }
 }
 
@@ -324,8 +342,16 @@ impl<N: Debug, L> TreeBuilder<N, L> {
         &self.leaves[id.0]
     }
 
+    pub fn leaf_mut(&mut self, id: LeafId) -> &mut Leaf<L> {
+        &mut self.leaves[id.0]
+    }
+
     pub fn node(&self, id: NodeId) -> &Node<N> {
         &self.nodes[id.0]
+    }
+
+    pub fn node_mut(&mut self, id: NodeId) -> &mut Node<N> {
+        &mut self.nodes[id.0]
     }
 
     pub fn start_node(&mut self, kind: SyntaxKind, start: usize) {
@@ -513,6 +539,37 @@ impl<'a, N, L> Iterator for ChildLeafIter<'a, N, L> {
         }
         let child_id = current.children.get(self.child).copied();
         let child_span = child_id.map(|id| self.tree.nodes[id].leaf_span.clone());
+        match (child_id, child_span) {
+            (Some(id), Some(Span { start, end })) if start == self.leaf => {
+                self.leaf = end;
+                self.child += 1;
+                Some(TreeElement::Node(NodeId(id)))
+            }
+            _ => {
+                let out = self.leaf;
+                self.leaf += 1;
+                Some(TreeElement::Leaf(LeafId(out)))
+            }
+        }
+    }
+}
+
+pub struct BuilderChildLeafIter<'a, N, L> {
+    builder: &'a TreeBuilder<N, L>,
+    leaf: usize,
+    child: usize,
+    node: usize,
+}
+
+impl<'a, N, L> Iterator for BuilderChildLeafIter<'a, N, L> {
+    type Item = TreeElement<NodeId, LeafId>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let current = &self.builder.nodes[self.node];
+        if self.leaf >= current.leaf_span.end {
+            return None;
+        }
+        let child_id = current.children.get(self.child).copied();
+        let child_span = child_id.map(|id| self.builder.nodes[id].leaf_span.clone());
         match (child_id, child_span) {
             (Some(id), Some(Span { start, end })) if start == self.leaf => {
                 self.leaf = end;

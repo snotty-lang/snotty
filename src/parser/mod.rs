@@ -93,16 +93,16 @@ impl<'a> Parser<'a> {
                 }
                 self.recovery.pop();
 
-                self.expression();
+                let s = self.expression();
                 self.builder.finish_node(self.e_loc, |_| None);
-                ParseRecovery::Ok
+                s
             }
             a @ (OutKw | ReturnKw) => {
                 self.builder.start_node(a, self.s_loc);
                 self.pass();
-                self.expression();
+                let s = self.expression();
                 self.builder.finish_node(self.e_loc, |_| None);
-                ParseRecovery::Ok
+                s
             }
             FileKw => {
                 self.builder.start_node(FileKw, self.s_loc);
@@ -217,6 +217,35 @@ impl<'a> Parser<'a> {
                     self.pass();
                     s = self.statement();
                 }
+                self.builder.finish_node(self.e_loc, |_| None);
+                s
+            }
+            FxKw => {
+                self.builder.start_node(Fx, self.s_loc);
+                self.recovery.extend(&[CloseParen, OpenParen, Identifier]);
+                self.pass();
+                if let ParseAction::Return(s) = self.expect(&[Identifier], 3, 2, true) {
+                    return s;
+                }
+                self.recovery.pop();
+
+                if let ParseAction::Return(s) = self.expect(&[OpenParen], 2, 2, false) {
+                    return s;
+                }
+                self.recovery.pop();
+
+                while self.current_syntax() != CloseParen {
+                    if let ParseAction::Return(s) = self.expect(&[Identifier], 1, 2, true) {
+                        return s;
+                    }
+                }
+
+                if let ParseAction::Return(s) = self.expect(&[CloseParen], 1, 2, false) {
+                    return s;
+                }
+                self.recovery.pop();
+
+                let s = self.statement();
                 self.builder.finish_node(self.e_loc, |_| None);
                 s
             }

@@ -101,6 +101,7 @@ pub enum SyntaxKind {
     If,
     Statement,
     Value,
+    Fx,
 
     Stuffing,
 
@@ -225,6 +226,7 @@ impl Display for SyntaxKind {
                 SyntaxKind::Ternary => "Ternary",
                 SyntaxKind::Error => "ERROR",
                 SyntaxKind::Stuffing => "STUFFING, yk",
+                SyntaxKind::Fx => "FUNCTION",
             }
         )
     }

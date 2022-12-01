@@ -103,9 +103,9 @@ impl Display for NodeKind {
 }
 
 impl NodeKind {
-    pub fn type_(&self) -> &ValueType {
+    pub fn type_(&self) -> &MaybeTyped {
         match self {
-            NodeKind::Kind(v) => v,
+            NodeKind::Kind(_v) => todo!(),
             NodeKind::Value(v) => &v.type_,
         }
     }
@@ -113,7 +113,7 @@ impl NodeKind {
 
 impl<'a> TreeElement<&'a Node<NodeData>, &'a Leaf<LeafData>> {
     /// **PANICS** when data of the node/leaf is none or type of leaf is not `LeafType::Value`
-    pub fn type_(&self) -> &'a ValueType {
+    pub fn type_(&self) -> &'a MaybeTyped {
         match self {
             TreeElement::Leaf(leaf) => match &**leaf.data().as_ref().unwrap() {
                 LeafKind::Value(Value { type_, .. }) => type_,
@@ -127,6 +127,13 @@ impl<'a> TreeElement<&'a Node<NodeData>, &'a Leaf<LeafData>> {
         match self {
             TreeElement::Node(node) => node.span(),
             TreeElement::Leaf(leaf) => leaf.span(),
+        }
+    }
+
+    pub fn kind(&self) -> SyntaxKind {
+        match self {
+            TreeElement::Node(node) => node.kind(),
+            TreeElement::Leaf(leaf) => leaf.kind(),
         }
     }
 
@@ -146,12 +153,17 @@ impl<'a> TreeElement<&'a Node<NodeData>, &'a Leaf<LeafData>> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[repr(u16)]
+pub enum MaybeTyped {
+    UnTyped(TreeElement<NodeId, LeafId>),
+    InProgress,
+    Typed(ValueType),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ValueType {
     None,
     Number,
-    Unknown,
-    Posisoned,
+    Poisoned,
     Pointer(Box<ValueType>),
 }
 
@@ -169,11 +181,21 @@ pub enum ValueData {
     Variable(usize),
 }
 
+impl Display for MaybeTyped {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MaybeTyped::InProgress => write!(f, "Loading"),
+            MaybeTyped::UnTyped(_) => write!(f, "?"),
+            MaybeTyped::Typed(t) => write!(f, "{t}"),
+        }
+    }
+}
+
 impl ValueType {
     pub fn operate_binary(&self, op: SyntaxKind, other: &ValueType) -> Option<ValueType> {
         match (&self, op, other) {
             (ValueType::Number, _, ValueType::Number) => Some(ValueType::Number),
-            (ValueType::Posisoned, _, _) => Some(ValueType::Posisoned),
+            (ValueType::Poisoned, _, _) => Some(ValueType::Poisoned),
             _ => None,
         }
     }
@@ -184,7 +206,7 @@ impl ValueType {
                 ValueType::Number,
                 SyntaxKind::Not | SyntaxKind::Inc | SyntaxKind::Dec | SyntaxKind::Sub,
             ) => Some(ValueType::Number),
-            (ValueType::Posisoned, _) => Some(ValueType::Posisoned),
+            (ValueType::Poisoned, _) => Some(ValueType::Poisoned),
             (ValueType::Pointer(t), SyntaxKind::Mul) => Some((**t).clone()),
             (ValueType::Pointer(_), SyntaxKind::Inc | SyntaxKind::Dec) => Some(self.clone()),
             _ => None,
@@ -200,14 +222,34 @@ impl ValueType {
     }
 }
 
+impl MaybeTyped {
+    pub fn type_(&self) -> Option<&ValueType> {
+        if let MaybeTyped::Typed(type_) = self {
+            Some(type_)
+        } else {
+            None
+        }
+    }
+
+    pub fn is_typed(&self) -> bool {
+        matches!(self, MaybeTyped::Typed(_))
+    }
+
+    pub fn map(self, f: impl Fn(ValueType) -> ValueType) -> Self {
+        match self {
+            MaybeTyped::Typed(t) => MaybeTyped::Typed(f(t)),
+            t => t,
+        }
+    }
+}
+
 impl Display for ValueType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ValueType::None => write!(f, "None"),
             ValueType::Number => write!(f, "Number"),
             ValueType::Pointer(t) => write!(f, "*{t}"),
-            ValueType::Unknown => write!(f, "?"),
-            ValueType::Posisoned => write!(f, "\u{1F480}"),
+            ValueType::Poisoned => write!(f, "\u{1F480}"),
         }
     }
 }
@@ -230,7 +272,7 @@ impl Display for ValueData {
 pub struct Value {
     pub value: Option<ValueData>,
     pub syntax: TreeElement<NodeId, LeafId>,
-    pub type_: ValueType,
+    pub type_: MaybeTyped,
 }
 
 impl Display for Value {
