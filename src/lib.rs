@@ -3,30 +3,21 @@ pub mod error;
 pub mod parser;
 mod tree;
 
-use analyzer::Analyzer;
+use analyzer::{analyzed_builder::Analyzer, type_checker::TypeChecker};
 use parser::Parser;
 
 pub type Span = core::ops::Range<usize>;
 
 use error::Error;
 
-pub fn compile(file: String, contents: &str) -> Result<String, Vec<Error>> {
-    let parser = Parser::new(contents);
-    let mut parsed = parser.parse();
-    for error in &mut parsed.errors {
+pub fn compile(file: String, source: &str) -> Result<String, Vec<Error>> {
+    let parsed = Parser::new(source).parse();
+    let analyzed = Analyzer::new(source, parsed).analyze();
+    let mut checked = TypeChecker::new(source, analyzed).analyze();
+    for error in &mut checked.errors {
         error.set_path(file.clone());
         eprintln!("{}", error);
     }
-    let parse = parsed.parse;
-    println!("\nPARSE:\n{:?}", parse);
-
-    let analyzer = Analyzer::new(contents);
-    let mut analyzed = analyzer.analyze(&parse);
-    for error in &mut analyzed.errors {
-        error.set_path(file.clone());
-        eprintln!("{}", error);
-    }
-    let analysis = analyzed.analyzed;
-    println!("\nTREE:\n{}", analysis.tree);
+    println!("\nTREE:\n{}", checked.analyzed.tree);
     todo!()
 }

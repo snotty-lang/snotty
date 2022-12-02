@@ -44,12 +44,12 @@ impl Location {
 
         for (i, source_line) in source.lines().enumerate() {
             current_loc += 1;
-            if source_line.len() + current_loc >= span.start && !start {
+            if source_line.len() + current_loc > span.start && !start {
                 line.start = i;
                 column.start = span.start + 1 - current_loc;
                 start = true;
             }
-            if source_line.len() + current_loc >= span.end {
+            if source_line.len() + current_loc > span.end {
                 line.end = i;
                 column.end = span.end + 1 - current_loc;
                 break;

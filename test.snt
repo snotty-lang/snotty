@@ -1,2 +1,4 @@
-let a = b
-let b = 2
+let mf = 1
+let dh = 2
+let madhav = 3
+out madhav == mf + dh

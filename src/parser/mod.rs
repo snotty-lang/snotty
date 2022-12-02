@@ -222,7 +222,7 @@ impl<'a> Parser<'a> {
             }
             FxKw => {
                 self.builder.start_node(Fx, self.s_loc);
-                self.recovery.extend(&[CloseParen, OpenParen, Identifier]);
+                self.recovery.extend([CloseParen, OpenParen, Identifier]);
                 self.pass();
                 if let ParseAction::Return(s) = self.expect(&[Identifier], 3, 2, true) {
                     return s;
@@ -625,7 +625,6 @@ impl<'a> Parser<'a> {
     /// Consumes current syntax and push to builder.
     fn bump(&mut self) {
         if let Some((kind, span)) = self.tokens.next() {
-            println!("`{kind}`:{span:?}");
             self.builder.push(kind, span, |_| None);
         }
         self.p_loc = self.e_loc;
