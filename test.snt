@@ -1,4 +1,1 @@
-let mf = 1
-let dh = 2
-let madhav = 3
-out madhav == mf + dh
+out 1 + 2 == 3

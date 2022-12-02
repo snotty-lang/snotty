@@ -26,6 +26,7 @@ pub enum ErrorKind {
     UndefinedReference,
     UnknownType,
     InvalidLHS,
+    KeywordMisuse { keyword: SyntaxKind },
 }
 
 /// Location of the error
@@ -217,6 +218,9 @@ impl Display for ErrorKind {
             }
             ErrorKind::InvalidLHS => {
                 write!(f, "The left-hand side of the expression is unacceptable")
+            }
+            ErrorKind::KeywordMisuse { keyword } => {
+                write!(f, "{keyword} can not be used here")
             }
         }
     }

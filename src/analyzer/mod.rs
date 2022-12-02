@@ -1,4 +1,4 @@
-pub mod analyzed_builder;
+pub mod builder;
 pub mod type_checker;
 pub mod value;
 

@@ -3,7 +3,7 @@ pub mod error;
 pub mod parser;
 mod tree;
 
-use analyzer::{analyzed_builder::Analyzer, type_checker::TypeChecker};
+use analyzer::{builder::Analyzer, type_checker::TypeChecker};
 use parser::Parser;
 
 pub type Span = core::ops::Range<usize>;
@@ -18,6 +18,6 @@ pub fn compile(file: String, source: &str) -> Result<String, Vec<Error>> {
         error.set_path(file.clone());
         eprintln!("{}", error);
     }
-    println!("\nTREE:\n{}", checked.analyzed.tree);
+    println!("{}", checked.analyzed.tree);
     todo!()
 }
