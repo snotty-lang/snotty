@@ -7,4 +7,6 @@ edition = "2021"
 
 [dependencies]
 logos = "0.12.1"
-cranelift = "0.89.2"
+cranelift = "0.90.1"
+cranelift-jit = "0.90.1"
+cranelift-module = "0.90.1"

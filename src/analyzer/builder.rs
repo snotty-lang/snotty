@@ -11,7 +11,7 @@ use super::value::{
 use super::{AnalysisResult, Analyzed, AnalyzedTreeBuilder};
 use SyntaxKind::*;
 
-/// Builds the basic analyzed tree structure and 
+/// Builds the basic analyzed tree structure and
 /// defines types and definitions for type checking later.
 /// Detects errors such as `ByteOverflow`, `InvalidLHS` and `KeywordMisuse`.
 #[derive(Debug)]

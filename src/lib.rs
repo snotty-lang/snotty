@@ -1,4 +1,5 @@
 pub mod analyzer;
+pub mod compiler;
 pub mod error;
 pub mod parser;
 mod tree;
