@@ -1,55 +1,51 @@
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
-use cranelift_module::{DataContext, Linkage, Module};
+use cranelift_module::{DataContext, Linkage, Module, ModuleError};
 use std::collections::HashMap;
 use std::slice;
 
 use crate::{
     analyzer::{
-        value::{LeafData, NodeData},
+        value::{LeafData, NodeData, ValueData},
         Analyzed, AnalyzedTree,
     },
     parser::syntax::SyntaxKind as SK,
     tree::{Leaf, LeafId, Node, NodeId, TreeElement},
 };
 
-pub struct JIT {
+pub struct JIT<'a> {
     builder_context: FunctionBuilderContext,
     ctx: codegen::Context,
     data_ctx: DataContext,
     module: JITModule,
+    source: &'a str,
 }
 
-impl Default for JIT {
-    fn default() -> Self {
+impl<'a> JIT<'a> {
+    pub fn new(source: &'a str) -> Self {
         let builder = JITBuilder::new(cranelift_module::default_libcall_names());
+
         let module = JITModule::new(builder.unwrap());
         Self {
             builder_context: FunctionBuilderContext::new(),
             ctx: module.make_context(),
             data_ctx: DataContext::new(),
             module,
+            source,
         }
     }
-}
 
-impl JIT {
-    pub fn compile(&mut self, analyzed: Analyzed, source: &str) -> Result<*const u8, String> {
-        self.translate(analyzed, source)?;
+    pub fn compile(&mut self, analyzed: Analyzed) -> Result<*const u8, ModuleError> {
+        self.translate(analyzed)?;
 
-        let id = self
-            .module
-            .declare_function("_M__main__", Linkage::Export, &self.ctx.func.signature)
-            .map_err(|e| e.to_string())?;
+        let id =
+            self.module
+                .declare_function("__main__", Linkage::Export, &self.ctx.func.signature)?;
 
-        self.module
-            .define_function(id, &mut self.ctx)
-            .map_err(|e| e.to_string())?;
+        self.module.define_function(id, &mut self.ctx)?;
 
         self.module.clear_context(&mut self.ctx);
-        self.module
-            .finalize_definitions()
-            .map_err(|e| e.to_string())?;
+        self.module.finalize_definitions()?;
 
         let code = self.module.get_finalized_function(id);
 
@@ -75,8 +71,9 @@ impl JIT {
         Ok(unsafe { slice::from_raw_parts(buffer.0, buffer.1) })
     }
 
-    fn translate(&mut self, analyzed: Analyzed, source: &str) -> Result<(), String> {
+    fn translate(&mut self, analyzed: Analyzed) -> Result<(), ModuleError> {
         let int = self.module.target_config().pointer_type();
+        self.ctx.func.signature.returns.push(AbiParam::new(int));
 
         let mut builder = FunctionBuilder::new(&mut self.ctx.func, &mut self.builder_context);
         let entry_block = builder.create_block();
@@ -89,14 +86,21 @@ impl JIT {
             memory,
             lookup,
         } = analyzed;
+
         let variables = memory
             .into_iter()
             .enumerate()
             .map(|(i, _)| Variable::new(i))
+            .map(|v| {
+                builder.declare_var(v, int);
+                v
+            })
             .collect::<Vec<_>>();
 
+        let mut return_var = builder.ins().iconst(int, 0);
+
         let mut trans = FunctionTranslator {
-            source,
+            source: self.source,
             int,
             builder,
             lookup,
@@ -107,10 +111,10 @@ impl JIT {
 
         let root = tree.node(AnalyzedTree::ROOT);
         for &child in root.children() {
-            trans.translate_node(&tree, tree.node(child));
+            return_var = trans.translate_node(&tree, tree.node(child));
         }
 
-        trans.builder.ins().return_(&[]);
+        trans.builder.ins().return_(&[return_var]);
         trans.builder.finalize();
         Ok(())
     }
@@ -142,37 +146,39 @@ impl<'a> FunctionTranslator<'a> {
         &mut self,
         tree: &AnalyzedTree,
         element: TreeElement<NodeId, LeafId>,
-    ) -> Option<Value> {
+    ) -> Value {
         match element {
             TreeElement::Node(id) => self.translate_node(tree, tree.node(id)),
             TreeElement::Leaf(id) => self.translate_leaf(tree, tree.leaf(id)),
         }
     }
 
-    fn translate_node(&mut self, tree: &AnalyzedTree, node: &Node<NodeData>) -> Option<Value> {
+    fn translate_node(&mut self, tree: &AnalyzedTree, node: &Node<NodeData>) -> Value {
         match node.kind() {
             SK::Statement => {
+                let mut ret = self.builder.ins().iconst(self.int, 0);
                 for &child in node.children() {
-                    self.translate_node(tree, tree.node(child));
+                    ret = self.translate_node(tree, tree.node(child));
                 }
-                None
+                ret
             }
             SK::Scope => {
                 self.current_scope += 1;
+                let mut ret = self.builder.ins().iconst(self.int, 0);
                 for &child in node.children() {
-                    self.translate_node(tree, tree.node(child));
+                    ret = self.translate_node(tree, tree.node(child));
                 }
                 self.current_scope -= 1;
-                None
+                ret
             }
             SK::BinaryOp => {
                 let mut iter = node.children_with_leaves(tree);
                 let e_a = iter.next().unwrap();
                 let op = iter.next().unwrap().into_leaf().unwrap().get(tree).kind();
                 let e_b = iter.next().unwrap();
-                let a = self.translate_element(tree, e_a).unwrap();
-                let b = self.translate_element(tree, e_b).unwrap();
-                Some(match op {
+                let a = self.translate_element(tree, e_a);
+                let b = self.translate_element(tree, e_b);
+                match op {
                     SK::Add => self.builder.ins().iadd(a, b),
                     SK::Sub => self.builder.ins().isub(a, b),
                     SK::Mul => self.builder.ins().imul(a, b),
@@ -194,20 +200,20 @@ impl<'a> FunctionTranslator<'a> {
                     SK::LessThan => self.builder.ins().icmp(IntCC::SignedLessThan, a, b),
                     SK::LessEqual => self.builder.ins().icmp(IntCC::SignedLessThanOrEqual, a, b),
                     _ => unreachable!(),
-                })
+                }
             }
             SK::UnaryOp => {
                 let mut iter = node.children_with_leaves(tree);
                 let e_a = iter.next().unwrap();
                 let op = iter.next().unwrap().into_leaf().unwrap().get(tree).kind();
-                let a = self.translate_element(tree, e_a).unwrap();
-                Some(match op {
+                let a = self.translate_element(tree, e_a);
+                match op {
                     SK::Not => self.builder.ins().bnot(a),
                     SK::Sub => self.builder.ins().ineg(a),
                     SK::Inc => self.builder.ins().iadd_imm(a, 1),
                     SK::Dec => self.builder.ins().iadd_imm(a, -1),
                     _ => unreachable!(),
-                })
+                }
             }
             SK::Value => {
                 self.translate_element(tree, node.children_with_leaves(tree).next().unwrap())
@@ -222,21 +228,20 @@ impl<'a> FunctionTranslator<'a> {
                 let merge_block = self.builder.create_block();
 
                 self.builder.append_block_param(merge_block, self.int);
-                let cond = self.translate_element(tree, a).unwrap();
+                let cond = self.translate_element(tree, a);
                 self.builder.ins().brz(cond, else_block, &[]);
                 self.builder.ins().jump(then_block, &[]);
                 self.builder.switch_to_block(then_block);
                 self.builder.seal_block(then_block);
-                let then_return = self.translate_element(tree, b).unwrap();
+                let then_return = self.translate_element(tree, b);
                 self.builder.ins().jump(merge_block, &[then_return]);
                 self.builder.switch_to_block(else_block);
                 self.builder.seal_block(else_block);
-                let else_return = self.translate_element(tree, c).unwrap();
+                let else_return = self.translate_element(tree, c);
                 self.builder.ins().jump(merge_block, &[else_return]);
                 self.builder.switch_to_block(merge_block);
                 self.builder.seal_block(merge_block);
-                let phi = self.builder.block_params(merge_block)[0];
-                Some(phi)
+                self.builder.block_params(merge_block)[0]
             }
             SK::If => {
                 let mut iter = node.children_with_leaves(tree);
@@ -248,118 +253,108 @@ impl<'a> FunctionTranslator<'a> {
                 let merge_block = self.builder.create_block();
 
                 self.builder.append_block_param(merge_block, self.int);
-                let cond = self.translate_element(tree, a).unwrap();
+                let cond = self.translate_element(tree, a);
                 self.builder.ins().brz(cond, else_block, &[]);
                 self.builder.ins().jump(then_block, &[]);
                 self.builder.switch_to_block(then_block);
                 self.builder.seal_block(then_block);
-                let then_return = self.translate_element(tree, b).unwrap();
+                let then_return = self.translate_element(tree, b);
                 self.builder.ins().jump(merge_block, &[then_return]);
                 self.builder.switch_to_block(else_block);
                 self.builder.seal_block(else_block);
                 let else_return = c
-                    .and_then(|c| self.translate_element(tree, c))
+                    .map(|c| self.translate_element(tree, c))
                     .unwrap_or_else(|| self.builder.ins().iconst(self.int, 0));
                 self.builder.ins().jump(merge_block, &[else_return]);
                 self.builder.switch_to_block(merge_block);
                 self.builder.seal_block(merge_block);
-                let phi = self.builder.block_params(merge_block)[0];
-                Some(phi)
+                self.builder.block_params(merge_block)[0]
             }
             SK::Let => {
                 let mut iter = node.children_with_leaves(tree);
                 let variable = self
                     .get(&self.source[iter.next().unwrap().get(tree).span()])
                     .unwrap();
-                let new_value = self.translate_element(tree, iter.next().unwrap()).unwrap();
+                let new_value = self.translate_element(tree, iter.next().unwrap());
                 self.builder.def_var(variable, new_value);
-                None
+                self.builder.ins().iconst(self.int, 0)
             }
-            _ => unreachable!(),
+            SK::Loop => {
+                let mut iter = node.children_with_leaves(tree);
+                let a = iter.next().unwrap();
+                let b = iter.next().unwrap();
+                let c = iter.next().unwrap();
+                let d = iter.next().unwrap();
+
+                let header_block = self.builder.create_block();
+                let body_block = self.builder.create_block();
+                let exit_block = self.builder.create_block();
+
+                self.builder.ins().jump(header_block, &[]);
+                self.builder.switch_to_block(header_block);
+                self.translate_element(tree, a);
+                let condition_value = self.translate_element(tree, b);
+                self.builder.ins().brz(condition_value, exit_block, &[]);
+                self.builder.ins().jump(body_block, &[]);
+                self.builder.switch_to_block(body_block);
+                self.builder.seal_block(body_block);
+                self.translate_element(tree, d);
+                self.translate_element(tree, c);
+                self.builder.ins().jump(header_block, &[]);
+                self.builder.switch_to_block(exit_block);
+                self.builder.seal_block(header_block);
+                self.builder.seal_block(exit_block);
+                self.builder.ins().iconst(self.int, 0)
+            }
+            SK::OutKw => {
+                let a =
+                    self.translate_element(tree, node.children_with_leaves(tree).next().unwrap());
+                let mut sig = self.module.make_signature();
+                sig.params.push(AbiParam::new(self.int));
+                sig.returns.push(AbiParam::new(self.int));
+
+                let callee = self
+                    .module
+                    .declare_function("puts", cranelift_module::Linkage::Import, &sig)
+                    .unwrap(); // For now
+
+                let local_callee = self
+                    .module
+                    .declare_func_in_func(callee, &mut self.builder.func);
+
+                let call = self.builder.ins().call(local_callee, &[a]);
+                self.builder.inst_results(call)[0]
+            }
+            SK::Stuffing => self.builder.ins().iconst(self.int, 1),
+            SK::Cast | SK::Kind => self.builder.ins().iconst(self.int, 0),
+            s => unreachable!("{s}"),
         }
     }
 
-    fn translate_leaf(&mut self, tree: &AnalyzedTree, leaf: &Leaf<LeafData>) -> Option<Value> {
+    fn translate_leaf(&mut self, _tree: &AnalyzedTree, leaf: &Leaf<LeafData>) -> Value {
         match leaf.kind() {
-            _ => unreachable!(),
+            SK::Identifier => {
+                let var = self.get(&self.source[leaf.span()]).unwrap();
+                self.builder.use_var(var)
+            }
+            SK::Number | SK::Char => self.builder.ins().iconst(
+                self.int,
+                match leaf
+                    .data()
+                    .as_ref()
+                    .unwrap()
+                    .into_value()
+                    .value
+                    .as_ref()
+                    .unwrap()
+                {
+                    ValueData::Number(n) => *n as i64,
+                    ValueData::Char(c) => *c as i64,
+                    _ => unreachable!(),
+                },
+            ),
+            SK::SemiColon => self.builder.ins().iconst(self.int, 0),
+            s => unreachable!("{s}"),
         }
-    }
-
-    // fn translate_assign(&mut self, name: String, expr: Expr) -> Value {
-    //     // `def_var` is used to write the value of a variable. Note that
-    //     // variables can have multiple definitions. Cranelift will
-    //     // convert them into SSA form for itself automatically.
-    //     let new_value = self.translate_element(expr);
-    //     let variable = self.variables.get(&name).unwrap();
-    //     self.builder.def_var(*variable, new_value);
-    //     new_value
-    // }
-
-    // fn translate_icmp(&mut self, cmp: IntCC, lhs: Expr, rhs: Expr) -> Value {
-    //     let lhs = self.translate_element(lhs);
-    //     let rhs = self.translate_element(rhs);
-    //     let c = self.builder.ins().icmp(cmp, lhs, rhs);
-    //     self.builder.ins().bint(self.int, c)
-    // }
-
-    // fn translate_while_loop(&mut self, condition: Expr, loop_body: Vec<Expr>) -> Value {
-    //     let header_block = self.builder.create_block();
-    //     let body_block = self.builder.create_block();
-    //     let exit_block = self.builder.create_block();
-    //     self.builder.ins().jump(header_block, &[]);
-    //     self.builder.switch_to_block(header_block);
-    //     let condition_value = self.translate_element(condition);
-    //     self.builder.ins().brz(condition_value, exit_block, &[]);
-    //     self.builder.ins().jump(body_block, &[]);
-    //     self.builder.switch_to_block(body_block);
-    //     self.builder.seal_block(body_block);
-    //     for expr in loop_body {
-    //         self.translate_element(expr);
-    //     }
-    //     self.builder.ins().jump(header_block, &[]);
-    //     self.builder.switch_to_block(exit_block);
-    //     // We've reached the bottom of the loop, so there will be no
-    //     // more backedges to the header to exits to the bottom.
-    //     self.builder.seal_block(header_block);
-    //     self.builder.seal_block(exit_block);
-    //     // Just return 0 for now.
-    //     self.builder.ins().iconst(self.int, 0)
-    // }
-
-    // fn translate_call(&mut self, name: String, args: Vec<Expr>) -> Value {
-    //     let mut sig = self.module.make_signature();
-    //     // Add a parameter for each argument.
-    //     for _arg in &args {
-    //         sig.params.push(AbiParam::new(self.int));
-    //     }
-    //     // For simplicity for now, just make all calls return a single I64.
-    //     sig.returns.push(AbiParam::new(self.int));
-    //     // TODO: Streamline the API here?
-    //     let callee = self
-    //         .module
-    //         .declare_function(&name, Linkage::Import, &sig)
-    //         .expect("problem declaring function");
-    //     let local_callee = self
-    //         .module
-    //         .declare_func_in_func(callee, &mut self.builder.func);
-    //     let mut arg_values = Vec::new();
-    //     for arg in args {
-    //         arg_values.push(self.translate_element(arg))
-    //     }
-    //     let call = self.builder.ins().call(local_callee, &arg_values);
-    //     self.builder.inst_results(call)[0]
-    // }
-
-    fn translate_global_data_addr(&mut self, name: String) -> Value {
-        let sym = self
-            .module
-            .declare_data(&name, Linkage::Export, true, false)
-            .expect("problem declaring data object");
-        let local_id = self
-            .module
-            .declare_data_in_func(sym, &mut self.builder.func);
-
-        let pointer = self.module.target_config().pointer_type();
-        self.builder.ins().symbol_value(pointer, local_id)
     }
 }

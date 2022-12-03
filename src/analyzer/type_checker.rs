@@ -215,8 +215,10 @@ impl<'a> TypeChecker<'a> {
             }
             Let => {
                 self.builder.start_node(node.kind(), node.span().start);
-                let child = node.children_with_leaves(tree).nth(1).unwrap();
-                self.analyze_element(tree, child);
+                let mut iter = node.children_with_leaves(tree);
+                let ident = iter.next().unwrap().into_leaf().unwrap().get(tree);
+                self.builder.push(ident.kind(), ident.span(), |_| None);
+                self.analyze_element(tree, iter.next().unwrap());
                 self.builder.finish_node(node.span().end, |_| None)
             }
             ReLet => {

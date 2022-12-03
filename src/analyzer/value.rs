@@ -54,6 +54,15 @@ impl Display for LeafKind {
     }
 }
 
+impl LeafKind {
+    pub fn into_value(&self) -> &Value {
+        match self {
+            Self::Value(v) => v,
+            _ => panic!(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct NodeData {
     pub kind: NodeKind,
@@ -107,6 +116,13 @@ impl NodeKind {
         match self {
             NodeKind::Kind(_v) => todo!(),
             NodeKind::Value(v) => &v.type_,
+        }
+    }
+
+    pub fn into_value(&self) -> &Value {
+        match self {
+            Self::Value(v) => v,
+            _ => panic!(),
         }
     }
 }
