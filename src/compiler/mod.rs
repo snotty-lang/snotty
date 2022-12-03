@@ -13,6 +13,23 @@ use crate::{
     tree::{Leaf, LeafId, Node, NodeId, TreeElement},
 };
 
+pub struct CompiledFn {
+    code: *const u8,
+    raw: Vec<*mut [u8]>,
+}
+
+impl CompiledFn {
+    pub fn run(self) -> i64 {
+        println!("RUNNING!");
+        let f = unsafe { std::mem::transmute::<_, fn() -> i64>(self.code) };
+        let res = f();
+        for ptr in self.raw {
+            let _ = unsafe { Box::from_raw(ptr) };
+        }
+        res
+    }
+}
+
 pub struct JIT<'a> {
     builder_context: FunctionBuilderContext,
     ctx: codegen::Context,
@@ -35,8 +52,8 @@ impl<'a> JIT<'a> {
         }
     }
 
-    pub fn compile(&mut self, analyzed: Analyzed) -> Result<*const u8, ModuleError> {
-        self.translate(analyzed)?;
+    pub fn compile(&mut self, analyzed: Analyzed) -> Result<CompiledFn, ModuleError> {
+        let raw = self.translate(analyzed)?;
 
         let id =
             self.module
@@ -49,10 +66,9 @@ impl<'a> JIT<'a> {
 
         let code = self.module.get_finalized_function(id);
 
-        Ok(code)
+        Ok(CompiledFn { code, raw })
     }
 
-    /// Create a zero-initialized data section.
     pub fn create_data(&mut self, name: &str, contents: Vec<u8>) -> Result<&[u8], String> {
         self.data_ctx.define(contents.into_boxed_slice());
         let id = self
@@ -71,7 +87,7 @@ impl<'a> JIT<'a> {
         Ok(unsafe { slice::from_raw_parts(buffer.0, buffer.1) })
     }
 
-    fn translate(&mut self, analyzed: Analyzed) -> Result<(), ModuleError> {
+    fn translate(&mut self, analyzed: Analyzed) -> Result<Vec<*mut [u8]>, ModuleError> {
         let int = self.module.target_config().pointer_type();
         self.ctx.func.signature.returns.push(AbiParam::new(int));
 
@@ -107,6 +123,7 @@ impl<'a> JIT<'a> {
             variables,
             current_scope: 0,
             module: &mut self.module,
+            raw: Vec::new(),
         };
 
         let root = tree.node(AnalyzedTree::ROOT);
@@ -116,12 +133,10 @@ impl<'a> JIT<'a> {
 
         trans.builder.ins().return_(&[return_var]);
         trans.builder.finalize();
-        Ok(())
+        Ok(trans.raw)
     }
 }
 
-/// A collection of state used for translating from toy-language AST nodes
-/// into Cranelift IR.
 struct FunctionTranslator<'a> {
     int: types::Type,
     source: &'a str,
@@ -130,6 +145,7 @@ struct FunctionTranslator<'a> {
     variables: Vec<Variable>,
     current_scope: usize,
     module: &'a mut JITModule,
+    raw: Vec<*mut [u8]>,
 }
 
 impl<'a> FunctionTranslator<'a> {
@@ -204,9 +220,8 @@ impl<'a> FunctionTranslator<'a> {
             }
             SK::UnaryOp => {
                 let mut iter = node.children_with_leaves(tree);
-                let e_a = iter.next().unwrap();
                 let op = iter.next().unwrap().into_leaf().unwrap().get(tree).kind();
-                let a = self.translate_element(tree, e_a);
+                let a = self.translate_element(tree, iter.next().unwrap());
                 match op {
                     SK::Not => self.builder.ins().bnot(a),
                     SK::Sub => self.builder.ins().ineg(a),
@@ -290,9 +305,9 @@ impl<'a> FunctionTranslator<'a> {
                 let body_block = self.builder.create_block();
                 let exit_block = self.builder.create_block();
 
+                self.translate_element(tree, a);
                 self.builder.ins().jump(header_block, &[]);
                 self.builder.switch_to_block(header_block);
-                self.translate_element(tree, a);
                 let condition_value = self.translate_element(tree, b);
                 self.builder.ins().brz(condition_value, exit_block, &[]);
                 self.builder.ins().jump(body_block, &[]);
@@ -315,12 +330,10 @@ impl<'a> FunctionTranslator<'a> {
 
                 let callee = self
                     .module
-                    .declare_function("puts", cranelift_module::Linkage::Import, &sig)
+                    .declare_function("putchar", cranelift_module::Linkage::Import, &sig)
                     .unwrap(); // For now
 
-                let local_callee = self
-                    .module
-                    .declare_func_in_func(callee, &mut self.builder.func);
+                let local_callee = self.module.declare_func_in_func(callee, self.builder.func);
 
                 let call = self.builder.ins().call(local_callee, &[a]);
                 self.builder.inst_results(call)[0]
@@ -354,6 +367,23 @@ impl<'a> FunctionTranslator<'a> {
                 },
             ),
             SK::SemiColon => self.builder.ins().iconst(self.int, 0),
+            SK::String => {
+                let data = match leaf
+                    .data()
+                    .as_ref()
+                    .unwrap()
+                    .into_value()
+                    .value
+                    .as_ref()
+                    .unwrap()
+                {
+                    ValueData::String(s) => s.clone(),
+                    _ => unreachable!(),
+                };
+                let raw = Box::into_raw(data.into_boxed_slice());
+                self.raw.push(raw);
+                self.builder.ins().iconst(self.int, raw as *const u8 as i64)
+            }
             s => unreachable!("{s}"),
         }
     }

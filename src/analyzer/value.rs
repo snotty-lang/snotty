@@ -234,7 +234,11 @@ impl ValueType {
     }
 
     pub fn can_be_displayed(&self) -> bool {
-        matches!(self, ValueType::Number | ValueType::Pointer(_))
+        match self {
+            ValueType::Pointer(x) if **x == ValueType::Number => true,
+            ValueType::Number => true,
+            _ => false,
+        }
     }
 }
 

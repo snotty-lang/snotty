@@ -358,7 +358,7 @@ impl<'a> Analyzer<'a> {
                 }
 
                 if let Some(&[e]) = iter.next() {
-                    self.analyze_element(tree, e).into_node().unwrap();
+                    self.analyze_element(tree, e);
                 } else {
                     self.builder.push(Stuffing, 0..0, |id| {
                         Some(LeafData::new(LeafKind::Value(Value {
@@ -628,6 +628,7 @@ impl<'a> Analyzer<'a> {
                         c => c as u8,
                     });
                 }
+                new.push(0);
                 self.builder.push(leaf.kind(), leaf.span(), move |id| {
                     Some(LeafData::new(LeafKind::Value(Value {
                         value: Some(ValueData::String(new)),

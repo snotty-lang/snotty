@@ -284,21 +284,15 @@ impl<'a> TypeChecker<'a> {
             }
             Loop => {
                 self.builder.start_node(node.kind(), node.span().start);
-                let mut elements = node.children_with_leaves(tree).collect::<Vec<_>>();
-                let body = elements.pop().unwrap();
-
-                let mut iter = elements.split(|s| {
-                    s.into_leaf()
-                        .map(|s| s.get_from_builder(&self.builder).kind() == SemiColon)
-                        .unwrap_or(false)
-                });
-                let a = iter.next().unwrap()[0];
-                let b = iter.next().unwrap()[0];
-                let c = iter.next().unwrap()[0];
+                let mut iter = node.children_with_leaves(tree);
+                let a = iter.next().unwrap();
+                let b = iter.next().unwrap();
+                let c = iter.next().unwrap();
+                let d = iter.next().unwrap();
                 self.analyze_element(tree, a);
-                let cond = self.analyze_element(tree, b).into_node().unwrap();
+                let cond = self.analyze_element(tree, b);
                 let cond = cond.get_from_builder(&self.builder);
-                let type_ = cond.data().as_ref().unwrap().type_().type_();
+                let type_ = cond.type_().type_();
                 if let Some(a) = type_ {
                     if !a.can_be_bool() {
                         self.errors.push(Error::error(
@@ -309,7 +303,7 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
                 self.analyze_element(tree, c);
-                self.analyze_element(tree, body);
+                self.analyze_element(tree, d);
                 self.builder.finish_node(node.span().end, |_| None)
             }
             If => {

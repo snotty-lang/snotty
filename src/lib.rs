@@ -23,8 +23,7 @@ pub fn compile(file: String, source: &str) -> Result<String, Vec<Error>> {
             match jit.compile(checked.analyzed) {
                 Err(err) => eprintln!("{}", err),
                 Ok(code) => {
-                    let f = unsafe { std::mem::transmute::<_, fn() -> i64>(code) };
-                    println!("Code ran: {}", f());
+                    println!("\nCode ran: {}", code.run());
                 }
             }
         }
