@@ -65,8 +65,6 @@ pub enum SyntaxKind {
     #[token("/")] Div,
     #[token("+")] Add,
     #[token("-")] Sub,
-    #[token("++")] Inc,
-    #[token("--")] Dec,
     #[token("<<")] Shl,
     #[token(">>")] Shr,
 
@@ -196,8 +194,6 @@ impl Display for SyntaxKind {
                 SyntaxKind::Div => "/",
                 SyntaxKind::Add => "+",
                 SyntaxKind::Sub => "-",
-                SyntaxKind::Inc => "++",
-                SyntaxKind::Dec => "--",
                 SyntaxKind::Shl => "<<",
                 SyntaxKind::Shr => ">>",
                 SyntaxKind::Char => "character",

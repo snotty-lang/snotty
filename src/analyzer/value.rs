@@ -221,13 +221,9 @@ impl ValueType {
 
     pub fn operate_unary(&self, op: SyntaxKind) -> Option<ValueType> {
         match (self, op) {
-            (
-                ValueType::Number,
-                SyntaxKind::Not | SyntaxKind::Inc | SyntaxKind::Dec | SyntaxKind::Sub,
-            ) => Some(ValueType::Number),
+            (ValueType::Number, SyntaxKind::Not | SyntaxKind::Sub) => Some(ValueType::Number),
             (ValueType::Poisoned, _) => Some(ValueType::Poisoned),
             (ValueType::Pointer(t), SyntaxKind::Mul) => Some((**t).clone()),
-            (ValueType::Pointer(_), SyntaxKind::Inc | SyntaxKind::Dec) => Some(self.clone()),
             _ => None,
         }
     }

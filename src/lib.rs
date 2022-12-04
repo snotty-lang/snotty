@@ -18,9 +18,9 @@ use crate::analyzer::AnalysisResult;
 
 pub fn compile(file: String, source: &str) -> Result<i64, Vec<Error>> {
     let parsed = Parser::new(source).parse();
-    // println!("{:?}\n", parsed.parse);
+    println!("{:?}\n", parsed.parse);
     let analyzed = Analyzer::new(source, parsed).analyze();
-    // println!("{}\n", analyzed.analyzed.tree);
+    println!("{}\n", analyzed.analyzed.tree);
     let AnalysisResult {
         mut errors,
         analyzed,
@@ -33,7 +33,8 @@ pub fn compile(file: String, source: &str) -> Result<i64, Vec<Error>> {
                 ErrorKind::CraneliftError(err),
                 0..source.len(),
                 source,
-            )]),
+            )
+            .with_path(file)]),
             Ok(code) => Ok({
                 let res = code();
                 std::io::stdout().flush().unwrap();

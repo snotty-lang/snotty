@@ -501,14 +501,13 @@ impl<'a> Analyzer<'a> {
 
     fn analyze_leaf(&mut self, _tree: &ParseTree, leaf: &Leaf<SyntaxKind>) -> LeafId {
         match leaf.kind() {
-            Add | Mul | Div | Sub | Mod | Inc | Dec | And | Or | Not | Shl | Shr | Equal
-            | NotEqual | Xor | LessThan | LessEqual | GreaterThan | GreaterEqual | Assign => {
+            Add | Mul | Div | Sub | Mod | And | Or | Not | Shl | Shr | Equal | NotEqual | Xor
+            | LessThan | LessEqual | GreaterThan | GreaterEqual | Assign => {
                 self.builder.push(leaf.kind(), leaf.span(), |_| None)
             }
             AddAssign | SubAssign | MulAssign | DivAssign | ModAssign | AndAssign | OrAssign
             | XorAssign | ShlAssign | ShrAssign => {
-                self.builder
-                    .push(leaf.kind().op_assignment().unwrap(), leaf.span(), |_| None)
+                self.builder.push(leaf.kind(), leaf.span(), |_| None)
             }
             Number => self.builder.push(leaf.kind(), leaf.span(), |id| {
                 Some(LeafData::new(LeafKind::Value(Value {

@@ -241,8 +241,6 @@ impl<'a> FunctionTranslator<'a> {
                 match op {
                     SK::Not => self.builder.ins().bnot(a),
                     SK::Sub => self.builder.ins().ineg(a),
-                    SK::Inc => self.builder.ins().iadd_imm(a, 1),
-                    SK::Dec => self.builder.ins().iadd_imm(a, -1),
                     SK::Mul => self.builder.ins().load(self.int, MemFlags::new(), a, 0),
                     _ => unreachable!(),
                 }
@@ -362,7 +360,34 @@ impl<'a> FunctionTranslator<'a> {
                 let call = self.builder.ins().call_indirect(sig_ref, f, &arg_values);
                 self.builder.inst_results(call)[0]
             }
-            SK::Cast | SK::Kind => self.builder.ins().iconst(self.int, 0),
+            SK::ReLet => {
+                let mut iter = node.children_with_leaves(tree);
+                let variable = self.get(&self.source[iter.next().unwrap().get(tree).span()]);
+                let op = iter.next().unwrap().get(tree).kind().op_assignment();
+                let mut b = self.translate_element(tree, iter.next().unwrap());
+                if let Some(op) = op {
+                    let a = self.builder.use_var(variable);
+                    b = match op {
+                        SK::Add => self.builder.ins().iadd(a, b),
+                        SK::Sub => self.builder.ins().isub(a, b),
+                        SK::Mul => self.builder.ins().imul(a, b),
+                        SK::Div => self.builder.ins().sdiv(a, b),
+                        SK::Mod => self.builder.ins().srem(a, b),
+                        SK::And => self.builder.ins().band(a, b),
+                        SK::Or => self.builder.ins().bor(a, b),
+                        SK::Xor => self.builder.ins().bxor(a, b),
+                        SK::Shl => self.builder.ins().ishl(a, b),
+                        SK::Shr => self.builder.ins().sshr(a, b),
+                        _ => unreachable!(),
+                    };
+                }
+                self.builder.def_var(variable, b);
+                self.builder.ins().iconst(self.int, 0)
+            }
+            SK::Cast => {
+                self.translate_element(tree, node.children_with_leaves(tree).nth(1).unwrap())
+            }
+            SK::Kind => self.builder.ins().iconst(self.int, 0),
             s => unreachable!("{s}"),
         }
     }

@@ -222,23 +222,31 @@ impl<'a> Parser<'a> {
             }
             FxKw => {
                 self.builder.start_node(Fx, self.s_loc);
-                self.recovery.extend([CloseParen, OpenParen, Identifier]);
+                self.recovery
+                    .extend([CloseParen, Comma, OpenParen, Identifier]);
                 self.pass();
-                if let ParseAction::Return(s) = self.expect(&[Identifier], 3, 2, true) {
+                if let ParseAction::Return(s) = self.expect(&[Identifier], 4, 2, true) {
                     return s;
                 }
                 self.recovery.pop();
 
-                if let ParseAction::Return(s) = self.expect(&[OpenParen], 2, 2, false) {
+                if let ParseAction::Return(s) = self.expect(&[OpenParen], 3, 2, false) {
                     return s;
                 }
                 self.recovery.pop();
 
                 while self.current_syntax() != CloseParen {
-                    if let ParseAction::Return(s) = self.expect(&[Identifier], 1, 2, true) {
-                        return s;
+                    match self.expect(&[Identifier], 2, 2, true) {
+                        ParseAction::Found | ParseAction::Recovered(1) => (),
+                        ParseAction::Recovered(_) => break,
+                        ParseAction::Return(s) => return s,
                     }
+                    if self.current_syntax() != Comma {
+                        break;
+                    }
+                    self.pass();
                 }
+                self.recovery.pop();
 
                 if let ParseAction::Return(s) = self.expect(&[CloseParen], 1, 2, false) {
                     return s;
@@ -332,28 +340,14 @@ impl<'a> Parser<'a> {
 
     fn factor(&mut self) -> ParseRecovery {
         match self.current_syntax() {
-            Sub | Inc | Dec => {
+            Sub => {
                 self.builder.start_node(UnaryOp, self.s_loc);
                 self.bump();
                 let s = self.factor();
                 self.builder.finish_node(self.e_loc, |_| None);
                 s
             }
-            _ => {
-                self.recovery.extend([Inc, Dec]);
-                let start = self.builder.checkpoint(self.s_loc);
-                if let ParseAction::Return(s) = self.expect_func(Self::cast, 2, 0) {
-                    return s;
-                }
-                if matches!(self.current_syntax(), Inc | Dec) {
-                    self.builder.start_node_at(start, UnaryOp);
-                    self.bump();
-                    self.builder.finish_node(self.e_loc, |_| None);
-                }
-                self.recovery.pop();
-                self.recovery.pop();
-                ParseRecovery::Ok
-            }
+            _ => self.cast(),
         }
     }
 
@@ -459,7 +453,7 @@ impl<'a> Parser<'a> {
             }
             _ => self.unexpected_syntax(vec![Value]),
         };
-        self.builder.finish_node(self.e_loc, |_| None);
+        self.builder.finish_node(self.p_loc, |_| None);
         s
     }
 
