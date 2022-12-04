@@ -6,7 +6,7 @@ use crate::parser::syntax::{ParseResult, ParseTree, SyntaxKind};
 use crate::tree::{Leaf, LeafId, Node, NodeId, TreeElement};
 
 use super::value::{
-    LeafData, LeafKind, MaybeTyped, NodeData, NodeKind, Value, ValueData, ValueType,
+    LeafData, LeafKind, MaybeTyped, NodeData, NodeKind, Value, ValueData, ValueType, BUILT_INS,
 };
 use super::{AnalysisResult, Analyzed, AnalyzedTreeBuilder};
 use SyntaxKind::*;
@@ -169,12 +169,6 @@ impl<'a> Analyzer<'a> {
                 for &child in node.children() {
                     self.analyze_node(tree, tree.node(child));
                 }
-                self.builder.finish_node(node.span().end, |_| None)
-            }
-            OutKw => {
-                self.builder.start_node(node.kind(), node.span().start);
-                self.analyze_element(tree, node.children_with_leaves(tree).next().unwrap())
-                    .get_from_builder(&self.builder);
                 self.builder.finish_node(node.span().end, |_| None)
             }
             Scope => {
@@ -422,6 +416,28 @@ impl<'a> Analyzer<'a> {
                     })))
                 })
             }
+            Call => {
+                self.builder.start_node(node.kind(), node.span().start);
+                let mut iter = node.children_with_leaves(tree);
+                let f = self.analyze_element(tree, iter.next().unwrap());
+                iter.for_each(|v| {
+                    self.analyze_element(tree, v);
+                });
+                let type_ = if let MaybeTyped::Typed(ValueType::FnPtr(v)) =
+                    f.get_from_builder(&self.builder).type_()
+                {
+                    MaybeTyped::Typed(v.last().cloned().unwrap())
+                } else {
+                    MaybeTyped::UnTyped(TreeElement::Node(node.id()))
+                };
+                self.builder.finish_node(node.span().end, |id| {
+                    Some(NodeData::new(NodeKind::Value(Value {
+                        value: None,
+                        syntax: TreeElement::Node(id),
+                        type_,
+                    })))
+                })
+            }
             Value => {
                 self.builder.start_node(node.kind(), node.span().start);
                 let a = self
@@ -638,7 +654,15 @@ impl<'a> Analyzer<'a> {
                 })
             }
             Identifier => {
-                let type_ = self.get(&self.source[leaf.span()]).map(|v| v.type_.clone());
+                let type_ = self
+                    .get(&self.source[leaf.span()])
+                    .and_then(|v| v.type_.type_().cloned())
+                    .or_else(|| {
+                        BUILT_INS
+                            .get(&self.source[leaf.span()])
+                            .map(|b| b.value_type())
+                    })
+                    .map(MaybeTyped::Typed);
                 self.builder.push(leaf.kind(), leaf.span(), |id| {
                     Some(
                         LeafData::new(LeafKind::Value(Value {

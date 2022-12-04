@@ -97,8 +97,8 @@ impl<'a> Parser<'a> {
                 self.builder.finish_node(self.e_loc, |_| None);
                 s
             }
-            a @ (OutKw | ReturnKw) => {
-                self.builder.start_node(a, self.s_loc);
+            ReturnKw => {
+                self.builder.start_node(ReturnKw, self.s_loc);
                 self.pass();
                 let s = self.expression();
                 self.builder.finish_node(self.e_loc, |_| None);

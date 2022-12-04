@@ -377,6 +377,7 @@ dependencies = [
  "cranelift-jit",
  "cranelift-module",
  "logos",
+ "once_cell",
 ]
 
 [[package]]

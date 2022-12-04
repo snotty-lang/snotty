@@ -4,36 +4,46 @@ pub mod error;
 pub mod parser;
 mod tree;
 
+use std::io::Write;
+
 use analyzer::{builder::Analyzer, type_checker::TypeChecker};
 use compiler::JIT;
 use parser::Parser;
 
 pub type Span = core::ops::Range<usize>;
 
-use error::Error;
+use error::{Error, ErrorKind};
 
-pub fn compile(file: String, source: &str) -> Result<String, Vec<Error>> {
+use crate::analyzer::AnalysisResult;
+
+pub fn compile(file: String, source: &str) -> Result<i64, Vec<Error>> {
     let parsed = Parser::new(source).parse();
+    // println!("{:?}\n", parsed.parse);
     let analyzed = Analyzer::new(source, parsed).analyze();
-    let mut checked = TypeChecker::new(source, analyzed).analyze();
-    println!("{}", checked.analyzed.tree);
-    match checked.errors.as_mut_slice() {
-        [] => {
-            let mut jit = JIT::new(source);
-            match jit.compile(checked.analyzed) {
-                Err(err) => eprintln!("{}", err),
-                Ok(code) => {
-                    println!("\nCode ran: {}", code.run());
-                }
-            }
+    // println!("{}\n", analyzed.analyzed.tree);
+    let AnalysisResult {
+        mut errors,
+        analyzed,
+    } = TypeChecker::new(source, analyzed).analyze();
+    // println!("{}\n", analyzed.tree);
+    if errors.is_empty() {
+        let mut jit = JIT::new(source);
+        match jit.compile(analyzed) {
+            Err(err) => Err(vec![Error::error(
+                ErrorKind::CraneliftError(err),
+                0..source.len(),
+                source,
+            )]),
+            Ok(code) => Ok({
+                let res = code();
+                std::io::stdout().flush().unwrap();
+                res
+            }),
         }
-        errors => {
-            for error in errors {
-                error.set_path(file.clone());
-                eprintln!("{}", error);
-            }
+    } else {
+        for error in &mut errors {
+            error.set_path(file.clone());
         }
+        Err(errors)
     }
-
-    todo!()
 }

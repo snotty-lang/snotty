@@ -1,0 +1,1 @@
+Fix shadowing bugs, replace HashMap in lookup with smth else

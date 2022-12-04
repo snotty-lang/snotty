@@ -1,9 +1,11 @@
 use std::fmt::Display;
 
+use cranelift_module::ModuleError;
+
 use crate::{analyzer::value::ValueType, parser::syntax::SyntaxKind, Span};
 
 /// Error
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Error<'source> {
     location: Location,
     source: &'source str,
@@ -14,19 +16,39 @@ pub struct Error<'source> {
 }
 
 /// Kind of the error
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum ErrorKind {
-    UnexpectedSyntax { expected: Vec<SyntaxKind> },
+    UnexpectedSyntax {
+        expected: Vec<SyntaxKind>,
+    },
     UnknownSyntax,
     MissingSemicolon,
-    UnsupportedOperation { operation: SyntaxKind },
+    UnsupportedOperation {
+        operation: SyntaxKind,
+    },
     ByteOverflow,
-    Custom { message: String },
-    TypeError { type_: ValueType },
+    Custom {
+        message: String,
+    },
+    TypeError {
+        type_: ValueType,
+    },
     UndefinedReference,
     UnknownType,
     InvalidLHS,
-    KeywordMisuse { keyword: SyntaxKind },
+    KeywordMisuse {
+        keyword: SyntaxKind,
+    },
+    TooManyArgs {
+        expected: usize,
+        found: usize,
+    },
+    WrongType {
+        expected: ValueType,
+        found: ValueType,
+    },
+    NotCallable,
+    CraneliftError(ModuleError),
 }
 
 /// Location of the error
@@ -219,8 +241,28 @@ impl Display for ErrorKind {
             ErrorKind::InvalidLHS => {
                 write!(f, "The left-hand side of the expression is unacceptable")
             }
+            ErrorKind::NotCallable => {
+                write!(f, "This thing isn't callable")
+            }
             ErrorKind::KeywordMisuse { keyword } => {
                 write!(f, "{keyword} can not be used here")
+            }
+            ErrorKind::TooManyArgs { expected, found } => {
+                write!(
+                    f,
+                    "The function expects {} arguments but {} values were passed in",
+                    expected, found
+                )
+            }
+            ErrorKind::WrongType { expected, found } => {
+                write!(
+                    f,
+                    "This value was supposed to be a `{}`, but is a `{}`",
+                    expected, found
+                )
+            }
+            ErrorKind::CraneliftError(error) => {
+                write!(f, "{error}")
             }
         }
     }

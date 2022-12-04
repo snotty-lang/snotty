@@ -4,31 +4,15 @@ use cranelift_module::{DataContext, Linkage, Module, ModuleError};
 use std::collections::HashMap;
 use std::slice;
 
+use crate::analyzer::value::BUILT_INS;
 use crate::{
     analyzer::{
-        value::{LeafData, NodeData, ValueData},
+        value::{LeafData, NodeData, ValueData, ValueType},
         Analyzed, AnalyzedTree,
     },
     parser::syntax::SyntaxKind as SK,
     tree::{Leaf, LeafId, Node, NodeId, TreeElement},
 };
-
-pub struct CompiledFn {
-    code: *const u8,
-    raw: Vec<*mut [u8]>,
-}
-
-impl CompiledFn {
-    pub fn run(self) -> i64 {
-        println!("RUNNING!");
-        let f = unsafe { std::mem::transmute::<_, fn() -> i64>(self.code) };
-        let res = f();
-        for ptr in self.raw {
-            let _ = unsafe { Box::from_raw(ptr) };
-        }
-        res
-    }
-}
 
 pub struct JIT<'a> {
     builder_context: FunctionBuilderContext,
@@ -52,8 +36,9 @@ impl<'a> JIT<'a> {
         }
     }
 
-    pub fn compile(&mut self, analyzed: Analyzed) -> Result<CompiledFn, ModuleError> {
-        let raw = self.translate(analyzed)?;
+    pub fn compile(&mut self, analyzed: Analyzed) -> Result<fn() -> i64, ModuleError> {
+        self.translate(analyzed)?;
+        // println!("{}", self.ctx.func);
 
         let id =
             self.module
@@ -66,7 +51,7 @@ impl<'a> JIT<'a> {
 
         let code = self.module.get_finalized_function(id);
 
-        Ok(CompiledFn { code, raw })
+        Ok(unsafe { std::mem::transmute(code) })
     }
 
     pub fn create_data(&mut self, name: &str, contents: Vec<u8>) -> Result<&[u8], String> {
@@ -87,7 +72,7 @@ impl<'a> JIT<'a> {
         Ok(unsafe { slice::from_raw_parts(buffer.0, buffer.1) })
     }
 
-    fn translate(&mut self, analyzed: Analyzed) -> Result<Vec<*mut [u8]>, ModuleError> {
+    fn translate(&mut self, analyzed: Analyzed) -> Result<(), ModuleError> {
         let int = self.module.target_config().pointer_type();
         self.ctx.func.signature.returns.push(AbiParam::new(int));
 
@@ -100,10 +85,10 @@ impl<'a> JIT<'a> {
         let Analyzed {
             tree,
             memory,
-            lookup,
+            mut lookup,
         } = analyzed;
 
-        let variables = memory
+        let mut variables = memory
             .into_iter()
             .enumerate()
             .map(|(i, _)| Variable::new(i))
@@ -112,6 +97,38 @@ impl<'a> JIT<'a> {
                 v
             })
             .collect::<Vec<_>>();
+
+        for (name, f) in BUILT_INS.iter() {
+            let mut sig = self.module.make_signature();
+            for arg in &f.args {
+                let t = match arg {
+                    ValueType::Number | ValueType::Pointer(_) => int,
+                    _ => todo!(),
+                };
+                sig.params.push(AbiParam::new(t));
+            }
+            if let Some(ret) = &f.ret {
+                let t = match ret {
+                    ValueType::Number | ValueType::Pointer(_) => int,
+                    _ => todo!(),
+                };
+                sig.returns.push(AbiParam::new(t));
+            }
+
+            let callee = self
+                .module
+                .declare_function(name, cranelift_module::Linkage::Import, &sig)
+                .unwrap();
+
+            let local_callee = self.module.declare_func_in_func(callee, builder.func);
+
+            let val = builder.ins().func_addr(int, local_callee);
+            let var = Variable::new(variables.len());
+            builder.declare_var(var, int);
+            builder.def_var(var, val);
+            lookup[0].insert(name, variables.len());
+            variables.push(var);
+        }
 
         let mut return_var = builder.ins().iconst(int, 0);
 
@@ -123,7 +140,6 @@ impl<'a> JIT<'a> {
             variables,
             current_scope: 0,
             module: &mut self.module,
-            raw: Vec::new(),
         };
 
         let root = tree.node(AnalyzedTree::ROOT);
@@ -133,7 +149,7 @@ impl<'a> JIT<'a> {
 
         trans.builder.ins().return_(&[return_var]);
         trans.builder.finalize();
-        Ok(trans.raw)
+        Ok(())
     }
 }
 
@@ -145,17 +161,17 @@ struct FunctionTranslator<'a> {
     variables: Vec<Variable>,
     current_scope: usize,
     module: &'a mut JITModule,
-    raw: Vec<*mut [u8]>,
 }
 
 impl<'a> FunctionTranslator<'a> {
     #[inline]
-    fn get(&self, ident: &'a str) -> Option<Variable> {
+    fn get(&self, ident: &'a str) -> Variable {
         self.lookup[..=self.current_scope]
             .iter()
             .rev()
             .find_map(|map| map.get(ident))
             .map(|&i| self.variables[i])
+            .unwrap()
     }
 
     fn translate_element(
@@ -227,6 +243,7 @@ impl<'a> FunctionTranslator<'a> {
                     SK::Sub => self.builder.ins().ineg(a),
                     SK::Inc => self.builder.ins().iadd_imm(a, 1),
                     SK::Dec => self.builder.ins().iadd_imm(a, -1),
+                    SK::Mul => self.builder.ins().load(self.int, MemFlags::new(), a, 0),
                     _ => unreachable!(),
                 }
             }
@@ -287,9 +304,7 @@ impl<'a> FunctionTranslator<'a> {
             }
             SK::Let => {
                 let mut iter = node.children_with_leaves(tree);
-                let variable = self
-                    .get(&self.source[iter.next().unwrap().get(tree).span()])
-                    .unwrap();
+                let variable = self.get(&self.source[iter.next().unwrap().get(tree).span()]);
                 let new_value = self.translate_element(tree, iter.next().unwrap());
                 self.builder.def_var(variable, new_value);
                 self.builder.ins().iconst(self.int, 0)
@@ -313,32 +328,40 @@ impl<'a> FunctionTranslator<'a> {
                 self.builder.ins().jump(body_block, &[]);
                 self.builder.switch_to_block(body_block);
                 self.builder.seal_block(body_block);
+
                 self.translate_element(tree, d);
                 self.translate_element(tree, c);
+
                 self.builder.ins().jump(header_block, &[]);
                 self.builder.switch_to_block(exit_block);
                 self.builder.seal_block(header_block);
                 self.builder.seal_block(exit_block);
                 self.builder.ins().iconst(self.int, 0)
             }
-            SK::OutKw => {
-                let a =
-                    self.translate_element(tree, node.children_with_leaves(tree).next().unwrap());
+            SK::Call => {
+                let mut iter = node.children_with_leaves(tree);
+                let f = self.translate_element(tree, iter.next().unwrap());
+                let args = iter.collect::<Vec<_>>();
                 let mut sig = self.module.make_signature();
-                sig.params.push(AbiParam::new(self.int));
+                for arg in &args {
+                    let t = arg.get(tree).type_().type_().unwrap();
+                    let t = match t {
+                        ValueType::Number | ValueType::Pointer(_) => self.int,
+                        _ => todo!(),
+                    };
+                    sig.params.push(AbiParam::new(t));
+                }
+
                 sig.returns.push(AbiParam::new(self.int));
 
-                let callee = self
-                    .module
-                    .declare_function("putchar", cranelift_module::Linkage::Import, &sig)
-                    .unwrap(); // For now
-
-                let local_callee = self.module.declare_func_in_func(callee, self.builder.func);
-
-                let call = self.builder.ins().call(local_callee, &[a]);
+                let mut arg_values = Vec::new();
+                for arg in args {
+                    arg_values.push(self.translate_element(tree, arg))
+                }
+                let sig_ref = self.builder.import_signature(sig);
+                let call = self.builder.ins().call_indirect(sig_ref, f, &arg_values);
                 self.builder.inst_results(call)[0]
             }
-            SK::Stuffing => self.builder.ins().iconst(self.int, 1),
             SK::Cast | SK::Kind => self.builder.ins().iconst(self.int, 0),
             s => unreachable!("{s}"),
         }
@@ -347,9 +370,10 @@ impl<'a> FunctionTranslator<'a> {
     fn translate_leaf(&mut self, _tree: &AnalyzedTree, leaf: &Leaf<LeafData>) -> Value {
         match leaf.kind() {
             SK::Identifier => {
-                let var = self.get(&self.source[leaf.span()]).unwrap();
+                let var = self.get(&self.source[leaf.span()]);
                 self.builder.use_var(var)
             }
+            SK::Stuffing => self.builder.ins().iconst(self.int, 1),
             SK::Number | SK::Char => self.builder.ins().iconst(
                 self.int,
                 match leaf
@@ -377,12 +401,16 @@ impl<'a> FunctionTranslator<'a> {
                     .as_ref()
                     .unwrap()
                 {
-                    ValueData::String(s) => s.clone(),
+                    ValueData::String(s) => s.clone().into_boxed_slice(),
                     _ => unreachable!(),
                 };
-                let raw = Box::into_raw(data.into_boxed_slice());
-                self.raw.push(raw);
-                self.builder.ins().iconst(self.int, raw as *const u8 as i64)
+                let id = self.module.declare_anonymous_data(false, false).unwrap();
+                let mut data_ctx = DataContext::new();
+                data_ctx.define(data);
+                self.module.define_data(id, &data_ctx).unwrap();
+                data_ctx.clear();
+                let value = self.module.declare_data_in_func(id, self.builder.func);
+                self.builder.ins().global_value(types::I64, value)
             }
             s => unreachable!("{s}"),
         }

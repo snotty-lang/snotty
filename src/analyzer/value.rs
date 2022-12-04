@@ -1,4 +1,6 @@
-use std::{fmt::Display, ops::Deref};
+use std::{collections::HashMap, fmt::Display, ops::Deref};
+
+use once_cell::sync::Lazy;
 
 use crate::{
     parser::syntax::SyntaxKind,
@@ -181,6 +183,7 @@ pub enum ValueType {
     Number,
     Poisoned,
     Pointer(Box<ValueType>),
+    FnPtr(Vec<ValueType>),
 }
 
 #[derive(Debug, Clone)]
@@ -270,6 +273,7 @@ impl Display for ValueType {
             ValueType::Number => write!(f, "Number"),
             ValueType::Pointer(t) => write!(f, "*{t}"),
             ValueType::Poisoned => write!(f, "\u{1F480}"),
+            ValueType::FnPtr(v) => write!(f, "fn {v:?}"),
         }
     }
 }
@@ -303,3 +307,36 @@ impl Display for Value {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct BuiltInFunc {
+    pub args: Vec<ValueType>,
+    pub ret: Option<ValueType>,
+}
+
+impl BuiltInFunc {
+    pub fn value_type(&self) -> ValueType {
+        let mut t = self.args.clone();
+        t.extend(self.ret.clone());
+        ValueType::FnPtr(t)
+    }
+}
+
+pub static BUILT_INS: Lazy<HashMap<&'static str, BuiltInFunc>> = Lazy::new(|| {
+    let mut built_in = HashMap::new();
+    built_in.insert(
+        "puts",
+        BuiltInFunc {
+            args: vec![ValueType::Pointer(Box::new(ValueType::Number))],
+            ret: Some(ValueType::Number),
+        },
+    );
+    built_in.insert(
+        "putchar",
+        BuiltInFunc {
+            args: vec![ValueType::Number],
+            ret: Some(ValueType::Number),
+        },
+    );
+    built_in
+});

@@ -1,0 +1,1 @@
+loop (let i = 127 ; i - 32 ; let i = --i) putchar(i)

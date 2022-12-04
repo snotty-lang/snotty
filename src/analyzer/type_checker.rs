@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{
-    value::{LeafData, LeafKind, MaybeTyped, NodeData, NodeKind, Value, ValueType},
+    value::{LeafData, LeafKind, MaybeTyped, NodeData, NodeKind, Value, ValueType, BUILT_INS},
     AnalysisResult, Analyzed, AnalyzedTree, AnalyzedTreeBuilder,
 };
 
@@ -83,25 +83,6 @@ impl<'a> TypeChecker<'a> {
                 self.builder.start_node(node.kind(), node.span().start);
                 for &child in node.children() {
                     self.analyze_node(tree, tree.node(child));
-                }
-                self.builder.finish_node(node.span().end, |_| None)
-            }
-            OutKw => {
-                self.builder.start_node(node.kind(), node.span().start);
-                let child = node.children_with_leaves(tree).next().unwrap();
-                self.analyze_element(tree, child)
-                    .get_from_builder(&self.builder);
-                let child = child.get_from_builder(&self.builder);
-                if let Some(type_) = child.type_().type_() {
-                    if !type_.can_be_displayed() {
-                        self.errors.push(Error::error(
-                            ErrorKind::TypeError {
-                                type_: type_.clone(),
-                            },
-                            child.span(),
-                            self.source,
-                        ))
-                    }
                 }
                 self.builder.finish_node(node.span().end, |_| None)
             }
@@ -378,6 +359,53 @@ impl<'a> TypeChecker<'a> {
                     })))
                 })
             }
+            Call => {
+                self.builder.start_node(node.kind(), node.span().start);
+                let mut iter = node.children_with_leaves(tree);
+                let f = self.analyze_element(tree, iter.next().unwrap());
+                let args = iter
+                    .map(|v| self.analyze_element(tree, v))
+                    .collect::<Vec<_>>();
+                let f = f.get_from_builder(&self.builder);
+                let type_ = if let MaybeTyped::Typed(ValueType::FnPtr(v)) = f.type_() {
+                    if args.len() != v.len() - 1 {
+                        self.errors.push(Error::error(
+                            ErrorKind::TooManyArgs {
+                                expected: v.len() - 1,
+                                found: args.len(),
+                            },
+                            node.span(),
+                            self.source,
+                        ))
+                    }
+                    for (arg, t) in args.into_iter().zip(v[..v.len() - 1].iter()) {
+                        let arg = arg.get_from_builder(&self.builder);
+                        let arg_t = arg.type_().type_().unwrap();
+                        if arg_t != t && *arg_t != ValueType::Poisoned {
+                            self.errors.push(Error::error(
+                                ErrorKind::WrongType {
+                                    expected: t.clone(),
+                                    found: arg_t.clone(),
+                                },
+                                arg.span(),
+                                self.source,
+                            ));
+                        }
+                    }
+                    MaybeTyped::Typed(v.last().cloned().unwrap())
+                } else {
+                    self.errors
+                        .push(Error::error(ErrorKind::NotCallable, f.span(), self.source));
+                    MaybeTyped::Typed(ValueType::Poisoned)
+                };
+                self.builder.finish_node(node.span().end, |id| {
+                    Some(NodeData::new(NodeKind::Value(Value {
+                        value: None,
+                        syntax: TreeElement::Node(id),
+                        type_,
+                    })))
+                })
+            }
             Value => {
                 self.builder.start_node(node.kind(), node.span().start);
                 let a = self
@@ -442,17 +470,28 @@ impl<'a> TypeChecker<'a> {
     fn analyze_leaf(&mut self, _tree: &AnalyzedTree, leaf: &Leaf<LeafData>) -> LeafId {
         let mut data = leaf.data().clone();
         let t = if leaf.kind() == Identifier {
-            Some(match self.get(&self.source[leaf.span()]) {
-                Some(v) => v.type_.clone(),
-                None => {
-                    self.errors.push(Error::error(
-                        ErrorKind::UndefinedReference,
-                        leaf.span(),
-                        self.source,
-                    ));
-                    MaybeTyped::Typed(ValueType::Poisoned)
-                }
-            })
+            Some(
+                match self
+                    .get(&self.source[leaf.span()])
+                    .and_then(|v| v.type_.type_().cloned())
+                    .or_else(|| {
+                        BUILT_INS
+                            .get(&self.source[leaf.span()])
+                            .map(|b| b.value_type())
+                    })
+                    .map(MaybeTyped::Typed)
+                {
+                    Some(v) => v,
+                    None => {
+                        self.errors.push(Error::error(
+                            ErrorKind::UndefinedReference,
+                            leaf.span(),
+                            self.source,
+                        ));
+                        MaybeTyped::Typed(ValueType::Poisoned)
+                    }
+                },
+            )
         } else {
             None
         };
