@@ -84,11 +84,11 @@ impl<'a> Parser<'a> {
                 self.builder.start_node(Let, self.s_loc);
                 self.recovery.push(Assign);
                 self.pass();
-                if let ParseAction::Return(s) = self.expect(&[Identifier], 1, 2, true) {
+                if let ParseAction::Return(s) = self.expect(&[Identifier], 1, 2, Some(true)) {
                     return s;
                 }
 
-                if let ParseAction::Return(s) = self.expect(&[Assign], 1, 2, false) {
+                if let ParseAction::Return(s) = self.expect(&[Assign], 1, 2, Some(false)) {
                     return s;
                 }
                 self.recovery.pop();
@@ -108,7 +108,7 @@ impl<'a> Parser<'a> {
                 self.builder.start_node(FileKw, self.s_loc);
                 self.pass();
                 self.recovery.push(String);
-                if let ParseAction::Return(s) = self.expect(&[String], 1, 2, true) {
+                if let ParseAction::Return(s) = self.expect(&[String], 1, 2, Some(true)) {
                     return s;
                 }
                 self.recovery.pop();
@@ -154,7 +154,7 @@ impl<'a> Parser<'a> {
                 self.builder.start_node(Loop, self.s_loc);
                 self.recovery.extend([CloseParen, OpenParen]);
                 self.pass();
-                if let ParseAction::Return(s) = self.expect(&[OpenParen], 2, 2, false) {
+                if let ParseAction::Return(s) = self.expect(&[OpenParen], 2, 2, Some(false)) {
                     return s;
                 }
                 self.recovery.pop();
@@ -171,7 +171,7 @@ impl<'a> Parser<'a> {
                         }
                     }
 
-                    if let ParseAction::Return(s) = self.expect(&[SemiColon], 1, 2, true) {
+                    if let ParseAction::Return(s) = self.expect(&[SemiColon], 1, 2, Some(true)) {
                         return s;
                     }
                 }
@@ -187,7 +187,7 @@ impl<'a> Parser<'a> {
                     }
                 }
 
-                if let ParseAction::Return(s) = self.expect(&[CloseParen], 1, 2, false) {
+                if let ParseAction::Return(s) = self.expect(&[CloseParen], 1, 2, Some(false)) {
                     return s;
                 }
 
@@ -223,21 +223,22 @@ impl<'a> Parser<'a> {
             FxKw => {
                 self.builder.start_node(Fx, self.s_loc);
                 self.recovery
-                    .extend([CloseParen, Comma, OpenParen, Identifier]);
+                    .extend([CloseParen, Comma, Identifier, OpenParen, Identifier]);
                 self.pass();
-                if let ParseAction::Return(s) = self.expect(&[Identifier], 4, 2, true) {
+                if let ParseAction::Return(s) = self.expect(&[Identifier], 5, 2, Some(true)) {
                     return s;
                 }
                 self.recovery.pop();
 
-                if let ParseAction::Return(s) = self.expect(&[OpenParen], 3, 2, false) {
+                if let ParseAction::Return(s) = self.expect(&[OpenParen], 4, 2, Some(false)) {
                     return s;
                 }
                 self.recovery.pop();
 
                 while self.current_syntax() != CloseParen {
-                    match self.expect(&[Identifier], 2, 2, true) {
-                        ParseAction::Found | ParseAction::Recovered(1) => (),
+                    match self.expect(&[Identifier], 3, 2, None) {
+                        ParseAction::Found | ParseAction::Recovered(0) => self.bump(),
+                        ParseAction::Recovered(1) => (),
                         ParseAction::Recovered(_) => break,
                         ParseAction::Return(s) => return s,
                     }
@@ -247,8 +248,9 @@ impl<'a> Parser<'a> {
                     self.pass();
                 }
                 self.recovery.pop();
+                self.recovery.pop();
 
-                if let ParseAction::Return(s) = self.expect(&[CloseParen], 1, 2, false) {
+                if let ParseAction::Return(s) = self.expect(&[CloseParen], 1, 2, Some(false)) {
                     return s;
                 }
                 self.recovery.pop();
@@ -292,7 +294,7 @@ impl<'a> Parser<'a> {
             self.pass();
             self.expression();
 
-            if let ParseAction::Return(s) = self.expect(&[Colon], 1, 1, false) {
+            if let ParseAction::Return(s) = self.expect(&[Colon], 1, 1, Some(false)) {
                 return s;
             }
             self.recovery.pop();
@@ -360,7 +362,7 @@ impl<'a> Parser<'a> {
                 if let ParseAction::Return(s) = self.expect_func(Self::kind, 1, 1) {
                     return s;
                 }
-                if let ParseAction::Return(s) = self.expect(&[GreaterThan], 1, 1, false) {
+                if let ParseAction::Return(s) = self.expect(&[GreaterThan], 1, 1, Some(false)) {
                     return s;
                 }
                 self.recovery.pop();
@@ -395,7 +397,7 @@ impl<'a> Parser<'a> {
                 self.pass();
             }
             self.recovery.pop();
-            if let ParseAction::Return(s) = self.expect(&[CloseParen], 1, 1, false) {
+            if let ParseAction::Return(s) = self.expect(&[CloseParen], 1, 1, Some(false)) {
                 return s;
             }
             self.recovery.pop();
@@ -424,7 +426,7 @@ impl<'a> Parser<'a> {
                 if let ParseAction::Return(s) = self.expect_func(Self::expression, 1, 0) {
                     return s;
                 }
-                if let ParseAction::Return(s) = self.expect(&[CloseParen], 1, 0, false) {
+                if let ParseAction::Return(s) = self.expect(&[CloseParen], 1, 0, Some(false)) {
                     return s;
                 }
                 self.recovery.pop();
@@ -437,7 +439,7 @@ impl<'a> Parser<'a> {
                 if let ParseAction::Return(s) = self.expect_func(Self::expression, 1, 1) {
                     return s;
                 }
-                if let ParseAction::Return(s) = self.expect(&[CloseBrace], 1, 1, false) {
+                if let ParseAction::Return(s) = self.expect(&[CloseBrace], 1, 1, Some(false)) {
                     return s;
                 }
                 self.recovery.pop();
@@ -507,7 +509,7 @@ impl<'a> Parser<'a> {
         expect: &[SyntaxKind],
         current_recovery: usize,
         node: usize,
-        bump: bool,
+        bump: Option<bool>,
     ) -> ParseAction {
         if !expect.contains(&self.current_syntax()) {
             let s = self.unexpected_syntax(expect.to_vec());
@@ -529,20 +531,24 @@ impl<'a> Parser<'a> {
                     ParseAction::Return(s)
                 }
                 ParseRecovery::Recovered(s) => {
-                    if bump {
-                        self.bump()
-                    } else {
-                        self.pass()
+                    if let Some(bump) = bump {
+                        if bump {
+                            self.bump()
+                        } else {
+                            self.pass()
+                        }
                     }
                     ParseAction::Recovered(s)
                 }
                 ParseRecovery::Ok => unreachable!(),
             }
         } else {
-            if bump {
-                self.bump()
-            } else {
-                self.pass()
+            if let Some(bump) = bump {
+                if bump {
+                    self.bump()
+                } else {
+                    self.pass()
+                }
             }
             ParseAction::Found
         }

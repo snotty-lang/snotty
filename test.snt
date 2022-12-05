@@ -1,1 +1,4 @@
-loop (let i = 0; i < 10; i += 1) putchar(i + 48) putchar(10)
+let a = 1
+putchar(a + 48)
+let a = "12"
+puts(a)

@@ -126,7 +126,11 @@ impl<'a> JIT<'a> {
             let var = Variable::new(variables.len());
             builder.declare_var(var, int);
             builder.def_var(var, val);
-            lookup[0].insert(name, variables.len());
+            lookup[0]
+                .entry(name)
+                .or_insert((Vec::new(), 1))
+                .0
+                .push(variables.len());
             variables.push(var);
         }
 
@@ -157,7 +161,7 @@ struct FunctionTranslator<'a> {
     int: types::Type,
     source: &'a str,
     builder: FunctionBuilder<'a>,
-    lookup: Vec<HashMap<&'a str, usize>>,
+    lookup: Vec<HashMap<&'a str, (Vec<usize>, usize)>>,
     variables: Vec<Variable>,
     current_scope: usize,
     module: &'a mut JITModule,
@@ -170,8 +174,19 @@ impl<'a> FunctionTranslator<'a> {
             .iter()
             .rev()
             .find_map(|map| map.get(ident))
-            .map(|&i| self.variables[i])
+            .map(|(v, i)| self.variables[v[*i - 1]])
             .unwrap()
+    }
+
+    #[inline]
+    fn increase_shadowing(&mut self, ident: &'a str) {
+        if let Some((_, i)) = self.lookup[..=self.current_scope]
+            .iter_mut()
+            .rev()
+            .find_map(|map| map.get_mut(ident))
+        {
+            *i += 1;
+        }
     }
 
     fn translate_element(
@@ -302,7 +317,9 @@ impl<'a> FunctionTranslator<'a> {
             }
             SK::Let => {
                 let mut iter = node.children_with_leaves(tree);
-                let variable = self.get(&self.source[iter.next().unwrap().get(tree).span()]);
+                let ident = &self.source[iter.next().unwrap().get(tree).span()];
+                self.increase_shadowing(ident);
+                let variable = self.get(ident);
                 let new_value = self.translate_element(tree, iter.next().unwrap());
                 self.builder.def_var(variable, new_value);
                 self.builder.ins().iconst(self.int, 0)

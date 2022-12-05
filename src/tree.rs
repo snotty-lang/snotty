@@ -354,6 +354,14 @@ impl<N: Debug, L> TreeBuilder<N, L> {
         &mut self.nodes[id.0]
     }
 
+    pub fn undo_leaf(&mut self) {
+        self.leaves.pop();
+    }
+
+    pub fn undo_node(&mut self) {
+        self.nodes.pop();
+    }
+
     pub fn start_node(&mut self, kind: SyntaxKind, start: usize) {
         let current = self.nodes.len();
         let parent = self.current.last().copied();

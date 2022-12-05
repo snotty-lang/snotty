@@ -18,7 +18,7 @@ use SyntaxKind::*;
 pub struct Analyzer<'a> {
     source: &'a str,
     errors: Vec<Error<'a>>,
-    lookup: Vec<HashMap<&'a str, usize>>,
+    lookup: Vec<HashMap<&'a str, (Vec<usize>, usize)>>,
     current_scope: usize,
     memory: Vec<Value>,
     tree: Option<ParseTree>,
@@ -40,11 +40,7 @@ impl<'a> Analyzer<'a> {
 
     #[inline]
     fn get(&self, ident: &'a str) -> Option<&Value> {
-        self.lookup[..=self.current_scope]
-            .iter()
-            .rev()
-            .find_map(|map| map.get(ident))
-            .map(|&i| &self.memory[i])
+        self.get_loc(ident).map(|i| &self.memory[i])
     }
 
     #[inline]
@@ -52,56 +48,76 @@ impl<'a> Analyzer<'a> {
         self.lookup[..=self.current_scope]
             .iter()
             .rev()
-            .find_map(|map| map.get(ident))
+            .find_map(|map| map.get(ident).and_then(|(v, _)| v.last()))
             .copied()
     }
 
     #[inline]
     fn insert(&mut self, ident: &'a str, value: Value) {
+        self.lookup[self.current_scope]
+            .entry(ident)
+            .or_insert((Vec::new(), 0))
+            .0
+            .push(self.memory.len());
         self.memory.push(value);
-        self.lookup[self.current_scope].insert(ident, self.memory.len() - 1);
     }
 
     fn resolve_types(&mut self) {
         for i in 0..self.lookup.len() {
             self.current_scope = i;
-            for &loc in self.lookup[i].clone().values() {
-                self.resolve_type(loc);
+            for (loc, _) in self.lookup[i].clone().values() {
+                for (i, &loc) in loc.iter().enumerate() {
+                    self.resolve_type(loc, i);
+                }
             }
         }
     }
 
-    fn resolve_type(&mut self, loc: usize) {
+    fn resolve_type(&mut self, loc: usize, i: usize) {
         match &self.memory[loc].type_ {
             MaybeTyped::UnTyped(_) => {
                 let MaybeTyped::UnTyped(id) = std::mem::replace(&mut self.memory[loc].type_, MaybeTyped::InProgress) else {unreachable!()};
-                self.memory[loc].type_ = MaybeTyped::Typed(self.compute_type(id));
+                self.memory[loc].type_ = MaybeTyped::Typed(self.compute_type(id, i));
             }
             MaybeTyped::InProgress => panic!("Loopoz"),
             MaybeTyped::Typed(_) => (),
         }
     }
 
-    fn compute_type(&mut self, id: TreeElement<NodeId, LeafId>) -> ValueType {
+    fn compute_type(&mut self, id: TreeElement<NodeId, LeafId>, i: usize) -> ValueType {
         let ast = id.get_from_builder(&self.builder);
         match ast.kind() {
             Identifier => {
                 let ident = &self.source[ast.span()];
-                match self.get_loc(ident) {
-                    Some(t) => {
-                        self.resolve_type(t);
-                        self.get(ident).unwrap().type_.type_().unwrap().clone()
+                match {
+                    self.lookup[..=self.current_scope]
+                        .iter()
+                        .rev()
+                        .find_map(|map| map.get(ident).and_then(|(v, _)| v.last()))
+                } {
+                    Some(&t) => {
+                        self.resolve_type(t, i);
+                        self.lookup[..=self.current_scope]
+                            .iter()
+                            .rev()
+                            .find_map(|map| map.get(ident).and_then(|(v, _)| v.get(i)))
+                            .map(|&i| &self.memory[i])
+                            .unwrap()
+                            .type_
+                            .type_()
+                            .unwrap()
+                            .clone()
                     }
                     None => ValueType::Poisoned,
                 }
             }
             Value => {
                 let &a = ast.into_node().unwrap().children().first().unwrap();
-                self.compute_type(TreeElement::Node(a))
+                self.compute_type(TreeElement::Node(a), i)
             }
             Pointer => {
                 let &a = ast.into_node().unwrap().children().first().unwrap();
-                ValueType::Pointer(Box::new(self.compute_type(TreeElement::Node(a))))
+                ValueType::Pointer(Box::new(self.compute_type(TreeElement::Node(a), i)))
             }
             UnaryOp => {
                 let mut iter = ast
@@ -111,7 +127,7 @@ impl<'a> Analyzer<'a> {
                 let op = iter.next().unwrap();
                 let a = iter.next().unwrap();
                 let op = self.builder.leaf(op.into_leaf().unwrap()).kind();
-                let a = self.compute_type(a);
+                let a = self.compute_type(a, i);
                 a.operate_unary(op).unwrap_or(ValueType::Poisoned)
             }
             BinaryOp => {
@@ -122,9 +138,9 @@ impl<'a> Analyzer<'a> {
                 let a = iter.next().unwrap();
                 let op = iter.next().unwrap();
                 let b = iter.next().unwrap();
-                let a = self.compute_type(a);
+                let a = self.compute_type(a, i);
                 let op = self.builder.leaf(op.into_leaf().unwrap()).kind();
-                let b = self.compute_type(b);
+                let b = self.compute_type(b, i);
                 a.operate_binary(op, &b).unwrap_or(ValueType::Poisoned)
             }
             _ => unreachable!(),

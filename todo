@@ -1,1 +1,3 @@
-Fix shadowing bugs, replace HashMap in lookup with smth else
+file kw
+function - fx, return
+box

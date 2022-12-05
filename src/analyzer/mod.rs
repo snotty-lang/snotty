@@ -22,5 +22,5 @@ pub struct AnalysisResult<'a> {
 pub struct Analyzed<'a> {
     pub tree: AnalyzedTree,
     pub memory: Vec<Value>,
-    pub lookup: Vec<HashMap<&'a str, usize>>,
+    pub lookup: Vec<HashMap<&'a str, (Vec<usize>, usize)>>,
 }

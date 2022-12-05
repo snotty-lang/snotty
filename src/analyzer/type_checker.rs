@@ -17,7 +17,7 @@ use SyntaxKind::*;
 pub struct TypeChecker<'a> {
     source: &'a str,
     errors: Vec<Error<'a>>,
-    lookup: Vec<HashMap<&'a str, usize>>,
+    lookup: Vec<HashMap<&'a str, (Vec<usize>, usize)>>,
     current_scope: usize,
     memory: Vec<Value>,
     tree: Option<AnalyzedTree>,
@@ -47,6 +47,10 @@ impl<'a> TypeChecker<'a> {
         self.builder.finish_node(root.span().end, |_| None);
         let tree = self.builder.finish();
 
+        for (_, (_, i)) in self.lookup.iter_mut().map(|m| m.iter_mut()).flatten() {
+            *i = 0;
+        }
+
         AnalysisResult {
             errors: self.errors,
             analyzed: Analyzed {
@@ -63,7 +67,18 @@ impl<'a> TypeChecker<'a> {
             .iter()
             .rev()
             .find_map(|map| map.get(ident))
-            .map(|&i| &self.memory[i])
+            .map(|(v, i)| &self.memory[v[*i - 1]])
+    }
+
+    #[inline]
+    fn increase_shadowing(&mut self, ident: &'a str) {
+        if let Some((_, i)) = self.lookup[..=self.current_scope]
+            .iter_mut()
+            .rev()
+            .find_map(|map| map.get_mut(ident))
+        {
+            *i += 1;
+        }
     }
 
     fn analyze_element(
@@ -200,6 +215,7 @@ impl<'a> TypeChecker<'a> {
                 let ident = iter.next().unwrap().into_leaf().unwrap().get(tree);
                 self.builder.push(ident.kind(), ident.span(), |_| None);
                 self.analyze_element(tree, iter.next().unwrap());
+                self.increase_shadowing(&self.source[ident.span()]);
                 self.builder.finish_node(node.span().end, |_| None)
             }
             ReLet => {
