@@ -1,4 +1,1 @@
-let a = 1
-putchar(a + 48)
-let a = "12"
-puts(a)
+if 1 10 else 20

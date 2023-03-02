@@ -12,10 +12,12 @@ pub struct Tree<N, L> {
 impl<N, L> Tree<N, L> {
     pub const ROOT: NodeId = NodeId(0);
 
+    /// Get node from id
     pub fn node(&self, id: NodeId) -> &Node<N> {
         &self.nodes[id.0]
     }
 
+    /// Get leaf from id
     pub fn leaf(&self, id: LeafId) -> &Leaf<L> {
         &self.leaves[id.0]
     }
@@ -99,34 +101,42 @@ pub struct Node<N> {
 }
 
 impl<N> Node<N> {
+    /// Kind of the node
     pub fn kind(&self) -> SyntaxKind {
         self.kind
     }
 
+    /// Span of the node, in the input code
     pub fn span(&self) -> Span {
         self.span.clone()
     }
 
+    /// id of the node
     pub fn id(&self) -> NodeId {
         NodeId(self.id)
     }
 
+    /// Parent of the node
     pub fn parent(&self) -> Option<NodeId> {
         self.parent.map(NodeId)
     }
 
+    /// Next sibling node
     pub fn next(&self) -> Option<NodeId> {
         self.next.map(NodeId)
     }
 
+    /// Previous sibling node
     pub fn prev(&self) -> Option<NodeId> {
         self.prev.map(NodeId)
     }
 
+    /// Children nodes
     pub fn children(&self) -> &Vec<NodeId> {
         unsafe { std::mem::transmute(&self.children) }
     }
 
+    /// Children nodes, including leaves
     pub fn children_with_leaves<'a, L>(&self, tree: &'a Tree<N, L>) -> ChildLeafIter<'a, N, L> {
         ChildLeafIter {
             tree,
@@ -136,6 +146,7 @@ impl<N> Node<N> {
         }
     }
 
+    /// Children nodes including leaves from builder
     pub fn children_with_leaves_builder<'a, L>(
         &self,
         builder: &'a TreeBuilder<N, L>,
@@ -148,6 +159,7 @@ impl<N> Node<N> {
         }
     }
 
+    /// Children leaves
     pub fn leaves<'a, L>(&self, tree: &'a Tree<N, L>) -> &'a [Leaf<L>] {
         &tree.leaves[self.leaf_span.clone()]
     }
@@ -166,10 +178,12 @@ impl<N> Node<N> {
         }
     }
 
+    /// Data stored in the node
     pub fn data(&self) -> &Option<N> {
         &self.data
     }
 
+    /// Data stored in the node
     pub fn data_mut(&mut self) -> &mut Option<N> {
         &mut self.data
     }
@@ -204,22 +218,27 @@ pub struct Leaf<L> {
 }
 
 impl<L> Leaf<L> {
+    /// Kind of Leaf
     pub fn kind(&self) -> SyntaxKind {
         self.kind
     }
 
+    /// Span of the leaf, in the input code
     pub fn span(&self) -> Span {
         self.span.clone()
     }
 
+    /// id of the leaf
     pub fn id(&self) -> LeafId {
         LeafId(self.id)
     }
 
+    /// Data stored in the leaf
     pub fn data(&self) -> &Option<L> {
         &self.data
     }
 
+    /// Data stored in the leaf
     pub fn data_mut(&mut self) -> &mut Option<L> {
         &mut self.data
     }
@@ -250,10 +269,12 @@ impl<L: Debug> Debug for Leaf<L> {
 pub struct NodeId(usize);
 
 impl NodeId {
+    /// Get node from tree
     pub fn get<N, L>(self, tree: &Tree<N, L>) -> &Node<N> {
         &tree.nodes[self.0]
     }
 
+    /// Get node from tree builder
     pub fn get_from_builder<N, L>(self, tree: &TreeBuilder<N, L>) -> &Node<N> {
         &tree.nodes[self.0]
     }
@@ -264,10 +285,12 @@ impl NodeId {
 pub struct LeafId(usize);
 
 impl LeafId {
+    /// Get leaf from tree
     pub fn get<N, L>(self, tree: &Tree<N, L>) -> &Leaf<L> {
         &tree.leaves[self.0]
     }
 
+    /// Get leaf from tree builder
     pub fn get_from_builder<N, L>(self, tree: &TreeBuilder<N, L>) -> &Leaf<L> {
         &tree.leaves[self.0]
     }
@@ -280,6 +303,7 @@ pub enum TreeElement<N, L> {
 }
 
 impl<N, L> TreeElement<N, L> {
+    /// Converts into leaf, if it is a leaf
     pub fn into_leaf(self) -> Option<L> {
         if let Self::Leaf(l) = self {
             Some(l)
@@ -288,6 +312,7 @@ impl<N, L> TreeElement<N, L> {
         }
     }
 
+    /// Converts into node, if it is a node
     pub fn into_node(self) -> Option<N> {
         if let Self::Node(n) = self {
             Some(n)
@@ -298,6 +323,7 @@ impl<N, L> TreeElement<N, L> {
 }
 
 impl TreeElement<NodeId, LeafId> {
+    /// Gets node or leaf from tree
     pub fn get<'a, N, L>(&self, tree: &'a Tree<N, L>) -> TreeElement<&'a Node<N>, &'a Leaf<L>> {
         match self {
             TreeElement::Node(node) => TreeElement::Node(&tree.nodes[node.0]),
@@ -305,6 +331,7 @@ impl TreeElement<NodeId, LeafId> {
         }
     }
 
+    /// Gets node or leaf from tree builder
     pub fn get_from_builder<'a, N, L>(
         &self,
         builder: &'a TreeBuilder<N, L>,

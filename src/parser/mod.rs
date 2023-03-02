@@ -14,16 +14,23 @@ use logos::{Logos, SpannedIter};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 enum ParseRecovery {
+    /// Recovered with the i-th token in self.recovery
     Recovered(usize),
+    /// Encountered a SemiColon token while recovering
     SemiColon,
+    /// Encountered an EOF token while recovering
     Eof,
+    /// Found the expected token
     Ok,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 enum ParseAction {
+    /// Return from the current function. Either recovered from a recovery token declared out of scope or didn't recover
     Return(ParseRecovery),
+    /// Found the expected token
     Found,
+    /// Recovered with the i-th token in self.recovery
     Recovered(usize),
 }
 
@@ -39,6 +46,7 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    /// Creates a new parser for the given source input
     pub fn new(source: &'a str) -> Parser {
         let mut tokens = SyntaxKind::lexer(source).spanned().peekable();
         Self {
@@ -59,6 +67,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parses the source passed at the creation
     pub fn parse(mut self) -> ParseResult<'a> {
         self.builder.start_node(Root, 0);
 
@@ -77,6 +86,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parses statements: Let, Return, File, Scope, Loop, If, Function
     fn statement(&mut self) -> ParseRecovery {
         self.builder.start_node(Statement, self.s_loc);
         let s = match self.current_syntax() {
@@ -222,21 +232,22 @@ impl<'a> Parser<'a> {
             }
             FxKw => {
                 self.builder.start_node(Fx, self.s_loc);
-                self.recovery
-                    .extend([CloseParen, Comma, Identifier, OpenParen, Identifier]);
+                self.recovery.extend([
+                    Identifier, OpenParen, Comma, Identifier, CloseParen, Identifier,
+                ]);
                 self.pass();
-                if let ParseAction::Return(s) = self.expect(&[Identifier], 5, 2, Some(true)) {
+                if let ParseAction::Return(s) = self.expect(&[Identifier], 6, 2, Some(true)) {
                     return s;
                 }
                 self.recovery.pop();
 
-                if let ParseAction::Return(s) = self.expect(&[OpenParen], 4, 2, Some(false)) {
+                if let ParseAction::Return(s) = self.expect(&[OpenParen], 5, 2, Some(false)) {
                     return s;
                 }
                 self.recovery.pop();
 
                 while self.current_syntax() != CloseParen {
-                    match self.expect(&[Identifier], 3, 2, None) {
+                    match self.expect(&[Identifier], 4, 2, None) {
                         ParseAction::Found | ParseAction::Recovered(0) => self.bump(),
                         ParseAction::Recovered(1) => (),
                         ParseAction::Recovered(_) => break,
@@ -280,6 +291,7 @@ impl<'a> Parser<'a> {
         s
     }
 
+    /// Parses expressions: ternary expressions
     fn expression(&mut self) -> ParseRecovery {
         let start = self.builder.checkpoint(self.s_loc);
         if let ParseAction::Return(s) =
@@ -305,6 +317,7 @@ impl<'a> Parser<'a> {
         ParseRecovery::Ok
     }
 
+    /// Parses comprision operations: !, ==, !=, >, >=, <, <=
     fn comparison(&mut self) -> ParseRecovery {
         match self.current_syntax() {
             Not => {
@@ -328,18 +341,22 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parses bitwise operations: <<, >>
     fn bitwise(&mut self) -> ParseRecovery {
         self.binary_op(Self::arithmetic, &[Shr, Shl])
     }
 
+    /// Parses arithmetic operations: +, -
     fn arithmetic(&mut self) -> ParseRecovery {
         self.binary_op(Self::term, &[Add, Sub])
     }
 
+    /// Parses arithmetic operations: *, /
     fn term(&mut self) -> ParseRecovery {
         self.binary_op(Self::factor, &[Mul, Div, Mod])
     }
 
+    /// Parses negative sign in front of numbers
     fn factor(&mut self) -> ParseRecovery {
         match self.current_syntax() {
             Sub => {
@@ -353,6 +370,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parses type casting
     fn cast(&mut self) -> ParseRecovery {
         match self.current_syntax() {
             LessThan => {
@@ -374,6 +392,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parses function calls
     fn call(&mut self) -> ParseRecovery {
         let start = self.builder.checkpoint(self.s_loc);
         self.recovery.push(OpenParen);
@@ -406,6 +425,7 @@ impl<'a> Parser<'a> {
         ParseRecovery::Ok
     }
 
+    /// Parses atoms: Number, Char, String, ;, In, Ident, (), pointer, deref, list
     fn value(&mut self) -> ParseRecovery {
         self.builder.start_node(Value, self.s_loc);
         let s = match self.current_syntax() {
@@ -453,12 +473,36 @@ impl<'a> Parser<'a> {
                 self.builder.finish_node(self.p_loc, |_| None);
                 s
             }
+            OpenBracket => {
+                self.builder.start_node(List, self.s_loc);
+                self.pass();
+                self.recovery.extend([CloseBracket, Comma]);
+                while self.current_syntax() != CloseBracket {
+                    match self.expect_func(Self::expression, 2, 1) {
+                        ParseAction::Found | ParseAction::Recovered(1) => (),
+                        ParseAction::Recovered(_) => break,
+                        ParseAction::Return(s) => return s,
+                    }
+                    if self.current_syntax() != Comma {
+                        break;
+                    }
+                    self.pass();
+                }
+                self.recovery.pop();
+                if let ParseAction::Return(s) = self.expect(&[CloseBracket], 1, 1, Some(false)) {
+                    return s;
+                }
+                self.recovery.pop();
+                self.builder.finish_node(self.p_loc, |_| None);
+                ParseRecovery::Ok
+            }
             _ => self.unexpected_syntax(vec![Value]),
         };
         self.builder.finish_node(self.p_loc, |_| None);
         s
     }
 
+    /// Parses kinds (types)
     fn kind(&mut self) -> ParseRecovery {
         match self.current_syntax() {
             ByteKw | Identifier | SemiColon => {

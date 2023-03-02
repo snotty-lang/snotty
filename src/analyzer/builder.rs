@@ -6,7 +6,8 @@ use crate::parser::syntax::{ParseResult, ParseTree, SyntaxKind};
 use crate::tree::{Leaf, LeafId, Node, NodeId, TreeElement};
 
 use super::value::{
-    LeafData, LeafKind, MaybeTyped, NodeData, NodeKind, Value, ValueData, ValueType, BUILT_INS,
+    AssignLHS, LeafData, LeafKind, MaybeTyped, NodeData, NodeKind, Value, ValueData, ValueType,
+    BUILT_INS,
 };
 use super::{AnalysisResult, Analyzed, AnalyzedTreeBuilder};
 use SyntaxKind::*;
@@ -238,19 +239,18 @@ impl<'a> Analyzer<'a> {
                 let mut iter = node.children_with_leaves(tree);
                 let a = iter.next().unwrap();
                 let b = iter.next().unwrap();
-                let (op, a) = match (a, b) {
+                let (op, e_a) = match (a, b) {
                     (a @ TreeElement::Node(_), op @ TreeElement::Leaf(_))
                     | (op @ TreeElement::Leaf(_), a @ TreeElement::Node(_)) => (
                         self.analyze_element(tree, op)
                             .get_from_builder(&self.builder)
                             .kind(),
-                        self.analyze_element(tree, a)
-                            .get_from_builder(&self.builder)
-                            .into_node()
-                            .unwrap(),
+                        self.analyze_element(tree, a),
                     ),
                     _ => unreachable!(),
                 };
+
+                let a = e_a.get_from_builder(&self.builder).into_node().unwrap();
 
                 let type_a = a.data().as_ref().unwrap().type_();
                 let type_ = type_a
@@ -266,7 +266,11 @@ impl<'a> Analyzer<'a> {
                                 MaybeTyped::UnTyped(TreeElement::Node(node.id()))
                             }),
                         }))
-                        .assignable(op == SyntaxKind::Mul),
+                        .assignable(if op == SyntaxKind::Mul {
+                            AssignLHS::Deref(e_a)
+                        } else {
+                            AssignLHS::Invalid
+                        }),
                     )
                 })
             }
@@ -324,7 +328,7 @@ impl<'a> Analyzer<'a> {
                 self.analyze_element(tree, iter.next().unwrap());
                 let lhs = lhs.get_from_builder(&self.builder);
                 let data_lhs = lhs.data().as_ref().unwrap();
-                if !data_lhs.assignable {
+                if data_lhs.assignable == AssignLHS::Invalid {
                     self.errors
                         .push(Error::error(ErrorKind::InvalidLHS, lhs.span(), self.source));
                 }
@@ -687,7 +691,7 @@ impl<'a> Analyzer<'a> {
                                 MaybeTyped::UnTyped(TreeElement::Leaf(leaf.id()))
                             }),
                         }))
-                        .assignable(true),
+                        .assignable(AssignLHS::Ident),
                     )
                 })
             }

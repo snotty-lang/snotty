@@ -11,18 +11,18 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct LeafData {
     pub kind: LeafKind,
-    pub assignable: bool,
+    pub assignable: AssignLHS,
 }
 
 impl LeafData {
     pub fn new(kind: LeafKind) -> Self {
         LeafData {
             kind,
-            assignable: false,
+            assignable: AssignLHS::Invalid,
         }
     }
 
-    pub fn assignable(mut self, assignable: bool) -> Self {
+    pub fn assignable(mut self, assignable: AssignLHS) -> Self {
         self.assignable = assignable;
         self
     }
@@ -68,18 +68,25 @@ impl LeafKind {
 #[derive(Debug, Clone)]
 pub struct NodeData {
     pub kind: NodeKind,
-    pub assignable: bool,
+    pub assignable: AssignLHS,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AssignLHS {
+    Invalid,
+    Ident,
+    Deref(TreeElement<NodeId, LeafId>),
 }
 
 impl NodeData {
     pub fn new(kind: NodeKind) -> Self {
         NodeData {
             kind,
-            assignable: false,
+            assignable: AssignLHS::Invalid,
         }
     }
 
-    pub fn assignable(mut self, assignable: bool) -> Self {
+    pub fn assignable(mut self, assignable: AssignLHS) -> Self {
         self.assignable = assignable;
         self
     }
@@ -162,11 +169,12 @@ impl<'a> TreeElement<&'a Node<NodeData>, &'a Leaf<LeafData>> {
         }
     }
 
-    pub fn assignable(&self) -> bool {
+    pub fn assignable(&self) -> AssignLHS {
         match self.data() {
-            TreeElement::Node(node) => node.assignable,
-            TreeElement::Leaf(leaf) => leaf.assignable,
+            TreeElement::Node(node) => &node.assignable,
+            TreeElement::Leaf(leaf) => &leaf.assignable,
         }
+        .clone()
     }
 }
 
@@ -331,6 +339,13 @@ pub static BUILT_INS: Lazy<HashMap<&'static str, BuiltInFunc>> = Lazy::new(|| {
         "putchar",
         BuiltInFunc {
             args: vec![ValueType::Number],
+            ret: Some(ValueType::Number),
+        },
+    );
+    built_in.insert(
+        "getchar",
+        BuiltInFunc {
+            args: vec![],
             ret: Some(ValueType::Number),
         },
     );

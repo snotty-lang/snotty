@@ -99,6 +99,7 @@ pub enum SyntaxKind {
     Statement,
     Value,
     Fx,
+    List,
 
     Stuffing,
 
@@ -207,6 +208,7 @@ impl Display for SyntaxKind {
                 SyntaxKind::Value => "value",
                 SyntaxKind::Statement => "statement",
                 SyntaxKind::Call => "CALL",
+                SyntaxKind::List => "[...]",
                 SyntaxKind::BinaryOp => "BINARY OPERATION",
                 SyntaxKind::UnaryOp => "UNARY OPERATION",
                 SyntaxKind::Let => "LET",
