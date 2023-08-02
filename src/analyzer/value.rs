@@ -222,7 +222,7 @@ impl ValueType {
     pub fn operate_binary(&self, op: SyntaxKind, other: &ValueType) -> Option<ValueType> {
         match (&self, op, other) {
             (ValueType::Number, _, ValueType::Number) => Some(ValueType::Number),
-            (ValueType::Poisoned, _, _) => Some(ValueType::Poisoned),
+            (ValueType::Poisoned, _, _) | (_, _, ValueType::Poisoned) => Some(ValueType::Poisoned),
             _ => None,
         }
     }

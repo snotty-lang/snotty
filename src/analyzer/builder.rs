@@ -17,12 +17,19 @@ use SyntaxKind::*;
 /// Detects errors such as `ByteOverflow`, `InvalidLHS` and `KeywordMisuse`.
 #[derive(Debug)]
 pub struct Analyzer<'a> {
+    /// The source code
     source: &'a str,
+    /// List of errors produced
     errors: Vec<Error<'a>>,
+    /// Contains all variables mapped to memory, arranged in nexting level of scopes
+    /// Vec<usize> contains all the values defined to this variable, usize is the current value
     lookup: Vec<HashMap<&'a str, (Vec<usize>, usize)>>,
+    /// Current scope which is getting analyzed
     current_scope: usize,
+    /// Data
     memory: Vec<Value>,
     tree: Option<ParseTree>,
+    /// Tree Builder
     builder: AnalyzedTreeBuilder,
 }
 
@@ -66,8 +73,8 @@ impl<'a> Analyzer<'a> {
     fn resolve_types(&mut self) {
         for i in 0..self.lookup.len() {
             self.current_scope = i;
-            for (loc, _) in self.lookup[i].clone().values() {
-                for (i, &loc) in loc.iter().enumerate() {
+            for (locs, _) in self.lookup[i].clone().values() {
+                for (i, &loc) in locs.iter().enumerate() {
                     self.resolve_type(loc, i);
                 }
             }
@@ -457,6 +464,32 @@ impl<'a> Analyzer<'a> {
                         type_,
                     })))
                 })
+            }
+            Fx => {
+                self.builder.start_node(node.kind(), node.span().start);
+                self.lookup.push(HashMap::new());
+                self.current_scope += 1;
+                let mut iter = node.children_with_leaves(tree);
+                let name = iter.next().unwrap().into_leaf().unwrap().get(tree);
+                self.builder.push(name.kind(), name.span(), |_| None);
+                let mut args = iter.collect::<Vec<_>>();
+                let body = args.pop().unwrap();
+                for arg in args {
+                    let arg = arg.into_leaf().unwrap().get(tree);
+                    let id = self.builder.push(arg.kind(), arg.span(), |_| None);
+                    self.insert(
+                        &self.source[arg.span()],
+                        Value {
+                            value: None,
+                            syntax: TreeElement::Leaf(id),
+                            // type_: MaybeTyped::UnTyped(TreeElement::Leaf(id)),
+                            type_: MaybeTyped::Typed(ValueType::Number),
+                        },
+                    );
+                }
+                self.analyze_element(tree, body);
+                self.current_scope -= 1;
+                self.builder.finish_node(node.span().end, |_| None)
             }
             Value => {
                 self.builder.start_node(node.kind(), node.span().start);

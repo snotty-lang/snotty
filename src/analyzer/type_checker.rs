@@ -47,7 +47,7 @@ impl<'a> TypeChecker<'a> {
         self.builder.finish_node(root.span().end, |_| None);
         let tree = self.builder.finish();
 
-        for (_, (_, i)) in self.lookup.iter_mut().map(|m| m.iter_mut()).flatten() {
+        for (_, (_, i)) in self.lookup.iter_mut().flat_map(|m| m.iter_mut()) {
             *i = 0;
         }
 
@@ -67,7 +67,7 @@ impl<'a> TypeChecker<'a> {
             .iter()
             .rev()
             .find_map(|map| map.get(ident))
-            .map(|(v, i)| &self.memory[v[*i - 1]])
+            .and_then(|(v, i)| (*i != 0).then(|| &self.memory[v[i - 1]]))
     }
 
     #[inline]
@@ -301,6 +301,24 @@ impl<'a> TypeChecker<'a> {
                 }
                 self.analyze_element(tree, c);
                 self.analyze_element(tree, d);
+                self.builder.finish_node(node.span().end, |_| None)
+            }
+            Fx => {
+                self.builder.start_node(node.kind(), node.span().start);
+                self.lookup.push(HashMap::new());
+                self.current_scope += 1;
+                let mut iter = node.children_with_leaves(tree);
+                let name = iter.next().unwrap().into_leaf().unwrap().get(tree);
+                self.builder.push(name.kind(), name.span(), |_| None);
+                let mut args = iter.collect::<Vec<_>>();
+                let body = args.pop().unwrap();
+                for arg in args {
+                    let arg = arg.into_leaf().unwrap().get(tree);
+                    self.builder.push(arg.kind(), arg.span(), |_| None);
+                    self.increase_shadowing(&self.source[arg.span()]);
+                }
+                self.analyze_element(tree, body);
+                self.current_scope -= 1;
                 self.builder.finish_node(node.span().end, |_| None)
             }
             If => {

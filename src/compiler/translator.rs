@@ -294,6 +294,9 @@ impl<'a> FunctionTranslator<'a> {
             SK::Cast => {
                 self.translate_element(tree, node.children_with_leaves(tree).nth(1).unwrap())
             }
+            SK::Fx => {
+                todo!()
+            }
             SK::Kind => self.builder.ins().iconst(self.int, 0),
             s => unreachable!("{s}"),
         }

@@ -232,9 +232,8 @@ impl<'a> Parser<'a> {
             }
             FxKw => {
                 self.builder.start_node(Fx, self.s_loc);
-                self.recovery.extend([
-                    Identifier, OpenParen, Comma, Identifier, CloseParen, Identifier,
-                ]);
+                self.recovery
+                    .extend([Identifier, OpenParen, Comma, Identifier, CloseParen]);
                 self.pass();
                 if let ParseAction::Return(s) = self.expect(&[Identifier], 6, 2, Some(true)) {
                     return s;
@@ -669,7 +668,7 @@ impl<'a> Parser<'a> {
     /// Consumes current syntax and push to builder.
     fn bump(&mut self) {
         if let Some((kind, span)) = self.tokens.next() {
-            self.builder.push(kind, span, |_| None);
+            self.builder.push(kind.unwrap_or(Error), span, |_| None);
         }
         self.p_loc = self.e_loc;
         self.s_loc = self.s_loc();
@@ -686,7 +685,10 @@ impl<'a> Parser<'a> {
 
     /// Peeks the current syntax
     fn current_syntax(&mut self) -> SyntaxKind {
-        self.tokens.peek().map(|&(kind, _)| kind).unwrap_or(Eof)
+        self.tokens
+            .peek()
+            .map(|&(kind, _)| kind.unwrap_or(Error))
+            .unwrap_or(Eof)
     }
 
     /// Current span of the syntax

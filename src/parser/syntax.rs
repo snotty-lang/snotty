@@ -102,8 +102,6 @@ pub enum SyntaxKind {
     List,
 
     Stuffing,
-
-    #[error]
     Error,
 }
 
